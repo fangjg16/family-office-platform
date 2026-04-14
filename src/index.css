@@ -1,0 +1,120 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /**
+   * 落地页：Zenith 系深蓝底 + 青蓝渐变强调（参考 aura Zenith）
+   */
+  :root {
+    --background: 240 43% 5%;
+    --foreground: 214 32% 91%;
+    --primary: 199 89% 48%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 240 28% 12%;
+    --secondary-foreground: 214 25% 88%;
+    --muted: 240 22% 14%;
+    --muted-foreground: 215 16% 57%;
+    --accent: 240 30% 12%;
+    --accent-foreground: 214 32% 91%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 240 15% 18%;
+    --input: 240 20% 16%;
+    --ring: 199 89% 55%;
+    --radius: 0.75rem;
+    --nav-button: 240 25% 14%;
+    --hero-bg: 240 43% 5%;
+    --surface-alt: 240 35% 8%;
+    --gradient-start: 199 100% 65%;
+    --gradient-mid: 217 91% 60%;
+    --gradient-end: 213 96% 72%;
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background font-sans text-foreground antialiased;
+  }
+
+  ::selection {
+    @apply bg-sky-500/30 text-white;
+  }
+
+  /**
+   * 工作台：同品牌浅色（非 dark mode），长时间阅读友好
+   */
+  .workspace-app {
+    --background: 210 40% 98%;
+    --foreground: 222 47% 11%;
+    --primary: 217 91% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 214 32% 95%;
+    --secondary-foreground: 222 30% 22%;
+    --muted: 210 35% 96%;
+    --muted-foreground: 215 16% 42%;
+    --accent: 210 50% 96%;
+    --accent-foreground: 217 50% 28%;
+    --destructive: 0 72% 46%;
+    --destructive-foreground: 0 0% 99%;
+    --border: 214 24% 88%;
+    --input: 214 24% 90%;
+    --ring: 217 91% 50%;
+    --radius: 0.75rem;
+    --nav-button: 210 40% 97%;
+    --hero-bg: 210 40% 98%;
+    --surface-alt: 214 35% 96%;
+    --gradient-start: 217 91% 55%;
+    --gradient-mid: 217 91% 48%;
+    --gradient-end: 199 89% 48%;
+    color-scheme: light;
+  }
+
+  .workspace-app ::selection {
+    @apply bg-primary/20 text-foreground;
+  }
+}
+
+@layer utilities {
+  .text-gradient-landing {
+    background: linear-gradient(
+      135deg,
+      hsl(var(--gradient-start)) 0%,
+      hsl(var(--gradient-mid)) 50%,
+      hsl(var(--gradient-end)) 100%
+    );
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  .glass-landing {
+    @apply rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-xl transition-colors duration-300;
+  }
+
+  .glass-landing:hover {
+    @apply border-white/[0.14];
+  }
+
+  .btn-gradient-landing {
+    @apply rounded-full bg-gradient-to-r from-sky-500 to-blue-600 px-7 py-3 text-sm font-medium text-white shadow-[0_0_24px_rgba(59,130,246,0.25)] transition-all duration-300;
+    box-shadow:
+      0 0 24px rgba(59, 130, 246, 0.25),
+      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  }
+
+  .btn-gradient-landing:hover {
+    @apply -translate-y-0.5 shadow-[0_0_40px_rgba(59,130,246,0.4)];
+  }
+
+  .btn-ghost-landing {
+    @apply rounded-full border border-white/10 bg-white/[0.04] px-6 py-3 text-sm font-medium text-[hsl(214_32%_91%)] backdrop-blur-xl transition-all duration-300;
+  }
+
+  .btn-ghost-landing:hover {
+    @apply -translate-y-0.5 border-sky-400/30 bg-sky-500/10 shadow-[0_0_32px_rgba(14,165,233,0.12)];
+  }
+}
