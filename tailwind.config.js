@@ -7,8 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        display: ["Outfit", "system-ui", "sans-serif"],
+        sans: ["Noto Sans SC", "system-ui", "sans-serif"],
+        display: ["Noto Serif SC", "Noto Sans SC", "serif"],
         mono: ["JetBrains Mono", "ui-monospace", "monospace"],
       },
       colors: {
@@ -83,12 +83,31 @@ export default {
             transform: "translateX(-50%) translateY(6px)",
           },
         },
+        "login-blob": {
+          "0%, 100%": { transform: "translate3d(0, 0, 0) scale(1)" },
+          "33%": { transform: "translate3d(24px, -30px, 0) scale(1.06)" },
+          "66%": { transform: "translate3d(-20px, 18px, 0) scale(0.95)" },
+        },
+        "login-float": {
+          "0%, 100%": { transform: "translateY(0px)" },
+          "50%": { transform: "translateY(-14px)" },
+        },
+        "login-pulse-soft": {
+          "0%, 100%": { opacity: "0.28" },
+          "50%": { opacity: "0.62" },
+        },
       },
       animation: {
         "fade-up": "fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "fade-in": "fade-in 0.5s ease-out forwards",
         "pulse-dot": "pulse-dot 2s ease infinite",
         "scroll-hint": "scroll-hint 2.5s ease-in-out infinite",
+        "login-blob":
+          "login-blob 18s cubic-bezier(0.45, 0, 0.55, 1) infinite",
+        "login-float":
+          "login-float 7s cubic-bezier(0.4, 0, 0.2, 1) infinite",
+        "login-pulse-soft":
+          "login-pulse-soft 6.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
       },
     },
   },

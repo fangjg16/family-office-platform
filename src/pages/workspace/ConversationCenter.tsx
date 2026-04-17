@@ -3,9 +3,11 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
   FileUp,
-  LayoutGrid,
+  FileText,
+  MoreHorizontal,
   Paperclip,
   Plane,
+  Plus,
   RefreshCw,
   Sparkles,
   X,
@@ -16,11 +18,10 @@ import {
   getProjectResourceDemo,
   type ProjectChatSnippet,
 } from "@/workspace/project-resource-demos";
-import { ALL_PROJECTS, getProjectById } from "@/workspace/projects";
+import { getProjectById } from "@/workspace/projects";
 import { loadSessionUserId, saveLastProjectId } from "@/workspace/session";
 import type { WorkspaceRole } from "@/workspace/types";
 import {
-  canEnterChat,
   getProjectRole,
   getUserById,
   workspaceRoleToUiTier,
@@ -28,32 +29,173 @@ import {
 } from "@/workspace/workspace-users";
 import type { WorkspaceUser } from "@/workspace/types";
 
-function UserBubble({ children }: { children: ReactNode }) {
+type SessionConversation = {
+  id: string;
+  projectId: string;
+  title: string;
+  preview: string;
+  updatedAt: string;
+  files: string[];
+};
+
+type SessionConversationState = {
+  conversations: SessionConversation[];
+};
+
+/**
+ * 仅保留在当前网页会话内（内存）：
+ * - 不刷新页面时，项目间切换可保留左侧操作
+ * - 刷新页面后自动清空
+ */
+const SESSION_CONVERSATION_CACHE: Record<string, SessionConversationState> = {};
+const DEFAULT_PROJECT_IDS = ["europe-hotel-ma", "shrimp"] as const;
+const PROJECT_TIME_META: Record<
+  string,
+  {
+    dayLabel: string;
+    userTimes: [string, string, string];
+    aiTimes: [string, string, string];
+  }
+> = {
+  shrimp: {
+    dayLabel: "2026/04/09",
+    userTimes: ["09:42", "09:47", "09:53"],
+    aiTimes: ["09:44", "09:49", "09:55"],
+  },
+  "europe-hotel-ma": {
+    dayLabel: "2026/04/12",
+    userTimes: ["14:32", "14:36", "14:41"],
+    aiTimes: ["14:34", "14:38", "14:44"],
+  },
+  "natgeo-rwa": {
+    dayLabel: "2026/04/13",
+    userTimes: ["11:18", "11:23", "11:29"],
+    aiTimes: ["11:20", "11:26", "11:31"],
+  },
+  "cross-trade": {
+    dayLabel: "2026/04/16",
+    userTimes: ["17:38", "17:43", "17:48"],
+    aiTimes: ["17:40", "17:45", "17:50"],
+  },
+};
+
+function getProjectTimeMeta(projectId: string) {
+  return (
+    PROJECT_TIME_META[projectId] ?? {
+      dayLabel: "2026/04/16",
+      userTimes: ["10:30", "10:35", "10:40"] as [string, string, string],
+      aiTimes: ["10:32", "10:37", "10:42"] as [string, string, string],
+    }
+  );
+}
+
+function getLastDialogueDateTime(projectId: string): string {
+  const meta = getProjectTimeMeta(projectId);
+  return `${meta.dayLabel} ${meta.aiTimes[2]}`;
+}
+
+function getCurrentDateTimeLabel() {
+  const now = new Date();
+  const date = new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(now);
+  const time = new Intl.DateTimeFormat("zh-CN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(now);
+  return `${date} ${time}`;
+}
+
+function withCurrentPreviewTime(conversation: SessionConversation): SessionConversation {
+  return {
+    ...conversation,
+    updatedAt: getCurrentDateTimeLabel(),
+  };
+}
+
+function buildConversationFromProject(projectId: string): SessionConversation | null {
+  const project = getProjectById(projectId);
+  if (!project) return null;
+  const demo = getProjectResourceDemo(projectId);
+  const names: string[] = [];
+  demo.chat.supplyExchanges?.forEach((ex) => {
+    ex.attachments?.forEach((f) => names.push(f.name));
+  });
+  demo.chat.midFollowUp?.forEach((step) => {
+    if (step.kind === "text" && step.attachments) {
+      step.attachments.forEach((f) => names.push(f.name));
+    }
+  });
+
+  return {
+    id: `${projectId}-main`,
+    projectId,
+    title: `${project.name} · 全局分析`,
+    preview: demo.chat.sidebarPreview,
+    updatedAt: getLastDialogueDateTime(projectId),
+    files: Array.from(new Set(names)),
+  };
+}
+
+function getDefaultConversations(): SessionConversation[] {
+  return DEFAULT_PROJECT_IDS.map((projectId) => buildConversationFromProject(projectId)).filter(
+    (item): item is SessionConversation => Boolean(item)
+  );
+}
+
+function UserBubble({ children, time }: { children: ReactNode; time?: string }) {
+  const displayTime =
+    time ??
+    new Intl.DateTimeFormat("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date());
   return (
     <div className="flex justify-end">
-      <div
-        className={cn(
-          "max-w-[85%] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50",
-          "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]",
-          "transition-transform duration-300 hover:scale-[1.005]"
-        )}
-      >
-        {children}
+      <div className="group inline-flex flex-col items-end">
+        <div
+          className={cn(
+            "max-w-[85%] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50",
+            "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]",
+            "transition-transform duration-300 hover:scale-[1.005]"
+          )}
+        >
+          {children}
+        </div>
+        <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+          {displayTime}
+        </span>
       </div>
     </div>
   );
 }
 
-function AiShell({ children }: { children: ReactNode }) {
+function AiShell({ children, time }: { children: ReactNode; time?: string }) {
+  const displayTime =
+    time ??
+    new Intl.DateTimeFormat("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    }).format(new Date());
   return (
     <div className="flex justify-start">
-      <div
-        className={cn(
-          "max-w-[92%] rounded-3xl rounded-bl-lg border border-border/80 bg-white px-5 py-4 text-sm leading-relaxed text-foreground",
-          "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.08)]"
-        )}
-      >
-        {children}
+      <div className="group inline-flex flex-col items-start">
+        <div
+          className={cn(
+            "max-w-[92%] rounded-3xl rounded-bl-lg border border-border/80 bg-white px-5 py-4 text-sm leading-relaxed text-foreground",
+            "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.08)]"
+          )}
+        >
+          {children}
+        </div>
+        <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+          {displayTime}
+        </span>
       </div>
     </div>
   );
@@ -96,11 +238,13 @@ function ResourceTableBlock({
   workspaceRole,
   projectId,
   projectName,
+  time,
 }: {
   tier: UiTier;
   workspaceRole: WorkspaceRole;
   projectId: string;
   projectName: string;
+  time?: string;
 }) {
   const demo = getProjectResourceDemo(projectId);
 
@@ -142,7 +286,7 @@ function ResourceTableBlock({
         : "权限同步 · Low · 最低权限对话";
 
   return (
-    <AiShell>
+    <AiShell time={time}>
       <p className="mb-3 text-muted-foreground">{intro}</p>
       <div className="overflow-x-auto rounded-2xl border border-border/80 bg-white/60">
         <table className="w-full min-w-[320px] text-left text-xs md:text-sm">
@@ -176,9 +320,9 @@ function ResourceTableBlock({
   );
 }
 
-function MidRefusalBlock({ body }: { body: string }) {
+function MidRefusalBlock({ body, time }: { body: string; time?: string }) {
   return (
-    <AiShell>
+    <AiShell time={time}>
       <p className="text-sm font-semibold text-foreground">无法按此问题回答</p>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
       <p className="mt-3 text-[11px] text-muted-foreground">
@@ -188,9 +332,9 @@ function MidRefusalBlock({ body }: { body: string }) {
   );
 }
 
-function MidTextBlock({ title, body }: { title?: string; body: string }) {
+function MidTextBlock({ title, body, time }: { title?: string; body: string; time?: string }) {
   return (
-    <AiShell>
+    <AiShell time={time}>
       {title ? (
         <p className="mb-2 text-sm font-semibold text-foreground">{title}</p>
       ) : null}
@@ -208,15 +352,17 @@ function CredibilityBlock({
   tier,
   chat,
   midSummaryLines,
+  time,
 }: {
   tier: UiTier;
   chat: ProjectChatSnippet;
   /** Mid：在报告卡片前逐条回应用户多问 */
   midSummaryLines?: string[];
+  time?: string;
 }) {
   if (tier === "low") {
     return (
-      <AiShell>
+      <AiShell time={time}>
         <p className="text-muted-foreground">
           按 Low 权限，无法展示具体合作方名称与金额可信度拆解。核心团队已在内部记录「外部大额意向」的折算规则，您只需知晓：该笔投入在评分中
           <strong className="text-foreground">不会</strong>
@@ -231,7 +377,7 @@ function CredibilityBlock({
 
   if (tier === "mid") {
     return (
-      <AiShell>
+      <AiShell time={time}>
         <div className="mb-2 text-base font-bold text-foreground">
           {`可信度检测报告 · ${chat.credibilityTitleSecondary}`}
         </div>
@@ -280,7 +426,7 @@ function CredibilityBlock({
   }
 
   return (
-    <AiShell>
+    <AiShell time={time}>
       <div className="mb-2 text-base font-bold text-foreground">
         {`可信度检测报告 · ${chat.credibilityTitleCore}`}
       </div>
@@ -315,13 +461,15 @@ function CredibilityBlock({
 function RankingBlock({
   tier,
   chat,
+  time,
 }: {
   tier: UiTier;
   chat: ProjectChatSnippet;
+  time?: string;
 }) {
   if (tier === "low") {
     return (
-      <AiShell>
+      <AiShell time={time}>
         <p className="text-base font-bold text-foreground">
           可行合作路径
         </p>
@@ -342,7 +490,7 @@ function RankingBlock({
     tier === "full" ? chat.rankingPlansCore : chat.rankingPlansSecondary;
 
   return (
-    <AiShell>
+    <AiShell time={time}>
       {tier === "mid" ? (
         <p className="mb-3 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs font-medium leading-relaxed text-amber-950/90">
           Mid 权限：仅展示组合与推荐标记，<strong>具体分值隐藏</strong>；不可在本视图
@@ -418,11 +566,16 @@ export default function ConversationCenter() {
   const [user, setUser] = useState<WorkspaceUser | null>(null);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [conversations, setConversations] = useState<SessionConversation[]>([]);
+  const [showHistoryMenu, setShowHistoryMenu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     const id = loadSessionUserId();
     if (!id) {
+      Object.keys(SESSION_CONVERSATION_CACHE).forEach((k) => {
+        delete SESSION_CONVERSATION_CACHE[k];
+      });
       navigate("/app/login", { replace: true });
       return;
     }
@@ -464,18 +617,52 @@ export default function ConversationCenter() {
     [projectId]
   );
 
-  const otherProject = useMemo(() => {
-    if (!userId || !projectId) return undefined;
-    return ALL_PROJECTS.find(
-      (p) =>
-        p.id !== projectId &&
-        canEnterChat(getProjectRole(userId, p.id))
-    );
-  }, [userId, projectId]);
-
   const permissionLine = projectRole
     ? permissionLineFor(projectRole)
     : "";
+  const defaultChatTitle = project ? `${project.name} · 全局分析` : "项目对话";
+  const timeMeta = projectId ? getProjectTimeMeta(projectId) : getProjectTimeMeta("");
+  const todayLabel = timeMeta.dayLabel;
+
+  useEffect(() => {
+    if (!projectId || !userId) return;
+    const cacheKey = userId;
+    const cached = SESSION_CONVERSATION_CACHE[cacheKey];
+    const currentConversation = buildConversationFromProject(projectId);
+    if (!currentConversation) return;
+
+    if (!cached || cached.conversations.length === 0) {
+      const defaults = getDefaultConversations();
+      const hasCurrent = defaults.some((item) => item.projectId === projectId);
+      const next = hasCurrent ? defaults : [withCurrentPreviewTime(currentConversation), ...defaults];
+      setConversations(next);
+      SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
+      return;
+    }
+
+    const hasCurrent = cached.conversations.some((item) => item.projectId === projectId);
+    if (hasCurrent) {
+      setConversations(cached.conversations);
+      return;
+    }
+
+    const next = [withCurrentPreviewTime(currentConversation), ...cached.conversations];
+    setConversations(next);
+    SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
+  }, [projectId, userId]);
+
+  useEffect(() => {
+    if (!userId || conversations.length === 0) return;
+    SESSION_CONVERSATION_CACHE[userId] = {
+      conversations,
+    };
+  }, [userId, conversations]);
+
+  const activeConversation = conversations.find((item) => item.projectId === projectId) ?? null;
+
+  useEffect(() => {
+    setShowHistoryMenu(false);
+  }, [projectId]);
 
   const addFiles = (files: FileList | null) => {
     if (!files || files.length === 0) return;
@@ -511,7 +698,7 @@ export default function ConversationCenter() {
     );
   }
 
-  const chatTitle = `${project.name} · 全局分析`;
+  const chatTitle = activeConversation?.title ?? defaultChatTitle;
 
   return (
     <WorkspaceShell
@@ -535,46 +722,50 @@ export default function ConversationCenter() {
             </div>
           </div>
         </div>
-        <div className="px-3 pt-2">
-          <Link
-            to="/app/projects"
-            className="flex items-center gap-2 rounded-2xl border border-border/60 bg-white/80 px-3 py-2.5 text-xs font-semibold text-muted-foreground shadow-sm transition-all hover:border-primary/25 hover:text-primary"
-          >
-            <LayoutGrid className="h-4 w-4" strokeWidth={2} />
-            项目总览
-          </Link>
-        </div>
         <nav className="flex-1 space-y-2 overflow-y-auto p-3">
-          <div className="w-full rounded-3xl border border-primary/15 bg-primary/[0.06] px-3 py-3 text-left shadow-sm">
-            <p className="font-bold text-primary">{chatTitle}</p>
-            <p className="text-[11px] font-semibold text-muted-foreground">14:32</p>
-            <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-              {resourceDemo.chat.sidebarPreview}
-            </p>
-          </div>
-          {otherProject ? (
-            <Link
-              to={`/app/chat/${otherProject.id}`}
-              className="block w-full rounded-3xl px-3 py-3 text-left text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <p className="font-bold text-foreground">
-                {otherProject.name} · 快速切换
-              </p>
-              <p className="text-[11px] font-semibold text-muted-foreground">
-                查看另一可进入的项目
-              </p>
-            </Link>
-          ) : (
-            <Link
-              to="/app/projects"
-              className="block w-full rounded-3xl px-3 py-3 text-left text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <p className="font-bold text-foreground">浏览全部项目</p>
-              <p className="text-[11px] font-semibold text-muted-foreground">
-                切换对话上下文
-              </p>
-            </Link>
-          )}
+          <button
+            type="button"
+            onClick={() => navigate("/app/projects")}
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 px-3 py-2.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+          >
+            <Plus className="h-4 w-4" strokeWidth={2} />
+            新增对话
+          </button>
+          {conversations.map((conversation) => {
+            const active = conversation.projectId === projectId;
+            return (
+              <div
+                key={conversation.id}
+                className={cn(
+                  "w-full rounded-3xl border px-3 py-3 text-left shadow-sm transition-colors",
+                  active
+                    ? "border-primary/20 bg-primary/[0.07]"
+                    : "border-border/70 bg-white/70 hover:border-primary/20"
+                )}
+              >
+                <button
+                  type="button"
+                  onClick={() => navigate(`/app/chat/${conversation.projectId}`)}
+                  className="w-full text-left"
+                >
+                  <p
+                    className={cn(
+                      "text-[13px] font-bold leading-snug",
+                      active ? "text-primary" : "text-foreground"
+                    )}
+                  >
+                    {conversation.title}
+                  </p>
+                  <p className="text-[10px] font-semibold text-muted-foreground">
+                    {conversation.updatedAt}
+                  </p>
+                  <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                    {conversation.preview}
+                  </p>
+                </button>
+              </div>
+            );
+          })}
         </nav>
         <div className="border-t border-border/60 p-3">
           <div className="flex items-center gap-2 rounded-3xl border border-border/80 bg-muted/40 px-2 py-2">
@@ -625,18 +816,51 @@ export default function ConversationCenter() {
               {chatTitle}
             </h1>
             <p className="text-xs font-medium text-muted-foreground">
-              Master Agent · 今天
+              Master Agent 在线
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/[0.07] px-3 py-1.5 text-xs font-semibold text-primary">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-primary/80" />
-              Agent 在线
-            </span>
+          <div className="relative flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowHistoryMenu((v) => !v)}
+              className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/85 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/25 hover:text-foreground"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+              历史文件
+            </button>
+            {showHistoryMenu ? (
+              <div className="absolute right-0 top-10 z-20 w-[18rem] rounded-2xl border border-border/70 bg-white/95 p-2 shadow-[0_12px_32px_-16px_rgba(15,23,42,0.35)] backdrop-blur-md">
+                <p className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">
+                  历史文件树（{activeConversation?.files.length ?? 0}）
+                </p>
+                <div className="max-h-52 overflow-y-auto rounded-xl border border-border/60 bg-background/50 p-2">
+                  {!activeConversation || activeConversation.files.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">暂无历史文件</p>
+                  ) : (
+                    <ul className="space-y-1">
+                      {activeConversation.files.map((name) => (
+                        <li
+                          key={`${activeConversation.id}-${name}`}
+                          className="flex items-center gap-1.5 text-[11px] text-foreground"
+                        >
+                          <FileText className="h-3.5 w-3.5 text-primary/80" />
+                          <span className="truncate">{name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              </div>
+            ) : null}
           </div>
         </header>
 
         <div className="flex-1 space-y-6 overflow-y-auto px-4 py-6 md:px-8">
+          <div className="flex justify-center">
+            <span className="rounded-full border border-border/70 bg-white/80 px-3 py-1 text-[11px] font-medium text-muted-foreground">
+              {todayLabel}
+            </span>
+          </div>
           {projectRole === "admin" ? (
             <AiShell>
               <p className="text-sm font-semibold text-primary">
@@ -649,8 +873,7 @@ export default function ConversationCenter() {
               </p>
             </AiShell>
           ) : null}
-
-          <UserBubble>
+          <UserBubble time={timeMeta.userTimes[0]}>
             请概述「{project.name}」目前的资源配置全貌
           </UserBubble>
           <ResourceTableBlock
@@ -658,6 +881,7 @@ export default function ConversationCenter() {
             workspaceRole={projectRole}
             projectId={project.id}
             projectName={project.name}
+            time={timeMeta.aiTimes[0]}
           />
 
           {tier === "full" &&
@@ -669,11 +893,11 @@ export default function ConversationCenter() {
                     {ex.attachments && ex.attachments.length > 0 ? (
                       <ChatSentFilesPanel files={ex.attachments} />
                     ) : null}
-                    <UserBubble>{ex.userLine}</UserBubble>
+                    <UserBubble time={timeMeta.userTimes[1]}>{ex.userLine}</UserBubble>
                   </div>
                   {ex.confirmation ? (
                     <>
-                      <AiShell>
+                      <AiShell time={timeMeta.aiTimes[1]}>
                         <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
                           {ex.confirmation.agentPrompt}
                         </p>
@@ -681,10 +905,12 @@ export default function ConversationCenter() {
                           ● Master Agent · 待您确认
                         </p>
                       </AiShell>
-                      <UserBubble>{ex.confirmation.userConfirmLine}</UserBubble>
+                      <UserBubble time={timeMeta.userTimes[1]}>
+                        {ex.confirmation.userConfirmLine}
+                      </UserBubble>
                     </>
                   ) : null}
-                  <AiShell>
+                  <AiShell time={timeMeta.aiTimes[1]}>
                     <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
                       {ex.aiBody}
                     </p>
@@ -708,12 +934,13 @@ export default function ConversationCenter() {
                     step.attachments.length > 0 ? (
                       <ChatSentFilesPanel files={step.attachments} />
                     ) : null}
-                    <UserBubble>{step.userLine}</UserBubble>
+                    <UserBubble time={timeMeta.userTimes[1]}>{step.userLine}</UserBubble>
                   </div>
                   {step.kind === "credibility" ? (
                     <CredibilityBlock
                       tier={tier}
                       chat={resourceDemo.chat}
+                      time={timeMeta.aiTimes[1]}
                       midSummaryLines={
                         step.summaryLines && step.summaryLines.length > 0
                           ? step.summaryLines
@@ -721,28 +948,28 @@ export default function ConversationCenter() {
                       }
                     />
                   ) : step.kind === "refusal" ? (
-                    <MidRefusalBlock body={step.body} />
+                    <MidRefusalBlock body={step.body} time={timeMeta.aiTimes[1]} />
                   ) : (
-                    <MidTextBlock title={step.title} body={step.body} />
+                    <MidTextBlock title={step.title} body={step.body} time={timeMeta.aiTimes[1]} />
                   )}
                 </div>
               ))}
             </>
           ) : (
             <>
-              <UserBubble>
+              <UserBubble time={timeMeta.userTimes[1]}>
                 {tier === "low"
                   ? resourceDemo.chat.credibilityUserLineLow
                   : tier === "mid"
                     ? resourceDemo.chat.credibilityUserLineMid
                     : resourceDemo.chat.credibilityUserLine}
               </UserBubble>
-              <CredibilityBlock tier={tier} chat={resourceDemo.chat} />
+              <CredibilityBlock tier={tier} chat={resourceDemo.chat} time={timeMeta.aiTimes[1]} />
             </>
           )}
 
-          <UserBubble>推荐最佳合作方案</UserBubble>
-          <RankingBlock tier={tier} chat={resourceDemo.chat} />
+          <UserBubble time={timeMeta.userTimes[2]}>推荐最佳合作方案</UserBubble>
+          <RankingBlock tier={tier} chat={resourceDemo.chat} time={timeMeta.aiTimes[2]} />
         </div>
 
         <footer className="relative border-t border-border/50 bg-white/70 px-4 py-4 backdrop-blur-md md:rounded-br-[1.65rem] md:px-6">
@@ -819,6 +1046,25 @@ export default function ConversationCenter() {
             </button>
             <button
               type="button"
+              onClick={() => {
+                if (!projectId) return;
+                if (selectedFiles.length === 0) return;
+                const names = selectedFiles.map((f) => f.name);
+                setConversations((prev) =>
+                  prev.map((t) =>
+                    t.projectId === projectId
+                      ? {
+                          ...t,
+                          files: Array.from(new Set([...t.files, ...names])),
+                          preview: `已上传 ${names.length} 个文件`,
+                          updatedAt: getCurrentDateTimeLabel(),
+                        }
+                      : t
+                  )
+                );
+                setSelectedFiles([]);
+                setShowUploadPanel(false);
+              }}
               className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-8 text-sm font-semibold text-primary-foreground shadow-[0_2px_12px_-2px_rgba(37,99,235,0.28)] transition-all hover:bg-primary/92 active:scale-[0.98]"
             >
               <Plane className="h-4 w-4" strokeWidth={2} />

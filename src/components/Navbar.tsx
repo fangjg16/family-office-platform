@@ -25,7 +25,7 @@ export function Navbar() {
       <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 sm:px-6 md:gap-6 md:px-10 lg:px-12">
         <Link
           to="/"
-          className="font-display text-[1.05rem] font-semibold uppercase tracking-[0.12em] text-gradient-landing"
+          className="font-display text-[1.05rem] font-semibold tracking-[0.08em] text-gradient-landing"
         >
           合域
         </Link>

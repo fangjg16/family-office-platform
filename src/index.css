@@ -29,6 +29,8 @@
     --gradient-start: 199 100% 65%;
     --gradient-mid: 217 91% 60%;
     --gradient-end: 213 96% 72%;
+    /** 落地页强调：实色（禁止渐变填充文字，见 .text-landing-accent） */
+    --landing-accent: 199 89% 68%;
     color-scheme: dark;
   }
 
@@ -70,6 +72,7 @@
     --gradient-start: 217 91% 55%;
     --gradient-mid: 217 91% 48%;
     --gradient-end: 199 89% 48%;
+    --landing-accent: 217 65% 42%;
     color-scheme: light;
   }
 
@@ -79,6 +82,15 @@
 }
 
 @layer utilities {
+  /** 落地页品牌强调色（导航、区块标题、页脚等） */
+  .text-landing-accent {
+    color: hsl(var(--landing-accent));
+  }
+
+  /**
+   * 首屏主标题「合域AI」专用：保留青蓝渐变字（产品明确要求）。
+   * 其它位置仍用 .text-landing-accent 实色，避免全站渐变字。
+   */
   .text-gradient-landing {
     background: linear-gradient(
       135deg,

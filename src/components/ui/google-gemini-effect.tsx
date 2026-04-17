@@ -166,7 +166,7 @@ export function GoogleGeminiEffect({
     <div className={cn("relative sticky top-24 md:top-32", className)}>
       <div className="mx-auto w-full max-w-4xl px-4 pb-10 md:px-6 md:pb-14">
         {typeof title === "string" || title == null ? (
-          <p className="bg-gradient-to-b from-neutral-100 to-neutral-300 bg-clip-text pb-4 text-center text-lg font-normal text-transparent md:text-7xl">
+          <p className="pb-4 text-center text-lg font-normal text-neutral-200 md:text-7xl">
             {(title as string | undefined) ?? defaultTitle}
           </p>
         ) : (

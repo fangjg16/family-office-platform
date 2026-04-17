@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { Link } from "react-router-dom";
 import {
   BookOpen,
   Brain,
@@ -156,12 +157,12 @@ export default function Index() {
           id="knowledge"
           className="scroll-mt-24 px-4 py-20 sm:px-6 md:px-10 md:py-24 lg:px-12"
         >
-          <div className="mx-auto max-w-4xl">
+          <div className="mx-auto max-w-4xl text-center">
             <SectionLabel>Knowledge base</SectionLabel>
             <h2 className="font-display text-2xl font-extralight tracking-tight text-foreground md:text-[1.65rem]">
               智库——对话即服务
             </h2>
-            <p className="mt-4 text-[0.88rem] font-light leading-relaxed text-muted-foreground">
+            <p className="mx-auto mt-4 max-w-[65ch] text-[0.88rem] font-light leading-relaxed text-muted-foreground">
               不再需要翻阅报告、等待回复。用户用自己的语言提出问题，平台从知识库中检索、整合并生成回答——每一条信息都可溯源至原始文档。
             </p>
           </div>
@@ -201,16 +202,22 @@ export default function Index() {
       <footer className="border-t border-white/[0.06] px-4 py-12 sm:px-6 md:px-10 lg:px-12">
         <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 md:flex-row md:items-center">
           <div>
-            <p className="font-display text-lg font-medium tracking-tight text-gradient-landing">
+            <p className="font-display text-lg font-medium tracking-tight text-landing-accent">
               合域
             </p>
             <p className="mt-2 max-w-xs text-[0.8rem] leading-relaxed text-muted-foreground">
               以 AI Agent 为引擎的多家族联合投资决策辅助系统
             </p>
           </div>
-          <p className="text-[0.78rem] text-muted-foreground/80">
-            © {new Date().getFullYear()} 合域
-          </p>
+          <div className="flex flex-col items-start gap-2 text-[0.78rem] text-muted-foreground/80 md:items-end">
+            <Link
+              to="/privacy"
+              className="transition-colors hover:text-foreground"
+            >
+              Privacy Policy（隐私政策）
+            </Link>
+            <p>© {new Date().getFullYear()} 合域</p>
+          </div>
         </div>
       </footer>
     </div>

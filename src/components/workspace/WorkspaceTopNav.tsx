@@ -1,11 +1,11 @@
-import { useState } from "react";
+﻿import { useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutGrid,
   LogOut,
   MessageSquare,
+  Search,
   ShieldCheck,
-  UserRoundCog,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -38,6 +38,14 @@ export function WorkspaceTopNav() {
   const isGuest = user?.id === GUEST_USER_ID;
   const isAdmin = user?.id === "candice-guo";
   const adminActive = pathname.startsWith("/app/admin");
+  const projectsActive = pathname.startsWith("/app/projects");
+  const userInitial =
+    (user?.displayName ?? "?")
+      .split(/[\s-]+/)
+      .map((s) => s[0])
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "?";
 
   const [guestDialog, setGuestDialog] = useState(false);
 
@@ -46,26 +54,48 @@ export function WorkspaceTopNav() {
     navigate("/app/login", { replace: true });
   };
 
-  /** 切换身份：清会话并回到登录页，模拟重新登录 */
-  const switchAccount = () => {
-    clearSession();
-    navigate("/app/login?switch=1", { replace: true });
-  };
-
   return (
     <>
       <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 px-3 py-3 backdrop-blur-xl sm:px-5 md:px-8">
-        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3">
-          <Link
-            to="/"
-            className="font-display text-sm font-semibold tracking-tight text-foreground transition-colors hover:text-primary md:text-base"
-          >
-            合域
-          </Link>
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 md:flex-nowrap">
+          <div className="flex items-center gap-3">
+            <Link
+              to="/"
+              className="text-gradient-landing font-display text-sm font-semibold tracking-tight md:text-base"
+            >
+              合域
+            </Link>
+            <div className="hidden items-center md:flex">
+              {projectsActive ? (
+                <div className="flex w-[340px] items-center rounded-full border border-border/70 bg-white/85 px-4 py-2 shadow-sm">
+                  <Search className="mr-2 h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                  <input
+                    type="text"
+                    placeholder="搜索项目"
+                    className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+                    aria-label="搜索项目"
+                  />
+                </div>
+              ) : null}
+            </div>
+          </div>
           <nav
-            className="flex flex-1 items-center justify-center gap-1 rounded-full border border-border/70 bg-white/70 p-1 shadow-sm backdrop-blur-md sm:gap-2 md:justify-end md:bg-white/85"
+            className="flex shrink-0 items-center justify-center gap-1 rounded-full border border-border/70 bg-white/70 p-1 shadow-sm backdrop-blur-md sm:gap-2 md:justify-end md:bg-white/85"
             aria-label="工作台主导航"
           >
+            {user ? (
+              <>
+                <div className="hidden items-center gap-2 px-2 md:flex">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-[10px] font-bold text-primary">
+                    {userInitial}
+                  </span>
+                  <span className="text-xs font-medium text-muted-foreground">
+                    {user.displayName}
+                  </span>
+                </div>
+                <div className="mx-1 hidden h-4 w-px bg-border/80 md:block" />
+              </>
+            ) : null}
             <NavLink to="/app/projects" className={linkClass} end>
               <LayoutGrid className="h-4 w-4 opacity-80" strokeWidth={2} />
               项目总览
@@ -107,14 +137,6 @@ export function WorkspaceTopNav() {
                 管理中枢
               </NavLink>
             ) : null}
-            <button
-              type="button"
-              onClick={switchAccount}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:px-4 md:text-[0.8rem]"
-            >
-              <UserRoundCog className="h-4 w-4" strokeWidth={2} />
-              切换账号
-            </button>
             <button
               type="button"
               onClick={logout}
