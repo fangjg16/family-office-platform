@@ -200,23 +200,51 @@ export default function Index() {
       </main>
 
       <footer className="border-t border-white/[0.06] px-4 py-12 sm:px-6 md:px-10 lg:px-12">
-        <div className="mx-auto flex max-w-6xl flex-col items-start justify-between gap-8 md:flex-row md:items-center">
-          <div>
-            <p className="font-display text-lg font-medium tracking-tight text-landing-accent">
+        <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:items-start md:justify-between md:gap-10 lg:gap-14">
+          <div className="shrink-0 md:max-w-xs">
+            <p className="font-display text-lg font-medium leading-none tracking-tight text-landing-accent">
               合域
             </p>
             <p className="mt-2 max-w-xs text-[0.8rem] leading-relaxed text-muted-foreground">
               以 AI Agent 为引擎的多家族联合投资决策辅助系统
             </p>
           </div>
-          <div className="flex flex-col items-start gap-2 text-[0.78rem] text-muted-foreground/80 md:items-end">
+          <div className="grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-x-8 md:gap-y-3 lg:gap-x-12">
+            <p className="flex flex-wrap items-baseline justify-start gap-x-2 text-[0.72rem] leading-none text-muted-foreground/80 md:col-start-1 md:row-start-1 md:w-full md:justify-end md:self-end">
+              <span className="font-medium uppercase tracking-[0.14em] text-muted-foreground/65">Legal</span>
+              <span className="text-muted-foreground/45" aria-hidden>
+                ·
+              </span>
+              <span className="font-medium text-muted-foreground/85">法律信息</span>
+            </p>
             <Link
               to="/privacy"
-              className="transition-colors hover:text-foreground"
+              className="block text-left text-[0.78rem] text-muted-foreground/80 transition-colors hover:text-foreground md:col-start-1 md:row-start-2 md:text-right"
             >
               Privacy Policy（隐私政策）
             </Link>
-            <p>© {new Date().getFullYear()} 合域</p>
+            <Link
+              to="/terms"
+              className="block text-left text-[0.78rem] text-muted-foreground/80 transition-colors hover:text-foreground md:col-start-1 md:row-start-3 md:text-right"
+            >
+              Terms of Service（服务条款）
+            </Link>
+            <p className="flex flex-wrap items-baseline justify-start gap-x-2 text-[0.72rem] leading-none text-muted-foreground/80 md:col-start-2 md:row-start-1 md:w-full md:justify-end md:self-end">
+              <span className="font-medium uppercase tracking-[0.14em] text-muted-foreground/65">Contact</span>
+              <span className="text-muted-foreground/45" aria-hidden>
+                ·
+              </span>
+              <span className="font-medium text-muted-foreground/85">联系方式</span>
+            </p>
+            <a
+              href="mailto:support@jfo.ai"
+              className="block text-left text-[0.78rem] text-muted-foreground/80 transition-colors hover:text-foreground md:col-start-2 md:row-start-2 md:text-right"
+            >
+              Email: support@jfo.ai
+            </a>
+            <p className="text-left text-[0.78rem] leading-none text-muted-foreground/80 md:col-start-3 md:row-start-1 md:self-end md:text-right">
+              © {new Date().getFullYear()} 合域
+            </p>
           </div>
         </div>
       </footer>

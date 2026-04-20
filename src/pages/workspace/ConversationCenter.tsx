@@ -8,7 +8,6 @@ import {
   Paperclip,
   Plane,
   Plus,
-  RefreshCw,
   Sparkles,
   X,
 } from "lucide-react";
@@ -36,6 +35,8 @@ type SessionConversation = {
   preview: string;
   updatedAt: string;
   files: string[];
+  /** 演示剧本对话；blank 为空白新对话 */
+  variant?: "demo" | "blank";
 };
 
 type SessionConversationState = {
@@ -137,7 +138,15 @@ function buildConversationFromProject(projectId: string): SessionConversation | 
     preview: demo.chat.sidebarPreview,
     updatedAt: getLastDialogueDateTime(projectId),
     files: Array.from(new Set(names)),
+    variant: "demo",
   };
+}
+
+function conversationPath(c: SessionConversation): string {
+  if (c.id === `${c.projectId}-main`) {
+    return `/app/chat/${c.projectId}`;
+  }
+  return `/app/chat/${c.projectId}/${c.id}`;
 }
 
 function getDefaultConversations(): SessionConversation[] {
@@ -551,7 +560,7 @@ function permissionLineFor(role: WorkspaceRole): string {
     case "core":
       return "Master Agent · Core · 财务细节与完整评分";
     case "mid":
-      return "Master Agent · Mid · 脱敏视图 · 不可触发重新评分";
+      return "Master Agent · Mid · 脱敏视图 · 不可重评";
     case "low":
       return "Master Agent · Low · 最低权限对话";
     default:
@@ -559,9 +568,17 @@ function permissionLineFor(role: WorkspaceRole): string {
   }
 }
 
+/** 侧栏展示用：去掉前缀「Master Agent ·」 */
+function permissionLineSidebar(role: WorkspaceRole): string {
+  return permissionLineFor(role).replace(/^Master Agent ·\s*/u, "").trim();
+}
+
 export default function ConversationCenter() {
   const navigate = useNavigate();
-  const { projectId } = useParams<{ projectId: string }>();
+  const { projectId, conversationId } = useParams<{
+    projectId: string;
+    conversationId?: string;
+  }>();
   const [userId, setUserId] = useState<string | null>(null);
   const [user, setUser] = useState<WorkspaceUser | null>(null);
   const [showUploadPanel, setShowUploadPanel] = useState(false);
@@ -617,9 +634,7 @@ export default function ConversationCenter() {
     [projectId]
   );
 
-  const permissionLine = projectRole
-    ? permissionLineFor(projectRole)
-    : "";
+  const permissionSidebarHint = projectRole ? permissionLineSidebar(projectRole) : "";
   const defaultChatTitle = project ? `${project.name} · 全局分析` : "项目对话";
   const timeMeta = projectId ? getProjectTimeMeta(projectId) : getProjectTimeMeta("");
   const todayLabel = timeMeta.dayLabel;
@@ -658,7 +673,23 @@ export default function ConversationCenter() {
     };
   }, [userId, conversations]);
 
-  const activeConversation = conversations.find((item) => item.projectId === projectId) ?? null;
+  const effectiveConversationId =
+    projectId && conversationId ? conversationId : projectId ? `${projectId}-main` : "";
+
+  const activeConversation = useMemo(() => {
+    if (!effectiveConversationId) return null;
+    return conversations.find((item) => item.id === effectiveConversationId) ?? null;
+  }, [conversations, effectiveConversationId]);
+
+  useEffect(() => {
+    if (!projectId || !userId) return;
+    if (!conversationId) return;
+    if (conversations.length === 0) return;
+    const exists = conversations.some((item) => item.id === conversationId);
+    if (!exists) {
+      navigate(`/app/chat/${projectId}`, { replace: true });
+    }
+  }, [projectId, conversationId, conversations, userId, navigate]);
 
   useEffect(() => {
     setShowHistoryMenu(false);
@@ -699,14 +730,24 @@ export default function ConversationCenter() {
   }
 
   const chatTitle = activeConversation?.title ?? defaultChatTitle;
+  const isBlankThread = activeConversation?.variant === "blank";
+  const chatDayLabel =
+    isBlankThread
+      ? new Intl.DateTimeFormat("zh-CN", {
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        }).format(new Date())
+      : todayLabel;
 
   return (
     <WorkspaceShell
       shellClassName="h-screen overflow-hidden"
       contentClassName="overflow-hidden pb-3"
     >
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden md:flex-row md:rounded-[1.75rem] md:border md:border-border/45 md:bg-white/55 md:shadow-[0_28px_90px_-48px_rgba(37,99,235,0.2)] md:backdrop-blur-xl">
-        <aside className="flex w-full shrink-0 flex-col overflow-hidden border-b border-border/60 bg-white/70 backdrop-blur-md md:w-[17rem] md:rounded-l-[1.75rem] md:border-b-0 md:border-r md:border-border/50">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden md:rounded-[1.75rem] md:border md:border-border/45 md:bg-white/55 md:shadow-[0_28px_90px_-48px_rgba(37,99,235,0.2)] md:backdrop-blur-xl">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
+        <aside className="flex w-full shrink-0 flex-col overflow-hidden border-b border-border/60 bg-white/70 backdrop-blur-md md:w-[17rem] md:rounded-tl-[1.75rem] md:border-b-0 md:border-r md:border-border/50">
         <div className="border-b border-border/60 px-4 py-4">
           <div className="flex items-center gap-3">
             <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary shadow-inner shadow-primary/5 transition-colors hover:from-primary/20">
@@ -722,44 +763,70 @@ export default function ConversationCenter() {
             </div>
           </div>
         </div>
-        <nav className="flex-1 space-y-2 overflow-y-auto p-3">
+        <nav className="flex-1 space-y-1.5 overflow-y-auto p-3">
           <button
             type="button"
-            onClick={() => navigate("/app/projects")}
+            onClick={() => {
+              if (!projectId || !project) return;
+              const newId = `${projectId}-blank-${Date.now()}`;
+              const newConv: SessionConversation = {
+                id: newId,
+                projectId,
+                title: `${project.name} · 新对话`,
+                preview: "尚未发送消息",
+                updatedAt: getCurrentDateTimeLabel(),
+                files: [],
+                variant: "blank",
+              };
+              setConversations((prev) => {
+                const next = [newConv, ...prev];
+                if (userId) SESSION_CONVERSATION_CACHE[userId] = { conversations: next };
+                return next;
+              });
+              navigate(`/app/chat/${projectId}/${newId}`);
+            }}
             className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 px-3 py-2.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
             新增对话
           </button>
           {conversations.map((conversation) => {
-            const active = conversation.projectId === projectId;
+            const active = conversation.id === effectiveConversationId;
             return (
               <div
                 key={conversation.id}
                 className={cn(
-                  "w-full rounded-3xl border px-3 py-3 text-left shadow-sm transition-colors",
+                  "relative w-full rounded-xl border px-3 py-3 text-left transition-colors",
                   active
-                    ? "border-primary/20 bg-primary/[0.07]"
-                    : "border-border/70 bg-white/70 hover:border-primary/20"
+                    ? "border-primary/30 bg-primary/[0.08]"
+                    : "border-transparent bg-white/70 hover:border-border/80 hover:bg-white"
                 )}
               >
+                {active ? (
+                  <span
+                    aria-hidden
+                    className="absolute bottom-1.5 right-0 top-1.5 w-[3px] rounded-full bg-primary/90"
+                  />
+                ) : null}
                 <button
                   type="button"
-                  onClick={() => navigate(`/app/chat/${conversation.projectId}`)}
+                  onClick={() => navigate(conversationPath(conversation))}
                   className="w-full text-left"
                 >
-                  <p
-                    className={cn(
-                      "text-[13px] font-bold leading-snug",
-                      active ? "text-primary" : "text-foreground"
-                    )}
-                  >
-                    {conversation.title}
-                  </p>
-                  <p className="text-[10px] font-semibold text-muted-foreground">
-                    {conversation.updatedAt}
-                  </p>
-                  <p className="mt-1 line-clamp-2 text-[11px] leading-snug text-muted-foreground">
+                  <div className="flex items-start justify-between gap-2">
+                    <p
+                      className={cn(
+                        "line-clamp-1 pr-1 text-[13px] font-semibold leading-snug",
+                        active ? "text-primary" : "text-foreground"
+                      )}
+                    >
+                      {conversation.title}
+                    </p>
+                    <p className="shrink-0 text-[10px] font-semibold text-primary/65">
+                      {conversation.updatedAt.split(" ")[0]}
+                    </p>
+                  </div>
+                  <p className="mt-1 line-clamp-1 text-[12px] leading-snug text-muted-foreground">
                     {conversation.preview}
                   </p>
                 </button>
@@ -767,43 +834,9 @@ export default function ConversationCenter() {
             );
           })}
         </nav>
-        <div className="border-t border-border/60 p-3">
-          <div className="flex items-center gap-2 rounded-3xl border border-border/80 bg-muted/40 px-2 py-2">
-            <div
-              className={cn(
-                "flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold",
-                user.avatarClass
-              )}
-            >
-              {user.avatarChar}
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-bold text-foreground">
-                {user.displayName}
-              </p>
-              <p className="truncate text-[10px] font-medium text-muted-foreground">
-                {user.orgTitle}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              aria-label="刷新"
-            >
-              <RefreshCw className="h-4 w-4" />
-            </button>
-          </div>
-          <Link
-            to="/"
-            className="mt-2 flex items-center gap-1 rounded-full px-1 py-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
-          >
-            <ArrowLeft className="h-3 w-3" />
-            返回官网
-          </Link>
-        </div>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-gradient-to-b from-background/30 to-background/5 md:rounded-r-[1.75rem]">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-gradient-to-b from-background/30 to-background/5 md:rounded-tr-[1.75rem]">
         <header className="sticky top-0 z-10 flex flex-wrap items-start justify-between gap-3 border-b border-border/50 bg-white/65 px-4 py-4 backdrop-blur-md md:px-6">
           <div>
             <Link
@@ -858,9 +891,18 @@ export default function ConversationCenter() {
         <div className="flex-1 space-y-6 overflow-y-auto px-4 py-6 md:px-8">
           <div className="flex justify-center">
             <span className="rounded-full border border-border/70 bg-white/80 px-3 py-1 text-[11px] font-medium text-muted-foreground">
-              {todayLabel}
+              {chatDayLabel}
             </span>
           </div>
+          {isBlankThread ? (
+            <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-white/40 px-6 py-16 text-center">
+              <p className="text-sm font-semibold text-foreground">空白对话</p>
+              <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
+                在下方输入消息或上传文件，开始与 Master Agent 对话。
+              </p>
+            </div>
+          ) : (
+            <>
           {projectRole === "admin" ? (
             <AiShell>
               <p className="text-sm font-semibold text-primary">
@@ -970,9 +1012,28 @@ export default function ConversationCenter() {
 
           <UserBubble time={timeMeta.userTimes[2]}>推荐最佳合作方案</UserBubble>
           <RankingBlock tier={tier} chat={resourceDemo.chat} time={timeMeta.aiTimes[2]} />
+            </>
+          )}
+        </div>
+      </div>
         </div>
 
-        <footer className="relative border-t border-border/50 bg-white/70 px-4 py-4 backdrop-blur-md md:rounded-br-[1.65rem] md:px-6">
+        <div className="flex shrink-0 flex-col border-t border-border/50 bg-white/70 backdrop-blur-md md:flex-row">
+          <div className="py-3 pl-6 pr-3 md:w-[17rem] md:shrink-0 md:rounded-bl-[1.65rem] md:border-r md:border-border/50">
+            {permissionSidebarHint ? (
+              <p className="mb-2.5 text-[10px] font-medium leading-snug text-muted-foreground">
+                当前项目权限：{permissionSidebarHint}
+              </p>
+            ) : null}
+            <Link
+              to="/"
+              className="flex items-center gap-1 rounded-full px-1 py-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              返回官网
+            </Link>
+          </div>
+          <footer className="relative flex-1 px-4 py-4 md:rounded-br-[1.65rem] md:px-6">
           {showUploadPanel ? (
             <div className="mb-3 rounded-2xl border border-dashed border-primary/45 bg-white p-3 shadow-sm">
               <div
@@ -1052,7 +1113,7 @@ export default function ConversationCenter() {
                 const names = selectedFiles.map((f) => f.name);
                 setConversations((prev) =>
                   prev.map((t) =>
-                    t.projectId === projectId
+                    t.id === effectiveConversationId
                       ? {
                           ...t,
                           files: Array.from(new Set([...t.files, ...names])),
@@ -1082,11 +1143,8 @@ export default function ConversationCenter() {
               e.currentTarget.value = "";
             }}
           />
-          <p className="mt-3 text-center text-[11px] font-medium text-muted-foreground">
-            {permissionLine}
-          </p>
         </footer>
-      </div>
+        </div>
     </div>
     </WorkspaceShell>
   );

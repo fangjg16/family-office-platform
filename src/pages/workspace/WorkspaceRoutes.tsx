@@ -22,6 +22,7 @@ export default function WorkspaceRoutes() {
           <Route path="projects" element={<ProjectOverview />} />
           <Route path="admin" element={<AdminPortal />} />
           <Route path="chat" element={<WorkspaceChatRedirect />} />
+          <Route path="chat/:projectId/:conversationId" element={<ConversationCenter />} />
           <Route path="chat/:projectId" element={<ConversationCenter />} />
         </Route>
       </Routes>

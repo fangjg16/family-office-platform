@@ -163,8 +163,14 @@ export function GoogleGeminiEffect({
 
   /** Aceternity 原版叠层：负 top 让曲线落在首屏可见区，避免再被压到视区外 */
   return (
-    <div className={cn("relative sticky top-24 md:top-32", className)}>
-      <div className="mx-auto w-full max-w-4xl px-4 pb-10 md:px-6 md:pb-14">
+    <div
+      className={cn(
+        "relative sticky top-20 md:top-24 lg:top-32",
+        "[@media(max-height:900px)]:-translate-y-3 [@media(max-height:800px)]:-translate-y-6 [@media(max-height:700px)]:-translate-y-8",
+        className
+      )}
+    >
+      <div className="mx-auto w-full max-w-4xl px-4 pb-6 md:px-6 md:pb-9 lg:pb-10">
         {typeof title === "string" || title == null ? (
           <p className="pb-4 text-center text-lg font-normal text-neutral-200 md:text-7xl">
             {(title as string | undefined) ?? defaultTitle}
@@ -184,9 +190,9 @@ export function GoogleGeminiEffect({
           </div>
         )}
       </div>
-      <div className="absolute top-0 flex h-[890px] w-full items-center justify-center md:-top-12">
+      <div className="absolute top-0 flex h-[890px] w-full items-center justify-center md:-top-14 [@media(max-height:900px)]:md:-top-20 [@media(max-height:800px)]:md:-top-24">
         {cta ? (
-          <div className="z-30 mx-auto mt-11 w-fit translate-y-1.5 md:mt-28 md:translate-y-2">
+          <div className="z-30 mx-auto mt-8 w-fit translate-y-1.5 md:mt-20 md:translate-y-1.5 lg:mt-28 lg:translate-y-2">
             {cta}
           </div>
         ) : null}
@@ -196,7 +202,7 @@ export function GoogleGeminiEffect({
         height="890"
         viewBox="0 0 1440 890"
         xmlns="http://www.w3.org/2000/svg"
-        className="pointer-events-none absolute top-0 w-full md:-top-12"
+        className="pointer-events-none absolute top-0 w-full md:-top-14 [@media(max-height:900px)]:md:-top-20 [@media(max-height:800px)]:md:-top-24"
         aria-hidden
       >
         {svgInner}

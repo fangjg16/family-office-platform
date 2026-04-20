@@ -15,7 +15,7 @@ export function LandingGeminiSection() {
   const pathDraw = geminiPathLengths(scrollP);
 
   return (
-    <div className="relative w-full overflow-x-clip rounded-b-3xl border-x border-white/[0.06] bg-[hsl(240_43%_5%)] pt-24 md:pt-28 lg:pt-32">
+    <div className="relative w-full overflow-x-clip rounded-b-3xl border-x border-white/[0.06] bg-[hsl(240_43%_5%)] pt-20 md:pt-24 lg:pt-28">
       <div
         ref={ref}
         className="h-[min(280vh,3200px)] w-full min-h-[180vh]"

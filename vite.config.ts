@@ -13,5 +13,9 @@ export default defineConfig({
     port: 5173,
     /** 监听所有网卡，避免仅未启动服务时访问 localhost 失败；也可用 http://127.0.0.1:5173 */
     host: true,
+    /** 允许从仓库根目录 `../` 读取《服务条款》.txt 唯一源 */
+    fs: {
+      allow: [path.resolve(__dirname, "..")],
+    },
   },
 });

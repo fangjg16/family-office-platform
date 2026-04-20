@@ -2,15 +2,14 @@ import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
+type BilingualPair = { en: string; zh: string };
+
 type PolicyBlock =
   | { type: "paragraph"; content: string }
+  | { type: "bilingual"; en: string; zh: string }
   | { type: "list"; items: string[] }
-  | { type: "subheading"; title: string }
-  | {
-      type: "table";
-      headers: string[];
-      rows: string[][];
-    };
+  | { type: "bilingual-list"; items: BilingualPair[] }
+  | { type: "subheading"; title: string; titleZh?: string };
 
 type PolicySection = {
   id: string;
@@ -21,241 +20,578 @@ type PolicySection = {
 const POLICY_SECTIONS: PolicySection[] = [
   {
     id: "information-we-collect",
-    title: "1. Information We Collect",
+    title: "1. Information We Collect | 1. 我们收集的信息",
     blocks: [
-      { type: "paragraph", content: "We collect information in the following categories in connection with JFO.AI, our website, and related services." },
-      { type: "subheading", title: "1.1 Personal Information You Provide" },
-      { type: "list", items: [
-        "Account information, such as your name, email address, password, profile image, title, company name, and related profile details.",
-        "Billing information, such as payment method details, billing address, and transaction history handled by third-party payment processors.",
-        "Communications, such as support requests, feedback, and other messages you send to us."
-      ]},
-      { type: "subheading", title: "1.2 Workspace Data" },
-      { type: "list", items: [
-        "Organization and team data, including workspace names, roles, permissions, and settings.",
-        "User-generated content, including prompts, task descriptions, documents, messages, notes, uploads, and related records."
-      ]},
-      { type: "subheading", title: "1.3 AI Interaction Data" },
-      { type: "list", items: [
-        "Prompts and instructions you provide to AI agents.",
-        "Agent outputs, including responses, drafts, actions, and deliverables generated on your behalf.",
-        "Conversation histories, task threads, feedback, tool logs, execution traces, and decision records."
-      ]},
-      { type: "subheading", title: "1.4 Connected Tool Data" },
-      { type: "paragraph", content: "When you authorize integrations, we may process data from connected tools such as email, calendars, communication platforms, code repositories, document systems, and project management software to complete authorized tasks." },
-      { type: "subheading", title: "1.5 Automatically Collected Information" },
-      { type: "list", items: [
-        "Device, browser, and operating system information.",
-        "Usage data such as pages visited, features used, click patterns, session duration, and referring URLs.",
-        "Log, diagnostic, and approximate location data inferred from IP address."
-      ]},
+      {
+        type: "bilingual",
+        en: "We collect information in the following categories:",
+        zh: "我们收集以下类别的信息：",
+      },
+      { type: "subheading", title: "1.1 Personal Information You Provide", titleZh: "1.1 您提供的个人信息" },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Account Information: Name, email address, password, profile photo, job title, company name, and other information you provide when creating or updating your account on jfo.ai.",
+            zh: "账户信息：姓名、电子邮件地址、密码、头像、职位、公司名称以及您在 jfo.ai 上创建或更新账户时提供的其他信息。",
+          },
+          {
+            en: "Communications: Information you provide when you contact us for support, submit feedback, or otherwise communicate with us.",
+            zh: "通信信息：您在联系我们寻求支持、提交反馈或通过其他方式与我们沟通时提供的信息。",
+          },
+        ],
+      },
+      { type: "subheading", title: "1.2 Workspace Data", titleZh: "1.2 工作区数据" },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Organization and Team Data: Organization names, member roles, permissions, and organizational settings.",
+            zh: "组织和团队数据：组织名称、成员角色、权限和组织设置。",
+          },
+          {
+            en: "User-Generated Content: Instructions, prompts, task descriptions, documents, messages, and other content you create or upload within the Services.",
+            zh: "用户生成内容：您在服务中创建或上传的说明、提示、任务描述、文档、消息及其他内容。",
+          },
+        ],
+      },
+      { type: "subheading", title: "1.3 AI Interaction Data", titleZh: "1.3 AI 交互数据" },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Prompts and Instructions: Text, commands, and instructions you provide to AI agents within the platform, including but not limited to project details, investment intentions, resource conditions, risk preferences, shareholder arbitration opinions, and other investment-related information you submit within the platform.",
+            zh: "提示和说明：您在平台内提供给 AI 代理的文本、命令和说明，包括但不限于项目详情、投资意向、资源条件、风险偏好、股东仲裁意见及其他与投资相关的信息。",
+          },
+          {
+            en: "Agent Outputs: Responses, content, deliverables, and actions generated by AI agents, including but not limited to project proposal recommendations, competitive analysis results, resource matching suggestions, valuation recommendations, and other outputs generated by the platform's AI system.",
+            zh: "智能体输出：由 AI 代理生成的响应、内容、交付成果和行动，包括但不限于平台 AI 系统生成的项目方案建议、竞争分析结果、资源匹配建议、估值建议及其他输出。",
+          },
+          {
+            en: "Conversation Histories: Logs of interactions between you and AI agents, including chat histories, task threads, and feedback.",
+            zh: "对话历史记录：您与 AI 代理之间的交互日志，包括聊天记录、任务线程和反馈。",
+          },
+          {
+            en: "Collaboration Records: Logs of discussions, resource submissions, scheme evaluations, voting records, and other collaborative activities within project groups.",
+            zh: "协作记录：项目群内的讨论记录、资源提交、方案评估、投票记录及其他协作活动日志。",
+          },
+          {
+            en: "Agent Action Logs: Records of actions taken by AI agents, including tool usage, decision-making steps, API calls, and execution traces.",
+            zh: "智能体操作日志：记录 AI 代理执行的操作，包括工具使用、决策步骤、API 调用和执行跟踪。",
+          },
+        ],
+      },
+      { type: "subheading", title: "1.4 Automatically Collected Information", titleZh: "1.4 自动收集的信息" },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Device and Browser Information: IP address, browser type and version, operating system, device identifiers, and screen resolution.",
+            zh: "设备和浏览器信息：IP 地址、浏览器类型和版本、操作系统、设备标识符和屏幕分辨率。",
+          },
+          {
+            en: "Usage Data: Pages visited on jfo.ai, features used, click patterns, session duration, referring URLs, and interaction patterns.",
+            zh: "使用数据：jfo.ai 上访问的页面、使用的功能、点击模式、会话时长、来源 URL 和交互模式。",
+          },
+          {
+            en: "Log Data: Server logs, error reports, access times, and diagnostic data.",
+            zh: "日志数据：服务器日志、错误报告、访问时间和诊断数据。",
+          },
+          {
+            en: "Location Data: Approximate geographic location inferred from your IP address.",
+            zh: "位置数据：根据您的 IP 地址推断出的大致地理位置。",
+          },
+        ],
+      },
     ],
   },
   {
-    id: "how-we-use",
-    title: "2. How We Process Your Information",
+    id: "how-we-process",
+    title: "2. How We Process Your Information | 2. 我们如何处理您的信息",
     blocks: [
-      { type: "paragraph", content: "We process personal information to provide, secure, improve, and support JFO.AI and its related services." },
-      { type: "list", items: [
-        "Provide and operate the service, including account creation, workspace management, and AI task execution.",
-        "Enable connected tool workflows and agent actions that you authorize.",
-        "Improve system quality, reliability, product performance, and feature development.",
-        "Send service notices, updates, and security communications; where permitted, marketing communications.",
-        "Detect fraud, prevent abuse, maintain security, and comply with legal obligations.",
-        "Conduct analytics, research, and customer support."
-      ]},
+      {
+        type: "bilingual",
+        en: "We process your personal information for the following purposes:",
+        zh: "我们出于以下目的处理您的个人信息：",
+      },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Providing the Services: To create and manage your account, operate the AI platform, execute tasks through AI agents, and deliver the core functionality of jfo.ai.",
+            zh: "提供服务：创建和管理您的账户，运营 AI 平台，通过 AI 代理执行任务，并提供 jfo.ai 的核心功能。",
+          },
+          {
+            en: "Improving the Services: To analyze usage patterns, diagnose technical issues, develop new features, and enhance the performance and reliability of our AI agents.",
+            zh: "改进服务：分析使用模式，诊断技术问题，开发新功能，并提升我们 AI 代理的性能和可靠性。",
+          },
+          {
+            en: "AI Model Enhancement: To use de-identified and aggregated data to improve our AI models, algorithms, and system performance.",
+            zh: "AI 模型增强：使用去标识化和聚合的数据来改进我们的 AI 模型、算法和系统性能。",
+          },
+          {
+            en: "Communications: To send you service-related notices, updates, security alerts, and administrative messages.",
+            zh: "通信：向您发送与服务相关的通知、更新、安全警报和管理消息。",
+          },
+          {
+            en: "Security and Fraud Prevention: To detect, investigate, and prevent fraudulent, unauthorized, or illegal activity.",
+            zh: "安全与防欺诈：检测、调查和预防欺诈、未经授权或非法活动。",
+          },
+          {
+            en: "Compliance: To comply with applicable laws, regulations, legal processes, and governmental requests.",
+            zh: "合规性：遵守适用的法律、法规、法律程序和政府要求。",
+          },
+          {
+            en: "Analytics: To conduct research and analytics to understand how users interact with the Services.",
+            zh: "分析：开展研究和分析，以了解用户如何与服务进行交互。",
+          },
+          {
+            en: "Customer Support: To respond to your inquiries, troubleshoot issues, and provide technical assistance.",
+            zh: "客户支持：为回应您的咨询、解决问题并提供技术支持。",
+          },
+        ],
+      },
     ],
   },
   {
     id: "legal-bases",
-    title: "3. Legal Bases for Processing",
+    title: "3. Legal Bases for Processing | 3. 处理的法律依据",
     blocks: [
-      { type: "subheading", title: "3.1 EEA, United Kingdom, and Switzerland" },
-      { type: "list", items: [
-        "Performance of a contract.",
-        "Legitimate interests, such as service improvement, analytics, fraud prevention, and security.",
-        "Consent, where required for specific activities.",
-        "Compliance with legal obligations."
-      ]},
-      { type: "subheading", title: "3.2 Canada" },
-      { type: "list", items: [
-        "Express or implied consent, except where law permits otherwise.",
-        "Legitimate business purposes that are reasonable in the circumstances.",
-        "Legal requirements under applicable privacy laws."
-      ]},
+      {
+        type: "bilingual",
+        en: 'We process your personal information under the following legal bases in accordance with applicable laws such as the Personal Information Protection Law of the People\'s Republic of China and the Personal Data (Privacy) Ordinance of the Hong Kong Special Administrative Region:',
+        zh: "我们依据《中华人民共和国个人信息保护法》及《香港特别行政区个人资料（私隐）条例》等适用法律，在以下法律基础下处理您的个人信息：",
+      },
+      {
+        type: "bilingual",
+        en: "(1) Obtain your consent — In situations where your consent is required (such as registering an account, using specific features, receiving marketing information, etc.), we will process your personal information after obtaining your explicit consent. You have the right to withdraw your consent at any time, but such withdrawal does not affect the legality of previous processing activities carried out based on your consent.",
+        zh: "（1）取得您的同意——在需要征得您同意的情形下（例如注册账户、使用特定功能、接收营销信息等），我们将在取得您的明示同意后处理您的个人信息。您有权随时撤回同意，但撤回不影响此前基于同意开展的处理活动的合法性。",
+      },
+      {
+        type: "bilingual",
+        en: "(2) Necessary for the conclusion or performance of a contract — To provide services to you, fulfill agreements with you, or respond to your requests, we may process your personal information within the scope necessary for the contract.",
+        zh: "（2）为订立或履行合同所必需——为向您提供服务、履行与您之间的协议或响应您的请求，我们可能在合同必要范围内处理您的个人信息。",
+      },
+      {
+        type: "bilingual",
+        en: "(3) Fulfill legal obligations — When required by laws and regulations, we may process your personal information to fulfill legal obligations or comply with the legitimate requirements of regulatory and judicial authorities.",
+        zh: "（3）履行法定义务——在法律法规要求的情况下，我们可能处理您的个人信息，以履行法定义务或配合监管、司法机关的合法要求。",
+      },
+      {
+        type: "bilingual",
+        en: "(4) Maintain public safety or significant legitimate interests — Within the scope permitted by law, to safeguard public safety, network security, or protect the legitimate rights and interests of users and ourselves, we may process relevant information in accordance with the law.",
+        zh: "（4）维护公共安全或重大合法权益——在法律允许的范围内，为维护公共安全、网络安全，或保护用户及我们的合法权益，我们可能依法处理相关信息。",
+      },
+      {
+        type: "bilingual",
+        en: "(5) De-identification processing — Subject to compliance with legal requirements, we may de-identify or anonymize personal information for statistical analysis, technical optimization, or model improvement. In such cases, such data will no longer identify specific individuals.",
+        zh: "（5）去标识化处理——在符合法律规定的前提下，我们可能对个人信息进行去标识化或匿名化处理，用于统计分析、技术优化或模型改进。在此情况下，该等数据将不再识别特定个人。",
+      },
     ],
   },
   {
     id: "sharing",
-    title: "4. When and With Whom We Share Your Information",
+    title: "4. When and With Whom We Share Your Information | 4. 我们何时以及与谁共享您的信息",
     blocks: [
-      { type: "list", items: [
-        "Service providers supporting infrastructure, payments, analytics, communications, and support.",
-        "AI model providers that power agent capabilities and process authorized prompts and context.",
-        "Connected third-party services that you explicitly authorize agents to access.",
-        "Acquirers or successor entities in a merger, acquisition, financing, reorganization, or sale.",
-        "Law enforcement, regulators, courts, or other parties where disclosure is required or appropriate by law.",
-        "Other parties where you have given explicit consent.",
-        "Recipients of aggregated or de-identified information that cannot reasonably identify you."
-      ]},
+      {
+        type: "bilingual",
+        en: "We may share your personal information in the following circumstances:",
+        zh: "我们可能会在以下情况下共享您的个人信息：",
+      },
+      { type: "subheading", title: "4.1 AI Model Providers", titleZh: "4.1 AI 模型提供商" },
+      {
+        type: "bilingual",
+        en: "We utilize third-party AI model providers including Minimax and Qwen. Data transmitted may include your prompts, conversation history, workspace context, and connected tool data.",
+        zh: "我们使用包括 Minimax 和阿里千问在内的第三方 AI 模型提供商。传输的数据可能包括您的提示、对话历史、工作区上下文和连接的工具数据。",
+      },
+      { type: "subheading", title: "4.2 Business Transfers", titleZh: "4.2 业务转让" },
+      {
+        type: "bilingual",
+        en: "In connection with any merger, acquisition, or reorganization, your personal information may be transferred to the acquiring entity.",
+        zh: "在任何合并、收购或重组过程中，您的个人信息可能会被转移至收购方实体。",
+      },
+      { type: "subheading", title: "4.3 Legal Requirements", titleZh: "4.3 法律要求" },
+      {
+        type: "bilingual",
+        en: "We may disclose your information if required by law, regulation, legal process, or governmental request.",
+        zh: "如果法律、法规、法律程序或政府要求，我们可能会披露您的信息。",
+      },
+      { type: "subheading", title: "4.4 Aggregated or De-Identified Data", titleZh: "4.4 聚合或去标识化数据" },
+      {
+        type: "bilingual",
+        en: "We may share aggregated or de-identified information that cannot reasonably be used to identify you.",
+        zh: "我们可能会分享无法合理用于识别您身份的汇总信息或去标识化信息。",
+      },
     ],
   },
   {
     id: "cookies",
-    title: "5. Cookies and Tracking Technologies",
+    title: "5. Cookies and Tracking Technologies | 5. Cookies 和跟踪技术",
     blocks: [
-      { type: "paragraph", content: "We and our service providers may use cookies, pixels, web beacons, and similar technologies to operate the service and understand usage." },
-      { type: "list", items: [
-        "Strictly necessary cookies for authentication, security, and core functionality.",
-        "Analytics cookies for usage measurement and product improvement.",
-        "Functional cookies that remember settings and preferences.",
-        "Marketing cookies where legally permitted."
-      ]},
-      { type: "paragraph", content: "Most browsers allow you to control cookies through settings. Disabling cookies may affect functionality." },
+      {
+        type: "bilingual",
+        en: "We use cookies, pixels, web beacons, and similar tracking technologies.",
+        zh: "我们使用 cookies、像素标签、网络信标和类似的跟踪技术。",
+      },
+      { type: "subheading", title: "5.1 Types of Cookies", titleZh: "5.1 Cookies 类型" },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Strictly Necessary Cookies: Essential for the operation of the Services.",
+            zh: "严格必要的 Cookie：对服务的运行至关重要。",
+          },
+          {
+            en: "Analytics Cookies: Help us understand how users interact with jfo.ai.",
+            zh: "分析型 Cookie：帮助我们了解用户如何与 jfo.ai 进行交互。",
+          },
+          {
+            en: "Functional Cookies: Enable enhanced functionality and personalization.",
+            zh: "功能性 Cookies：启用增强功能和个性化设置。",
+          },
+          {
+            en: "Marketing Cookies: Used to deliver relevant advertisements.",
+            zh: "营销 Cookie：用于投放相关广告。",
+          },
+        ],
+      },
+      { type: "subheading", title: "5.2 Your Cookie Choices", titleZh: "5.2 您的 Cookie 选择" },
+      {
+        type: "bilingual",
+        en: "Most web browsers allow you to control cookies through their settings.",
+        zh: "大多数网络浏览器允许您通过其设置来控制 Cookie。",
+      },
     ],
   },
   {
     id: "social-logins",
-    title: "6. Social Logins",
+    title: "6. Social Logins | 6. 社交登录",
     blocks: [
-      { type: "paragraph", content: "If JFO.AI offers social login options, we may receive profile information from the selected provider, such as your name, email address, and profile image, and use that information only as described in this Privacy Policy." },
+      {
+        type: "bilingual",
+        en: "The Services may offer you the ability to register and log in using third-party social media account details (e.g., Wechat and QQ).",
+        zh: "本服务可能会为您提供使用第三方社交媒体账户信息（例如：微信、QQ）进行注册和登录的功能。",
+      },
     ],
   },
   {
     id: "ai-processing",
-    title: "7. AI Data Processing",
+    title: "7. AI Data Processing | 7. AI 数据处理",
     blocks: [
-      { type: "paragraph", content: "This section explains how data is processed in connection with AI features, agents, and large language model capabilities used by JFO.AI." },
-      { type: "subheading", title: "7.1 LLM Processing" },
-      { type: "paragraph", content: "Prompts, instructions, workspace context, and relevant task data may be processed by AI systems to generate outputs, recommendations, and actions." },
-      { type: "subheading", title: "7.2 Third-Party AI Providers" },
-      { type: "list", items: [
-        "We may use third-party AI providers, including providers of large language models and related AI infrastructure.",
-        "Data sent to such providers may include prompts, interaction history, workspace context, and authorized connected-tool data needed for execution."
-      ]},
-      { type: "subheading", title: "7.3 Connected Services Access" },
-      { type: "paragraph", content: "When you grant access to third-party services, AI agents may read, process, and act on data within those systems to the extent necessary to perform assigned tasks." },
-      { type: "subheading", title: "7.4 Sensitive Data Warning" },
-      { type: "paragraph", content: "Please use caution when sharing sensitive personal information, financial account data, government identifiers, health information, trade secrets, or highly confidential business information with AI agents." },
-      { type: "subheading", title: "7.5 Retention of AI Logs" },
-      { type: "paragraph", content: "Prompts, responses, conversation histories, and agent action logs may be retained in line with the retention periods described below, subject to legal and operational requirements." },
-      { type: "subheading", title: "7.6 Deletion Rights" },
-      { type: "paragraph", content: "You may request deletion of AI interaction data, including chat history, prompts, outputs, and action logs, subject to applicable exceptions." },
-      { type: "subheading", title: "7.7 De-Identified Data for Improvement" },
-      { type: "paragraph", content: "We may use de-identified, aggregated, or anonymized data derived from interactions with JFO.AI to improve service quality, model performance, and system reliability." },
+      { type: "subheading", title: "7.1 LLM Processing", titleZh: "7.1 大语言模型处理" },
+      {
+        type: "bilingual",
+        en: "The core functionality of jfo.ai involves processing your data through large language models (LLMs). When you interact with AI agents, your prompts, instructions, contextual data, and relevant workspace information are transmitted to and processed by AI systems.",
+        zh: "jfo.ai 的核心功能是通过大语言模型（LLMs）处理您的数据。当您与 AI 代理互动时，您的提示、指令、上下文数据和相关工作区信息会被传输到 AI 系统并由其处理。",
+      },
+      { type: "subheading", title: "7.2 Third-Party AI Providers", titleZh: "7.2 第三方 AI 供应商" },
+      {
+        type: "bilingual",
+        en: "We utilize third-party AI model providers including:",
+        zh: "我们使用第三方 AI 模型提供商，包括：",
+      },
+      {
+        type: "bilingual-list",
+        items: [
+          { en: "Minimax (Minimax models)", zh: "Minimax（Minimax 模型）" },
+          { en: "Alibaba (Qwen models)", zh: "Alibaba（千问模型）" },
+          { en: "Other LLM and AI service providers as needed", zh: "其他 LLM 和 AI 服务提供商（视需要而定）" },
+        ],
+      },
+      { type: "subheading", title: "7.3 Connected Services Access", titleZh: "7.3 连接服务访问" },
+      {
+        type: "bilingual",
+        en: "When you grant AI agents access to connected third-party services, the AI agents may read, process, and act upon data within those services.",
+        zh: "当您授予 AI 代理访问已连接的第三方服务的权限时，AI 代理可能会读取、处理这些服务中的数据并据此采取行动。",
+      },
+      { type: "subheading", title: "7.4 Sensitive Data Warning", titleZh: "7.4 敏感数据警告" },
+      {
+        type: "bilingual",
+        en: "Please exercise caution when sharing sensitive personal information with AI agents, including but not limited to:",
+        zh: "与 AI 代理共享敏感个人信息时请务必谨慎，包括但不限于：",
+      },
+      {
+        type: "bilingual-list",
+        items: [
+          { en: "Racial or ethnic origin", zh: "种族或族裔出身" },
+          { en: "Political opinions or religious beliefs", zh: "政治观点或宗教信仰" },
+          { en: "Health or biometric data", zh: "健康或生物特征数据" },
+          { en: "Financial account numbers, Social Security numbers", zh: "金融账户号码、社会保障号码" },
+          { en: "Trade secrets or highly confidential business information", zh: "商业秘密或高度机密的商业信息" },
+        ],
+      },
+      { type: "subheading", title: "7.5 Retention of AI Logs", titleZh: "7.5 AI 日志的保留" },
+      {
+        type: "bilingual",
+        en: "AI interaction data is retained for the duration of your account unless you request earlier deletion.",
+        zh: "除非您要求提前删除，否则 AI 交互数据将在您的账户存续期间保留。",
+      },
+      { type: "subheading", title: "7.6 Deletion Rights", titleZh: "7.6 删除权" },
+      {
+        type: "bilingual",
+        en: "You have the right to request deletion of your AI interaction data. To exercise your deletion rights, please contact us at support@jfo.ai.",
+        zh: "您有权请求删除您的 AI 交互数据。若要行使删除权，请通过 support@jfo.ai 与我们联系。",
+      },
+      { type: "subheading", title: "7.7 De-Identified Data for Improvement", titleZh: "7.7 用于改进的去标识化数据" },
+      {
+        type: "bilingual",
+        en: "We may use de-identified, aggregated, or anonymized data derived from your interactions with AI agents to improve our AI systems.",
+        zh: "我们可能会使用从您与 AI 代理的互动中获取的去标识化、汇总或匿名化数据来改进我们的 AI 系统。",
+      },
     ],
   },
   {
     id: "international-transfers",
-    title: "8. International Data Transfers",
+    title: "8. International Data Transfers | 8. 跨境数据传输",
     blocks: [
-      { type: "paragraph", content: "Your information may be processed in jurisdictions outside your country of residence, including jurisdictions with different privacy laws." },
-      { type: "list", items: [
-        "Where required, we use appropriate transfer safeguards, such as Standard Contractual Clauses or other lawful transfer mechanisms.",
-        "Data processed by third-party AI providers and service providers may also be subject to cross-border transfer arrangements."
-      ]},
+      {
+        type: "bilingual",
+        en: "We are based in the Hong Kong, and your information may be processed and stored in the Hong Kong or other countries and regions.",
+        zh: "我们的总部设在香港，您的信息可能会在香港或其他国家地区进行处理和存储。",
+      },
     ],
   },
   {
     id: "retention",
-    title: "9. Data Retention",
+    title: "9. Data Retention | 9. 数据保留",
     blocks: [
-      { type: "list", items: [
-        "Account information: retained while your account remains active and for a reasonable period thereafter.",
-        "AI interaction data: retained for the duration of your account unless you request deletion earlier, subject to exceptions.",
-        "Billing and transaction data: retained as required by applicable accounting, tax, and reporting laws.",
-        "Usage and analytics data: retained for a limited period before aggregation or de-identification.",
-        "Support communications: retained for internal support, audit, and quality assurance purposes."
-      ]},
+      {
+        type: "bilingual",
+        en: "We retain your personal information for as long as necessary to fulfill the purposes described in this Privacy Policy:",
+        zh: "我们将保留您的个人信息，保留期限为实现本隐私政策所述目的所必需的时间：",
+      },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Account Information: Retained for the duration of your account and up to 30 days thereafter.",
+            zh: "账户信息：在您的账户存续期间及之后最多 30 天内保留。",
+          },
+          {
+            en: "AI Interaction Data: Retained for the duration of your account unless you request earlier deletion.",
+            zh: "AI 交互数据：除非您要求提前删除，否则将在您的账户存续期间保留。",
+          },
+          {
+            en: "Billing and Transaction Data: Retained for the period required by applicable tax and financial reporting laws (typically 7 years).",
+            zh: "计费和交易数据：按照适用的税务和财务报告法律要求的期限保留（通常为 7 年）。",
+          },
+          {
+            en: "Usage and Analytics Data: Retained in identifiable form for up to 24 months.",
+            zh: "使用和分析数据：以可识别形式保留长达 24 个月。",
+          },
+          {
+            en: "Support Communications: Retained for up to 3 years following resolution.",
+            zh: "支持通信：在解决问题后最多保留 3 年。",
+          },
+        ],
+      },
     ],
   },
   {
     id: "security",
-    title: "10. Security",
+    title: "10. Security | 10. 安全",
     blocks: [
-      { type: "paragraph", content: "We use technical and organizational measures intended to protect personal information, including access controls, encryption, monitoring, logging, security testing, and incident response processes." },
-      { type: "paragraph", content: "No internet transmission or storage system is completely secure, and we cannot guarantee absolute security." },
+      {
+        type: "bilingual",
+        en: "We implement appropriate technical and organizational measures designed to protect your personal information:",
+        zh: "我们实施旨在保护您个人信息的适当技术和组织措施：",
+      },
+      {
+        type: "bilingual-list",
+        items: [
+          { en: "Encryption of data in transit (TLS/SSL) and at rest", zh: "传输中（TLS/SSL）和静态数据的加密" },
+          { en: "Access controls and authentication mechanisms", zh: "访问控制和认证机制" },
+          { en: "Regular security assessments and penetration testing", zh: "定期安全评估和渗透测试" },
+          { en: "Employee training on data protection and security practices", zh: "员工数据保护和安全实践培训" },
+          { en: "Incident response and breach notification procedures", zh: "事件响应和违规通知程序" },
+        ],
+      },
     ],
   },
   {
     id: "privacy-rights",
-    title: "11. Privacy Rights",
+    title: "11. Privacy Rights | 11. 隐私权",
     blocks: [
-      { type: "subheading", title: "11.1 EEA, United Kingdom, and Switzerland" },
-      { type: "list", items: [
-        "Right of access.",
-        "Right to rectification.",
-        "Right to erasure.",
-        "Right to restriction of processing.",
-        "Right to data portability.",
-        "Right to object.",
-        "Right to withdraw consent.",
-        "Right to lodge a complaint with a supervisory authority."
-      ]},
-      { type: "subheading", title: "11.2 United States — State Privacy Rights" },
-      { type: "list", items: [
-        "Right to know or access personal information.",
-        "Right to delete.",
-        "Right to correct.",
-        "Right to opt out where applicable.",
-        "Right to non-discrimination.",
-        "Right to data portability."
-      ]},
-      { type: "subheading", title: "11.3 CCPA Categories of Personal Information" },
       {
-        type: "table",
-        headers: ["Category", "Examples", "Collected", "Disclosed", "Sold/Shared"],
-        rows: [
-          ["Identifiers", "Name, email, IP address, account name", "Yes", "Yes", "No"],
-          ["Customer records", "Name, address, payment details", "Yes", "Yes", "No"],
-          ["Commercial information", "Transaction and subscription history", "Yes", "Yes", "No"],
-          ["Internet activity", "Browsing, feature use, usage data", "Yes", "Yes", "No"],
-          ["Geolocation data", "Approximate location from IP", "Yes", "Yes", "No"],
-          ["Professional information", "Job title, company name", "Yes", "No", "No"],
-          ["Inferences", "Preferences and usage patterns", "Yes", "No", "No"],
+        type: "subheading",
+        title: "11.1 Rights of Mainland Chinese Users (in accordance with the Personal Information Protection Law)",
+        titleZh: "11.1 中国大陆用户的权利（依据《个人信息保护法》）",
+      },
+      {
+        type: "bilingual",
+        en: "If you are located within the territory of the People's Republic of China (excluding Hong Kong, Macao, and Taiwan regions), in accordance with the Personal Information Protection Law of the People's Republic of China and relevant laws and regulations, you have the following rights regarding your personal information:",
+        zh: "如果您位于中华人民共和国境内（不含香港、澳门、台湾地区），根据《中华人民共和国个人信息保护法》及相关法律法规，您对您的个人信息享有以下权利：",
+      },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Right to be informed and right to decide: You have the right to know how we process your personal information and the right to decide whether to consent to our processing of your personal information.",
+            zh: "知情权与决定权：有权知悉我们如何处理您的个人信息，并有权决定是否同意我们处理您的个人信息。",
+          },
+          {
+            en: "Right to access and data portability: The right to access and copy your personal information.",
+            zh: "查阅与复制权：有权查阅、复制您的个人信息。",
+          },
+          {
+            en: "Right to correction and supplementation: If you find that your personal information is inaccurate or incomplete, you have the right to request us to correct or supplement it.",
+            zh: "更正与补充权：如您发现您的个人信息不准确或不完整，有权要求我们更正或补充。",
+          },
+          {
+            en: "Right to deletion: Under circumstances that comply with legal provisions, you have the right to request the deletion of your personal information.",
+            zh: "删除权：在符合法律规定的情形下，您有权请求删除您的个人信息。",
+          },
+          {
+            en: "Right to withdraw consent: You have the right to withdraw your previously given consent, but such withdrawal shall not affect the legality of personal information processing activities conducted based on the consent prior to the withdrawal.",
+            zh: "撤回同意权：您有权撤回此前作出的同意，但撤回不影响撤回前基于同意进行的个人信息处理活动的合法性。",
+          },
+          {
+            en: "Right to cancel account: If you have registered an account, you have the right to apply for account cancellation.",
+            zh: "注销账户权：如您注册了账户，您有权申请注销账户。",
+          },
+          {
+            en: "Right to obtain explanations: You have the right to request us to explain the personal information processing rules.",
+            zh: "获取解释说明权：您有权要求我们对个人信息处理规则进行说明。",
+          },
+          {
+            en: "Right to restrict or refuse processing: Within the scope of the law, you have the right to restrict or refuse our processing of your personal information.",
+            zh: "限制或拒绝处理权：在法律规定的范围内，您有权限制或拒绝我们处理您的个人信息。",
+          },
         ],
       },
-      { type: "paragraph", content: "We do not sell your personal information." },
+      {
+        type: "bilingual",
+        en: "If you wish to exercise the above rights, please contact us via email at support@jfo.ai. We will complete the verification and processing within the time limit stipulated by law.",
+        zh: "如您希望行使上述权利，请通过电子邮件联系我们：support@jfo.ai。我们将在法律规定的期限内完成核查和处理。",
+      },
+      {
+        type: "subheading",
+        title: "11.2 Rights of Users in the Hong Kong Special Administrative Region (under the Personal Data (Privacy) Ordinance)",
+        titleZh: "11.2 香港特别行政区用户的权利（依据《个人资料（私隐）条例》）",
+      },
+      {
+        type: "bilingual",
+        en: "If you are located in the Hong Kong Special Administrative Region, under the Personal Data (Privacy) Ordinance (Chapter 486), you have the following rights regarding your personal data:",
+        zh: "如果您位于香港特别行政区，根据《个人资料（私隐）条例》（第 486 章），您对您的个人资料享有以下权利：",
+      },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Data Access Right: The right to request access to your personal data held by us.",
+            zh: "查阅权（Data Access Right）：有权要求查阅我们持有的您的个人资料。",
+          },
+          {
+            en: "Right to Data Correction (Data Correction Right): If your personal information is inaccurate, you have the right to request correction.",
+            zh: "更正权（Data Correction Right）：如您的个人资料不准确，有权要求更正。",
+          },
+          {
+            en: "Right to know the purpose of processing: The right to know the purposes for which we collect and use personal data.",
+            zh: "获知处理目的权：有权了解我们收集及使用个人资料的目的。",
+          },
+          {
+            en: "Right to inquire about the categories of personal data we hold and the categories of third parties who may receive such data: You have the right to know the categories of personal data we hold and the categories of third parties who may receive such data.",
+            zh: "查询资料类别及接收方权：有权了解我们持有的个人资料类别以及可能接收该等资料的第三方类别。",
+          },
+        ],
+      },
+      {
+        type: "bilingual",
+        en: "If you wish to exercise the above rights, please contact us via email at support@jfo.ai. We will process your request in a reasonable time in accordance with legal requirements.",
+        zh: "如您希望行使上述权利，请通过电子邮件联系我们：support@jfo.ai。我们将在合理时间内根据法律要求处理您的请求。",
+      },
+      {
+        type: "bilingual",
+        en: "We do not sell your personal information.",
+        zh: "我们不会出售您的个人信息。",
+      },
     ],
   },
   {
     id: "minors",
-    title: "12. Minors",
+    title: "12. Minors | 12. 未成年人",
     blocks: [
-      { type: "paragraph", content: "JFO.AI is not intended for individuals under 18, and we do not knowingly collect personal information from minors." },
+      {
+        type: "bilingual",
+        en: "The Services are not intended for individuals under the age of 18. We do not knowingly collect personal information from anyone under 18 years of age.",
+        zh: "本服务不适用于 18 岁以下的个人。我们不会在知情的情况下收集 18 岁以下任何人的个人信息。",
+      },
     ],
   },
   {
     id: "dnt",
-    title: "13. Do-Not-Track Signals",
+    title: "13. Do-Not-Track Signals | 13. 不跟踪信号",
     blocks: [
-      { type: "paragraph", content: "Because there is no universally accepted standard for responding to Do-Not-Track browser signals, JFO.AI does not currently respond to such signals." },
+      {
+        type: "bilingual",
+        en: 'Some web browsers transmit "Do-Not-Track" (DNT) signals. The Services do not currently respond to DNT signals.',
+        zh: "部分网络浏览器会传输“请勿追踪”（DNT）信号。本服务目前不响应 DNT 信号。",
+      },
     ],
   },
   {
     id: "updates",
-    title: "14. Updates to This Privacy Policy",
+    title: "14. Updates to This Privacy Policy | 14. 本隐私政策的更新",
     blocks: [
-      { type: "paragraph", content: "We may update this Privacy Policy from time to time to reflect changes in product functionality, legal requirements, or business practices. When we do, we will update the effective date and provide additional notice where required by law." },
+      {
+        type: "bilingual",
+        en: 'We may update this Privacy Policy from time to time. When we make material changes, we will update the "Last Updated" date and provide notice through the Services.',
+        zh: "我们可能会不时更新本隐私政策。当我们进行重大变更时，我们将更新“上次更新”日期，并通过服务提供通知。",
+      },
     ],
   },
   {
     id: "contact",
-    title: "15. Contact Us",
+    title: "15. Contact Us | 15. 联系我们",
     blocks: [
-      { type: "paragraph", content: "If you have questions, concerns, or requests regarding this Privacy Policy or our data practices, please contact us through the official contact channels listed on JFO.AI." },
+      {
+        type: "bilingual",
+        en: "If you have any questions, concerns, or requests regarding this Privacy Policy, please contact us at:",
+        zh: "如果您对本隐私政策有任何疑问、担忧或请求，请通过以下方式联系我们：",
+      },
+      {
+        type: "bilingual",
+        en: "JFO AI, Inc. 9F China Life Center, 18 Hung Luen Rd, Hung Hom, KL, Hong Kong",
+        zh: "合域 AI 公司 香港九龍紅磡紅鸞道 18 號中國人壽中心 9 樓",
+      },
+      {
+        type: "bilingual",
+        en: "Email: support@jfo.ai   Website: jfo.ai",
+        zh: "邮箱：support@jfo.ai    网站：jfo.ai",
+      },
     ],
   },
   {
     id: "manage-data",
-    title: "16. How to Review, Update, or Delete Your Data",
+    title: "16. How to Review, Update, or Delete Your Data | 16. 如何查看、更新或删除您的数据",
     blocks: [
-      { type: "list", items: [
-        "Review and update account information through account or profile settings where available.",
-        "Manage AI interaction history and related records through applicable product controls where available.",
-        "Review and revoke permissions for connected tools through account and integration settings.",
-        "Submit an access, correction, export, or deletion request through our official support or privacy contact channels."
-      ]},
+      {
+        type: "bilingual",
+        en: "You may review, update, or request deletion of your personal information at any time by:",
+        zh: "您可以随时通过以下方式查看、更新或请求删除您的个人信息：",
+      },
+      {
+        type: "bilingual-list",
+        items: [
+          {
+            en: "Account Settings: Logging into your account on jfo.ai",
+            zh: "账户设置：登录 jfo.ai 上的账户",
+          },
+          {
+            en: "AI Data Management: Using the data management features within the Services",
+            zh: "AI 数据管理：使用服务中的数据管理功能",
+          },
+          {
+            en: 'Email Request: Sending a request to support@jfo.ai with the subject line "Data Request"',
+            zh: '电子邮件请求：向 support@jfo.ai 发送主题为 "数据请求" 的请求',
+          },
+        ],
+      },
+      {
+        type: "bilingual",
+        en: "We will respond to all verified requests within the timeframes required by applicable law.",
+        zh: "我们将在适用法律规定的时间范围内对所有已核实的请求作出回应。",
+      },
     ],
   },
 ];
@@ -265,8 +601,22 @@ function PolicyContent({ block }: { block: PolicyBlock }) {
     return <p className="text-sm leading-relaxed text-muted-foreground">{block.content}</p>;
   }
 
+  if (block.type === "bilingual") {
+    return (
+      <div className="space-y-2">
+        <p className="text-sm leading-relaxed text-muted-foreground">{block.en}</p>
+        <p className="text-sm leading-relaxed text-muted-foreground/85">{block.zh}</p>
+      </div>
+    );
+  }
+
   if (block.type === "subheading") {
-    return <h3 className="mb-2 text-sm font-semibold text-foreground">{block.title}</h3>;
+    return (
+      <div className="mb-2">
+        <h3 className="text-sm font-semibold text-foreground">{block.title}</h3>
+        {block.titleZh ? <p className="mt-0.5 text-sm font-semibold text-foreground">{block.titleZh}</p> : null}
+      </div>
+    );
   }
 
   if (block.type === "list") {
@@ -279,37 +629,26 @@ function PolicyContent({ block }: { block: PolicyBlock }) {
     );
   }
 
-  return (
-    <div className="mb-4 overflow-x-auto">
-      <table className="w-full border-collapse text-sm">
-        <thead>
-          <tr className="border-b border-border">
-            {block.headers.map((header) => (
-              <th key={header} className="py-2 pr-4 text-left text-xs font-medium text-foreground">
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody className="text-muted-foreground">
-          {block.rows.map((row) => (
-            <tr key={row[0]} className="border-b border-border last:border-0">
-              {row.map((cell, index) => (
-                <td key={`${row[0]}-${index}`} className="py-2 pr-4 align-top text-xs">
-                  {cell}
-                </td>
-              ))}
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
-  );
+  if (block.type === "bilingual-list") {
+    return (
+      <ul className="list-disc space-y-3 pl-5">
+        {block.items.map((item, index) => (
+          <li key={`${item.en.slice(0, 40)}-${index}`} className="text-sm leading-relaxed">
+            <span className="text-muted-foreground">{item.en}</span>
+            <span className="mt-1 block text-muted-foreground/85">{item.zh}</span>
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
+  return null;
 }
 
 function renderSectionBlocks(blocks: PolicyBlock[]) {
   const content: ReactNode[] = [];
   let pendingHeading: string | null = null;
+  let pendingTitleZh: string | undefined;
   let pendingBlocks: PolicyBlock[] = [];
 
   const flushGroup = (key: string) => {
@@ -317,8 +656,11 @@ function renderSectionBlocks(blocks: PolicyBlock[]) {
 
     if (pendingHeading) {
       content.push(
-        <div key={key} className="mb-4">
-          <h3 className="mb-2 text-sm font-semibold text-foreground">{pendingHeading}</h3>
+        <div key={key}>
+          <div className="mb-2">
+            <h3 className="text-sm font-semibold text-foreground">{pendingHeading}</h3>
+            {pendingTitleZh ? <p className="mt-0.5 text-sm font-semibold text-foreground">{pendingTitleZh}</p> : null}
+          </div>
           <div className="space-y-3">
             {pendingBlocks.map((block, index) => (
               <PolicyContent key={`${key}-${index}`} block={block} />
@@ -333,6 +675,7 @@ function renderSectionBlocks(blocks: PolicyBlock[]) {
     }
 
     pendingHeading = null;
+    pendingTitleZh = undefined;
     pendingBlocks = [];
   };
 
@@ -340,6 +683,7 @@ function renderSectionBlocks(blocks: PolicyBlock[]) {
     if (block.type === "subheading") {
       flushGroup(`group-${index}`);
       pendingHeading = block.title;
+      pendingTitleZh = block.titleZh;
       return;
     }
 
@@ -347,7 +691,7 @@ function renderSectionBlocks(blocks: PolicyBlock[]) {
   });
 
   flushGroup("group-final");
-  return content;
+  return <div className="flex flex-col gap-8">{content}</div>;
 }
 
 export default function PrivacyPolicy() {
@@ -372,29 +716,55 @@ export default function PrivacyPolicy() {
         <div className="border-b border-border py-16 px-6">
           <div className="mx-auto max-w-3xl">
             <p className="mb-3 text-xs uppercase tracking-widest text-muted-foreground/80">Legal</p>
-            <h1 className="mb-3 font-display text-[clamp(28px,3vw,44px)] font-semibold leading-tight tracking-tight text-foreground">
+            <h1 className="mb-2 font-display text-[clamp(28px,3vw,44px)] font-semibold leading-tight tracking-tight text-foreground">
               Privacy Policy
             </h1>
-            <p className="text-sm text-muted-foreground/80">Last Updated: March 6, 2026</p>
+            <p className="mb-3 text-base font-medium text-muted-foreground">隐私政策</p>
+            <p className="text-sm text-muted-foreground/80">Last Updated: April 16, 2026</p>
+            <p className="mt-1 text-sm text-muted-foreground/80">最后更新时间：2026 年 4 月 16 日</p>
           </div>
         </div>
 
         <div className="mx-auto max-w-3xl px-6 py-16">
-          <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-            This Privacy Policy describes how JFO.AI collects, uses, stores, shares, and otherwise processes personal information in connection with our website, products, AI agent workflows, and related services.
-          </p>
-          <p className="mb-3 text-sm leading-relaxed text-muted-foreground">
-            By accessing or using the Services, you acknowledge that you have read and understood this Privacy Policy. If you do not agree with our practices, please do not use the Services.
-          </p>
+          <div className="space-y-3">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              This Privacy Policy describes how JFO AI, Inc.（合域 AI 公司）(&quot;Company,&quot; &quot;we,&quot; &quot;us,&quot; or
+              &quot;our&quot;) collects, uses, discloses, and otherwise processes personal information in connection with our website
+              jfo.ai, our AI Platform, and any related services, tools, and applications (collectively, the &quot;Services&quot;). This
+              Policy also describes your rights regarding our processing of your personal information and how you can exercise those
+              rights.
+            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground/85">
+              本隐私政策描述了合域 AI 公司（JFO AI, Inc.）（&quot;公司&quot;、&quot;我们&quot;或&quot;我们的&quot;）如何收集、使用、披露以及以其他方式处理与我们的网站
+              jfo.ai、我们的联合家族办公室投资协同平台以及任何相关服务、工具和应用程序（统称&quot;服务&quot;）相关的个人信息。本政策还描述了您对我们处理您的个人信息所享有的权利，以及您如何行使这些权利。
+            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              By accessing or using the Services, you acknowledge that you have read and understood this Privacy Policy. If you do not
+              agree with our practices, please do not use the Services.
+            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground/85">
+              通过访问或使用本服务，即表示您已阅读并理解本隐私政策。如果您不同意我们的做法，请不要使用本服务。
+            </p>
+          </div>
           <div className="mt-8 border-t border-border" />
 
           {POLICY_SECTIONS.map((section) => (
             <section key={section.id} id={section.id} className="mb-2 scroll-mt-24">
-              <h2 className="mb-4 mt-10 text-base font-semibold text-foreground">{section.title}</h2>
+              <h2 className="mb-4 mt-10 text-base font-semibold leading-snug text-foreground">{section.title}</h2>
               {renderSectionBlocks(section.blocks)}
               <div className="mt-10 border-t border-border" />
             </section>
           ))}
+
+          <div className="mt-10 space-y-2">
+            <p className="text-sm leading-relaxed text-muted-foreground">
+              This Privacy Policy is effective as of April 16, 2026. JFO AI, Inc. — All rights reserved.
+            </p>
+            <p className="text-sm leading-relaxed text-muted-foreground/85">
+              本隐私政策自 2026 年 4 月 16 日起生效。JFO AI 公司保留所有权利。
+            </p>
+            <p className="pt-2 text-xs text-muted-foreground/70">（注：内容由 AI 生成，请谨慎参考）</p>
+          </div>
         </div>
       </main>
     </div>

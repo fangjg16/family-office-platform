@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ArrowRight,
@@ -60,14 +60,6 @@ const ROLE_PILL_CLASS: Record<WorkspaceRole, string> = {
   guest: "border border-primary/20 bg-primary/5 text-primary/80",
 };
 
-const ROLE_RIBBON_CLASS: Record<WorkspaceRole, string> = {
-  admin: "bg-primary/25 text-primary",
-  core: "bg-primary text-primary-foreground",
-  mid: "bg-primary/5 text-primary/75",
-  low: "bg-slate-100 text-slate-600",
-  guest: "bg-primary/5 text-primary/80",
-};
-
 function phaseChipText(phase: ProjectPhase): string {
   const english = phase.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? "ACTIVE";
   const cn = phase.match(/（(.+?)）/)?.[1] ?? "";
@@ -122,18 +114,6 @@ function ProjectCard({
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       )}
     >
-      {role === "core" ? (
-        <div className="pointer-events-none absolute right-0 top-0 h-16 w-16" aria-hidden>
-          <div
-            className={cn(
-              "absolute -right-6 top-2 rotate-45 px-10 py-1 text-[10px] font-bold uppercase shadow-sm",
-              ROLE_RIBBON_CLASS[role]
-            )}
-          >
-            Core
-          </div>
-        </div>
-      ) : null}
       <div className="mb-4 flex items-start justify-between gap-3">
         <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-border/70 bg-muted/40 text-primary">
           <Icon className="h-5 w-5" strokeWidth={1.8} />
