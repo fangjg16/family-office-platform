@@ -2,7 +2,7 @@ import { ArrowLeft } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 
-import termsRaw from "../../../JFO.AI Terms of Service（服务条款）.txt?raw";
+import termsRaw from "@/legal/terms-of-service-source.txt?raw";
 
 import type { LegalBlock } from "@/legal/parseTermsOfService";
 import { parseTermsOfServiceSource } from "@/legal/parseTermsOfService";

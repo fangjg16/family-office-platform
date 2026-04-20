@@ -14,7 +14,7 @@ export type LegalSection = {
 };
 
 /**
- * 从《JFO.AI Terms of Service（服务条款）.txt》解析出的文档结构。
+ * 从 `terms-of-service-source.txt`（与《JFO.AI Terms of Service（服务条款）》正文一致）解析出的文档结构。
  * 源文件为**自然双语稿**（不修改正文）：前几行为标题与日期，其后为
  * `N. 英文标题 | N. 中文标题` 章节行，正文为英文段与中文段交替、或 `•` 列表、或 `1.` 编号条款等。
  */

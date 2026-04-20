@@ -1,0 +1,307 @@
+JFO.AI Terms of Service（服务条款）
+Terms of Service | 服务条款
+Last updated April 17, 2026
+最后更新于2026年4月17日
+Agreement to Our Legal Terms | 同意我们的法律条款
+We are JFO AI, Inc. ("Company," "we," "us," "our"), a company registered in  9F China Life Center, 18 Hung Luen Rd, Hung Hom, KL, Hong Kong.
+我们是JFO AI公司（“公司”、“我们”、“我们的”），一家注册于香港九龍紅磡紅鸞道18號中國人壽中心9樓的公司。
+We operate JFO(jfo.ai), as well as any other related products and services that refer or link to these legal terms (the "Legal Terms") (collectively, the "Services").
+我们运营AI平台JFO（jfo.ai），以及任何提及或链接到这些法律条款（“法律条款”）的其他相关产品和服务（统称“服务”）。
+We provide an AI platform that provides autonomous AI agents for family office businesses.
+我们为家族办公室提供自主AI智能体平台。
+You can contact us by email at support@kuse.ai or by mail to 1111B S Governors Ave STE 6959, Dover, DE 19904, United States.
+您可以通过电子邮件 support@jfo.ai 联系我们，也可以通过邮寄方式联系我们，地址为香港九龍紅磡紅鸞道18號中國人壽中心9樓的公司。
+These Legal Terms constitute a legally binding agreement made between you, whether personally or on behalf of an entity ("you"), and JFO AI, Inc., concerning your access to and use of the Services. You agree that by accessing the Services, you have read, understood, and agreed to be bound by all of these Legal Terms. IF YOU DO NOT AGREE WITH ALL OF THESE LEGAL TERMS, THEN YOU ARE EXPRESSLY PROHIBITED FROM USING THE SERVICES AND YOU MUST DISCONTINUE USE IMMEDIATELY.
+本法律条款构成您（无论您是个人还是代表实体行事，以下称“您”）与JFO AI公司就您访问和使用服务达成的具有法律约束力的协议。您同意，通过访问服务，即表示您已阅读、理解并同意受本法律条款的所有规定约束。如果您不同意本法律条款的所有规定，则明确禁止您使用服务，您必须立即停止使用。
+The Services are intended for users who are at least 18 years old. Persons under the age of 18 are not permitted to use or register for the Services.
+本服务面向年满18岁的用户。未满18岁者不得使用或注册本服务。
+1. Our Services | 1. 我们的服务
+The Services do not constitute, and are not intended to constitute, financial, investment, legal, or other professional advice. The Services provide tools and information to assist users in evaluating projects, but do not make investment decisions on behalf of users.
+We do not recommend, endorse, or guarantee any project, investment opportunity, or expected return. Any decision to participate in or fund a project is made solely at your own discretion and risk.
+You are solely responsible for ensuring that your use of the Services complies with all applicable laws and regulations in your jurisdiction, including any laws relating to investments, fundraising, securities, or financial activities.
+We do not represent or warrant that the Services comply with regulatory requirements applicable to licensed financial intermediaries or regulated investment activities.
+本服务不构成，也不应被视为金融、投资、法律或其他专业建议。本服务仅提供工具及信息，协助用户评估项目，但不会代表用户作出任何投资决策。
+我们不会对任何项目、投资机会或预期收益作出推荐、背书或保证。是否参与或资助任何项目，均由用户自行决定并自行承担风险。
+您有责任确保您的行为符合您所在司法管辖区的所有适用法律及监管要求，包括与投资、融资、证券或金融活动相关的法律法规。
+我们不声明或保证本服务符合适用于持牌金融中介机构或受监管投资活动的监管要求。
+2. Intellectual Property Rights | 2. 知识产权
+Our intellectual property
+我们的知识产权
+We are the owner or the licensee of all intellectual property rights in our Services, including all source code, databases, functionality, software, website designs, audio, video, text, photographs, and graphics in the Services (collectively, the "Content"), as well as the trademarks, service marks, and logos contained therein (the "Marks").
+我们是服务中所有知识产权的所有者或被许可人，这些知识产权包括服务中的所有源代码、数据库、功能、软件、网站设计、音频、视频、文本、照片和图形（统称“内容”），以及其中包含的商标、服务标记和标识（“标记”）。
+Our Content and Marks are protected by copyright and trademark laws and treaties in the Hong Kong and around the world.
+我们的内容和标识受香港及全球版权和商标法律及条约的保护。
+The Content and Marks are provided in or through the Services "AS IS" for your personal, non-commercial use or internal business purpose only.
+内容和标记以“现状”形式在服务中提供或通过服务提供，仅用于您的个人、非商业用途或内部业务目的。
+Your use of our Services
+您使用我们的服务
+Subject to your compliance with these Legal Terms, we grant you a non-exclusive, non-transferable, revocable license to:
+在您遵守本法律条款的前提下，我们授予您一项非独占、不可转让、可撤销的许可，允许您：
+•	access the Services; and
+•	访问服务；以及
+•	download or print a copy of any portion of the Content to which you have properly gained access.
+•	下载或打印您已正确获得访问权限的内容的任何部分的副本。
+solely for your internal evaluation, project assessment, or lawful business purposes, and in accordance with these Legal Terms.
+仅用于您的内部评估、项目分析或合法业务用途，并须符合本法律条款的规定。
+Except as expressly permitted herein, no part of the Services, Content, or Marks may be copied, reproduced, distributed, modified, publicly displayed, or commercially exploited without our prior written consent.
+除本条款明确允许外，未经我们事先书面同意，不得复制、传播、修改、公开展示或以其他方式商业利用本服务、内容或标识的任何部分。
+Ownership and Responsibility
+所有权与责任
+You retain all ownership rights in and to any questions, comments, project materials, financial information, data, documents, or other content that you submit, upload, or transmit through the Services ("User Submissions").
+您对通过本服务提交、上传或传输的任何问题、评论、项目资料、财务信息、数据、文件或其他内容（“用户提交内容”）保留全部所有权。
+You represent and warrant that:
+您声明并保证：
+•	You have all necessary rights, licenses, consents, and authorizations to submit such User Submissions;
+•	您已取得提交该等用户提交内容所需的一切权利、许可、同意及授权；
+•	Your User Submissions do not violate any confidentiality obligation, non-disclosure agreement, contractual restriction, intellectual property right, or applicable law; and
+•	您的用户提交内容不违反任何保密义务、保密协议、合同限制、知识产权或适用法律；以及
+•	You are solely responsible for the legality, accuracy, and appropriateness of your User Submissions.
+•	您对用户提交内容的合法性、准确性及适当性承担全部责任。
+Limited License to the Platform
+授予平台的有限许可
+By submitting User Submissions, you grant us a limited, non-exclusive, revocable, worldwide, royalty-free license to use, process, analyze, reproduce, and display such User Submissions solely for the purpose of:
+通过提交用户提交内容，您授予我们一项有限的、非独占的、可撤销的、全球范围内的、免版税的许可，仅为以下目的使用、处理、分析、复制及展示该等内容：
+•	Providing and improving the Services;
+•	提供及优化本服务；
+•	Generating AI-based analyses, summaries, and project-related outputs;
+•	生成AI分析、总结及项目相关输出；
+•	Facilitating platform functionality as requested by you.
+•	按照您的请求实现平台功能。
+We will not use User Submissions for purposes beyond providing the Services unless expressly authorized by you.
+除非获得您的明确授权，我们不会将用户提交内容用于提供本服务以外的用途。
+Nothing in these Legal Terms shall be construed as a transfer or assignment of ownership of your User Submissions to us.
+本法律条款中的任何内容均不应被解释为将用户提交内容的所有权转让或让与给我们。
+3. User Representations | 3. 用户表征
+By using the Services, you represent and warrant that:
+通过使用本服务，您声明并保证：
+1.	all registration information you submit will be true, accurate, current, and complete;
+2.	您提交的所有注册信息将是真实、准确、最新且完整的；
+3.	you will maintain the accuracy of such information and promptly update such registration information as necessary;
+4.	您将保持此类信息的准确性，并在必要时及时更新此类注册信息；
+5.	you have the legal capacity and you agree to comply with these Legal Terms;
+6.	您具有合法行为能力，并同意遵守本法律条款；
+7.	you are not a minor in the jurisdiction in which you reside;
+8.	您在居住的司法管辖区内不属于未成年人；
+9.	you will not access the Services through automated or non-human means;
+10.	您不得通过自动化或非人类手段访问本服务；
+11.	you will not use the Services for any illegal or unauthorized purpose; and
+12.	您不会将服务用于任何非法或未经授权的目的；并且
+13.	your use of the Services will not violate any applicable law or regulation.
+14.	您使用服务不会违反任何适用的法律或法规。
+4. User Registration | 4. 用户注册
+You may be required to register to use the Services. You agree to keep your password confidential and will be responsible for all use of your account and password.
+您可能需要注册才能使用本服务。您同意对您的密码保密，并将对您账户和密码的所有使用负责。
+5. Prohibited Activities | 5. 禁止的活动
+You may not access or use the Services for any purpose other than that for which we make the Services available. As a user of the Services, you agree not to:
+除我们提供服务的目的外，您不得出于任何其他目的访问或使用本服务。作为本服务的用户，您同意不进行以下行为：
+•	Systematically retrieve data or other content from the Services to create or compile a collection, compilation, database, or directory without written permission from us.
+•	未经我们书面许可，系统地从服务中检索数据或其他内容，以创建或汇编集合、汇编作品、数据库或目录。
+•	Trick, defraud, or mislead us and other users.
+•	欺骗、欺诈或误导我们及其他用户。
+•	Circumvent, disable, or otherwise interfere with security-related features of the Services.
+•	规避、禁用或以其他方式干扰服务的安全相关功能。
+•	Disparage, tarnish, or otherwise harm, in our opinion, us and/or the Services.
+•	在我们看来，诋毁、玷污或以其他方式损害我们和/或服务。
+•	Use any information obtained from the Services in order to harass, abuse, or harm another person.
+•	使用从服务中获取的任何信息来骚扰、虐待或伤害他人。
+•	Make improper use of our support services or submit false reports of abuse or misconduct.
+•	不当使用我们的支持服务，或提交虚假的滥用或不当行为报告。
+•	Use the Services in a manner inconsistent with any applicable laws or regulations.
+•	以与任何适用法律或法规不一致的方式使用服务。
+•	Engage in unauthorized framing of or linking to the Services.
+•	从事未经授权的对服务的框架化或链接。
+•	Upload or transmit viruses, Trojan horses, or other material that interferes with any party's uninterrupted use and enjoyment of the Services.
+•	上传或传播病毒、特洛伊木马或其他干扰任何一方不间断使用和享受服务的材料。
+•	Engage in any automated use of the system, such as using scripts to send comments or messages, or using data mining or robots.
+•	从事任何对系统的自动化使用，例如使用脚本发送评论或消息，或使用数据挖掘或机器人。
+•	Delete the copyright or other proprietary rights notice from any Content.
+•	删除任何内容中的版权或其他专有权利声明。
+•	Attempt to impersonate another user or person or use the username of another user.
+•	试图冒充其他用户或个人，或使用其他用户的用户名。
+•	Interfere with, disrupt, or create an undue burden on the Services or the networks or services connected to the Services.
+•	干扰、破坏服务或与服务相连的网络或服务，或给其造成不合理的负担。
+•	Harass, annoy, intimidate, or threaten any of our employees or agents engaged in providing any portion of the Services to you.
+•	骚扰、烦扰、恐吓或威胁任何为您提供部分服务的我们的员工或代理人。
+•	Attempt to bypass any measures of the Services designed to prevent or restrict access to the Services.
+•	试图绕过旨在防止或限制访问服务的任何服务措施。
+•	Copy or adapt the Services' software.
+•	复制或改编服务的软件。
+•	Except as permitted by applicable law, decipher, decompile, disassemble, or reverse engineer any of the software comprising or in any way making up a part of the Services.
+•	除非适用法律允许，否则不得对构成服务或在任何方面构成服务一部分的任何软件进行解密、反编译、反汇编或逆向工程。
+•	Make any unauthorized use of the Services.
+•	未经授权使用本服务。
+•	Use the Services as part of any effort to compete with us or otherwise use the Services and/or the Content for any revenue-generating endeavor or commercial enterprise.
+•	将服务用作与我们竞争的任何努力的一部分，或以其他方式将服务和/或内容用于任何创收活动或商业企业。
+•	Sell or otherwise transfer your profile.
+•	出售或以其他方式转让您的个人资料。
+•	Use the AI agents provided by the Services to send spam, phishing messages, or other unsolicited or deceptive communications.
+•	使用服务提供的AI代理发送垃圾邮件、网络钓鱼信息或其他未经请求或具有欺骗性的通信。
+•	Use the AI agents to perform actions that violate any applicable law, regulation, or third-party terms of service.
+•	使用AI代理执行违反任何适用法律、法规或第三方服务条款的行为。
+•	Attempt to manipulate or exploit the AI agents to bypass safety controls, content policies, or usage restrictions.
+•	试图操纵或利用AI智能体来绕过安全控制、内容政策或使用限制。
+•	Use the Services to transmit, distribute, or otherwise make available any material non-public information, inside information, or confidential information in violation of applicable securities laws or regulatory requirements.
+•	利用本服务传输、分发或以其他方式披露任何重大非公开信息、内幕信息或机密信息，从而违反适用的证券法律或监管要求。
+•	Use the Services to engage in any unlawful financial activity, including but not limited to fraud, misrepresentation, unauthorized fundraising, illegal solicitation, money laundering, or other prohibited financial conduct.
+•	利用本服务从事任何违法金融活动，包括但不限于欺诈、虚假陈述、未经授权的募资、非法招揽、洗钱或其他受禁止的金融行为。
+•	Use AI Outputs, analyses, or platform-generated materials to engage in market manipulation, price manipulation, misleading promotion, coordinated trading schemes, or other deceptive financial practices.
+•	利用AI输出、分析结果或平台生成内容从事市场操纵、价格操纵、误导性宣传、协同行为交易或其他欺骗性金融行为。
+•	Attempt to access, reconstruct, infer, or extract non-anonymized, non-aggregated, or pre-de-identified information of other users, projects, or platform data.
+•	试图访问、还原、推断或提取其他用户、项目或平台数据的未脱敏、未汇总或原始信息。
+•	Attempt to circumvent, probe, reverse engineer, or disclose the Services’ confidentiality mechanisms, data protection controls, AI safety systems, risk management processes, or internal compliance safeguards.
+•	试图规避、探测、逆向分析或披露本服务的保密机制、数据保护控制措施、AI安全系统、风险管理流程或内部合规保障措施。
+•	Use the Services in a manner that would cause the Company to be in violation of any applicable financial, securities, anti-money laundering, or regulatory requirements.
+•	以可能导致本公司违反任何适用金融、证券、反洗钱或监管要求的方式使用本服务。
+6. Social Media | 6. 社交媒体
+As part of the functionality of the Services, you may link your account with online accounts you have with third-party service providers by either: (1) providing your Third-Party Account login information through the Services; or (2) allowing us to access your Third-Party Account.
+作为服务功能的一部分，您可以通过以下任一方式将您的账户与您在第三方服务提供商处拥有的在线账户关联：(1) 通过服务提供您的第三方账户登录信息； 或(2)允许我们访问您的第三方账户。
+7. AI Services | 7. AI服务
+AI-Generated Content and Outputs
+AI生成的内容和输出
+The Services include AI-powered features that generate content through autonomous AI ag                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             ents ("AI Agents"). You acknowledge and agree that:
+服务包括由AI驱动的功能，这些功能主要通过自主AI代理（“AI代理”）生成内容。您承认并同意：
+•	AI-generated content, analyses, summaries, recommendations, projections, and responses ("AI Outputs") are produced by artificial intelligence models and are provided for informational and reference purposes only. AI Outputs do not constitute financial, investment, legal, tax, or other professional advice, and shall not be construed as a recommendation, endorsement, solicitation, or offer to participate in any investment or project.
+•	AI生成的内容、分析、总结、建议、预测及回复（“AI输出”）均由人工智能模型生成，仅供信息参考之用。AI输出不构成金融、投资、法律、税务或其他专业建议，亦不应被视为对任何投资或项目的推荐、背书、要约或招揽。
+•	AI Outputs may contain errors, inaccuracies, omissions, or outdated information. You are solely responsible for reviewing, evaluating, and verifying all AI Outputs before relying on them. Any investment or project decision made based on AI Outputs is made at your own discretion and risk.
+•	AI输出可能存在错误、不准确、遗漏或过时信息。在依赖AI输出之前，您应自行进行审查、评估及核实。基于AI输出作出的任何投资或项目决策，均由您自行判断并承担风险。
+•	We make no representations or warranties regarding the accuracy, completeness, reliability, suitability, or timeliness of any AI Outputs. AI Outputs are provided on an "AS IS" and "AS AVAILABLE" basis.
+•	我们对任何AI输出的准确性、完整性、可靠性、适用性或及时性不作任何陈述或保证。AI输出按“现状”及“现有可用”基础提供。
+•	AI Outputs may not be unique, and similar or identical outputs may be generated for other users.
+•	AI输出可能并非唯一，其他用户可能会收到相似或相同的输出。
+Agent Actions on Your Behalf
+AI代理代表您执行的行为
+•	AI Agents may assist in organizing information, summarizing project materials, structuring discussions, generating analytical frameworks, or facilitating communication within the platform.
+•	AI代理可能协助整理信息、汇总项目资料、组织讨论结构、生成分析框架或促进平台内沟通。
+•	AI Agents do not execute financial transactions, transfer funds, enter into contracts, or make binding decisions on your behalf. The Services do not provide discretionary management or asset management functions.
+•	AI代理不会代表您执行资金划转、金融交易、合同签署或作出具有法律约束力的决定。本服务不提供自主投资管理或资产管理功能。
+•	All final investment decisions, funding actions, and contractual commitments are made solely by you.
+•	所有最终投资决策、出资行为及合同承诺均由您自行作出。
+Data Processing by AI Models
+AI模型的数据处理
+•	Your input may be processed by artificial intelligence models, including third-party AI models provided by companies such as Minimax and Qwen.
+•	您的输入可能会由人工智能模型处理，包括由Minimax、Qwen等第三方AI供应商提供的模型。
+•	Before being used for analytical processing, certain data may be subject to technical measures such as masking, de-identification, aggregation, or other data minimization practices designed to reduce exposure of sensitive information.
+•	在用于分析处理前，相关数据可能会采取脱敏、去标识化、汇总或其他数据最小化技术措施，以降低敏感信息的暴露风险。
+•	You agree not to submit highly sensitive personal information (including but not limited to government identification numbers, financial account passwords, or medical records) unless strictly necessary and legally permissible.
+•	除非绝对必要且符合法律要求，您同意不提交高度敏感的个人信息（包括但不限于政府身份证号码、金融账户密码或医疗记录）。
+No Guarantee of AI Performance
+不保证AI性能
+We do not guarantee that AI Agents will perform tasks without error, that AI Outputs will meet your specific requirements, or that the AI features will be available without interruption.
+我们不保证AI智能体执行任务时不会出错，不保证AI输出能满足您的特定要求，也不保证AI功能能不间断地提供。
+To the maximum extent permitted by applicable law, we disclaim liability for any loss, damage, or claim arising from reliance on AI Outputs.
+在适用法律允许的最大范围内，我们不对因依赖AI输出而产生的任何损失、损害或索赔承担责任。
+8. Services Management | 8. 服务管理
+We reserve the right, but not the obligation, to:
+我们保留权利，但无义务，采取以下行动：
+15.	Monitor the Services for violations of these Legal Terms;
+16.	监督服务是否违反这些法律条款；
+17.	Take appropriate legal action against anyone who violates the law or these Legal Terms;
+18.	对任何违反法律或本法律条款的人采取适当的法律行动；
+19.	Refuse, restrict access to, limit the availability of, or disable any of your Contributions or any portion thereof;
+20.	拒绝、限制访问、限制可用性或禁用您的任何投稿或其任何部分；
+21.	Remove or otherwise disable all files and content that are excessive in size or are in any way burdensome to our systems;
+22.	移除或以其他方式禁用所有体积过大或对我们的系统造成任何负担的文件和内容；
+23.	Otherwise manage the Services in a manner designed to protect our rights and property and to facilitate the proper functioning of the Services.
+24.	以旨在保护我们的权利和财产并促进服务正常运行的方式管理服务。
+9. Privacy Policy | 9. 隐私政策
+We care about data privacy and security. Please review our Privacy Policy: jfo.ai/privacy. By using the Services, you agree to be bound by our Privacy Policy.
+我们重视数据隐私和安全。请查看我们的隐私政策：jfo.ai/privacy。使用本服务即表示您同意遵守我们的隐私政策。
+10. Copyright Infringements | 10. 版权侵权
+We respect the intellectual property rights of others. If you believe that any material available on or through the Services infringes upon any copyright you own or control, please immediately notify us using the contact information provided below.
+我们尊重他人的知识产权。如果您认为通过服务可获取的任何材料侵犯了您拥有或控制的任何版权，请立即使用以下提供的联系方式通知我们。
+11. Term and Termination | 11. 期限与终止
+These Legal Terms shall remain in full force and effect while you use the Services. WITHOUT LIMITING ANY OTHER PROVISION OF THESE LEGAL TERMS, WE RESERVE THE RIGHT TO, IN OUR SOLE DISCRETION AND WITHOUT NOTICE OR LIABILITY, DENY ACCESS TO AND USE OF THE SERVICES TO ANY PERSON FOR ANY REASON OR FOR NO REASON.
+在您使用服务期间，本法律条款应始终保持完全有效。在不限制本法律条款任何其他规定的前提下，我们保留自行决定且无需通知或承担责任，以任何理由或无理由拒绝任何人访问和使用服务的权利。
+If we terminate or suspend your account for any reason, you are prohibited from registering and creating a new account under your name or the name of any third party.
+如果我们因任何原因终止或暂停您的账户，您将被禁止以您的名义或任何第三方的名义注册和创建新账户。
+12. Modifications and Interruptions | 12. 修改和中断
+We reserve the right to change, modify, or remove the contents of the Services at any time or for any reason at our sole discretion without notice. We will not be liable to you or any third party for any modification, price change, suspension, or discontinuance of the Services.
+我们保留随时自行决定更改、修改或删除服务内容的权利，且无需事先通知。对于服务的任何修改、价格变动、暂停或终止，我们不对您或任何第三方承担责任。
+13. Governing Law | 13. 适用法律
+These Legal Terms and your use of the Services shall be governed by and construed in accordance with the laws of the Hong Kong Special Administrative Region of the People's Republic of China (“Hong Kong”), without regard to its conflict of law principles.
+Any dispute, controversy, or claim arising out of or in connection with these Legal Terms or the Services shall be subject to the exclusive jurisdiction of the courts of Hong Kong.
+本法律条款及您对本服务的使用，均受中华人民共和国香港特别行政区（“香港”）法律管辖，并按其解释，但不适用其法律冲突原则。
+凡因本法律条款或本服务引起或与之相关的任何争议、纠纷或索赔，均应提交香港法院专属管辖。
+14. Dispute Resolution | 14. 争议解决
+Informal Negotiations
+非正式谈判
+To expedite resolution and control the cost of any dispute, the Parties agree to first attempt to negotiate any Dispute informally for at least thirty (30) days before initiating arbitration.
+为加快解决任何争议并控制成本，双方同意在启动仲裁前，首先尝试就任何争议进行至少三十（30）天的非正式协商。
+Binding Arbitration
+有约束力的仲裁
+If the Parties are unable to resolve a Dispute through informal negotiations, the Dispute will be finally and exclusively resolved by binding arbitration. YOU UNDERSTAND THAT WITHOUT THIS PROVISION, YOU WOULD HAVE THE RIGHT TO SUE IN COURT AND HAVE A JURY TRIAL. The arbitration shall be commenced and conducted under the Commercial Arbitration Rules of the American Arbitration Association ("AAA").
+如果双方无法通过非正式协商解决争议，则该争议将最终且排他性地通过具有约束力的仲裁解决。您理解，如果没有本条款，您将有权向法院提起诉讼并要求陪审团审判。仲裁应根据美国仲裁协会（“AAA”）的《商业仲裁规则》启动并进行。
+Restrictions
+限制条件
+The Parties agree that any arbitration shall be limited to the Dispute between the Parties individually. To the full extent permitted by law, (a) no arbitration shall be joined with any other proceeding; (b) there is no right or authority for any Dispute to be arbitrated on a class-action basis; and (c) there is no right or authority for any Dispute to be brought in a purported representative capacity.
+双方同意，任何仲裁应仅限于双方之间的个别争议。在法律允许的最大范围内，(a)任何仲裁不得与任何其他程序合并； (b) 任何争议均无权或无依据以集体诉讼的方式进行仲裁； 以及(c)任何争议均无权或无依据以所谓的代表身份提起。
+Exceptions to Informal Negotiations and Arbitration
+非正式协商和仲裁的例外情况
+The Parties agree that the following Disputes are not subject to the above provisions: (a) any Disputes seeking to enforce or protect any of the intellectual property rights of a Party; (b) any Dispute related to allegations of theft, piracy, invasion of privacy, or unauthorized use; and (c) any claim for injunctive relief.
+双方同意以下争议不受上述规定的约束：（a）任何寻求执行或保护一方任何知识产权的争议；（b）与盗窃、盗版、侵犯隐私或未经授权使用的指控有关的任何争议；（c）任何禁令救济索赔。
+15. Corrections | 15.更正
+There may be information on the Services that contains typographical errors, inaccuracies, or omissions. We reserve the right to correct any errors, inaccuracies, or omissions and to change or update the information on the Services at any time.
+服务中可能存在包含排版错误、不准确信息或遗漏的内容。我们保留随时更正任何错误、不准确信息或遗漏，并更改或更新服务中信息的权利。
+16. Disclaimer｜16. 免责声明
+THE SERVICES, INCLUDING ALL AI-GENERATED ANALYSES, SUMMARIES, PROJECTIONS, RECOMMENDATIONS, AND OTHER OUTPUTS, ARE PROVIDED ON AN “AS IS” AND “AS AVAILABLE” BASIS.
+本服务（包括所有AI生成的分析、总结、预测、建议及其他输出）均按“现状”及“现有可用”基础提供。
+YOU AGREE THAT YOUR USE OF THE SERVICES IS AT YOUR SOLE RISK.
+您同意，您使用本服务完全由您自行承担风险。
+TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, WE DISCLAIM ALL WARRANTIES, WHETHER EXPRESS, IMPLIED, STATUTORY, OR OTHERWISE, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF ACCURACY, COMPLETENESS, RELIABILITY, TIMELINESS, NON-INFRINGEMENT, MERCHANTABILITY, OR FITNESS FOR A PARTICULAR PURPOSE.
+在适用法律允许的最大范围内，我们明确排除所有明示、默示、法定或其他形式的保证，包括但不限于有关准确性、完整性、可靠性、及时性、不侵权性、适销性或适用于特定目的的任何保证。
+Investment and AI-Specific Disclaimer
+投资及AI特别声明
+AI-generated content and analytical outputs are provided for informational and reference purposes only and do not constitute financial, investment, legal, tax, or other professional advice. Nothing provided through the Services shall be construed as a recommendation, endorsement, offer, or solicitation to buy, sell, or invest in any project, security, or financial product.
+AI生成的内容及分析输出仅供信息参考之用，不构成金融、投资、法律、税务或其他专业建议。通过本服务提供的任何内容均不应被视为对任何项目、证券或金融产品的推荐、背书、要约或招揽。
+We do not guarantee that any analysis, projection, or AI Output will be accurate, complete, suitable for investment purposes, or reflective of future performance.
+我们不保证任何分析、预测或AI输出的准确性、完整性、适用于投资目的，或能反映未来表现。
+Investments involve risk, including the possible loss of principal. You are solely responsible for conducting your own independent evaluation and due diligence before making any investment decision.
+投资存在风险，包括本金损失的可能性。在作出任何投资决策前，您应自行进行独立评估及尽职调查，并承担全部责任。
+We expressly disclaim any liability for any investment decision, financial loss, or other damages arising from or related to your reliance on AI Outputs or any information provided through the Services.
+对于因您依赖AI输出或通过本服务提供的任何信息而作出的投资决策或因此产生的财务损失或其他损害，我们明确不承担任何责任。
+17. Limitations of Liability｜17. 责任限制
+General Limitation
+一般责任限制
+To the maximum extent permitted by applicable law, in no event shall we, our directors, employees, affiliates, agents, or service providers be liable to you or any third party for any indirect, incidental, consequential, exemplary, special, punitive, or similar damages, including but not limited to loss of profit, loss of investment opportunity, loss of revenue, loss of goodwill, loss of data, or business interruption arising out of or in connection with your use of the Services.
+在适用法律允许的最大范围内，在任何情况下，我们、我们的董事、员工、关联方、代理人或服务提供商均不对您或任何第三方承担任何间接、附带、后果性、惩戒性、特殊或类似损害赔偿责任，包括但不限于利润损失、投资机会损失、收入损失、商誉损失、数据损失或业务中断。
+Investment and AI-Related Disclaimer
+投资及AI相关责任声明
+You acknowledge that the Services provide analytical tools and AI-generated outputs for informational purposes only. We shall not be liable for any investment loss, financial loss, missed opportunity, or other damages resulting from your reliance on AI Outputs, project analyses, summaries, projections, or any other information provided through the Services.
+您确认本服务仅提供分析工具及AI生成内容供信息参考之用。对于因您依赖AI输出、项目分析、总结、预测或通过本服务提供的任何信息而导致的投资损失、财务损失、机会损失或其他损害，我们不承担任何责任。
+All investment decisions are made solely at your own discretion and risk.
+所有投资决策均由您自行判断并承担风险。
+Data Processing and De-identification Risk
+数据处理与脱敏风险
+While we implement reasonable technical and organizational measures designed to protect and de-identify data, you acknowledge that no data transmission or processing system can be guaranteed to be completely secure. To the extent permitted by law, we shall not be liable for unintended disclosure arising from technical limitations, provided that we have not engaged in willful misconduct or gross negligence.
+尽管我们采取合理的技术及组织措施以保护及脱敏数据，您确认任何数据传输或处理系统均无法保证绝对安全。在法律允许范围内，如非因我们的故意不当行为或重大过失导致，我们不对因技术限制而产生的非故意信息披露承担责任。
+Non-Excludable Liability
+不可排除责任
+Nothing in these Legal Terms shall exclude or limit liability that cannot be excluded or limited under applicable law.
+本条款不排除或限制根据适用法律不得排除或限制的责任。
+18. Indemnification｜18. 赔偿
+You agree to defend, indemnify, and hold us harmless, including our subsidiaries, affiliates, and all of our respective officers, agents, partners, and employees, from and against any loss, damage, liability, claim, or demand.
+您同意为我们（包括我们的子公司、关联公司以及我们各自的所有管理人员、代理人、合作伙伴和员工）进行辩护、赔偿，并使其免受任何损失、损害、责任、索赔或要求的影响。
+19. User Data｜19. 用户数据
+We will maintain certain data that you transmit to the Services for the purpose of managing the performance of the Services. You are solely responsible for all data that you transmit or that relates to any activity you have undertaken using the Services.
+我们将保留您传输给服务的某些数据，目的是管理服务的性能。您对您传输的所有数据或与您使用服务进行的任何活动相关的数据负全部责任。
+20. Electronic Communications and Electronic Acceptance｜20. 电子通信与电子确认
+Visiting the Services, submitting information through the platform, or communicating with us electronically (including via email or in-platform messaging) constitutes electronic communications.
+访问本服务、通过平台提交信息或以电子方式与我们沟通（包括电子邮件或平台内消息）均构成电子通信。
+You consent to receive communications from us electronically, including notices, updates, disclosures, and other information relating to the Services.
+您同意以电子方式接收我们发送的与本服务相关的通知、更新、披露及其他信息。
+You agree that all agreements, notices, disclosures, policies, and other communications that we provide to you electronically satisfy any legal requirement that such communications be in writing.
+您同意，我们以电子方式向您提供的所有协议、通知、披露、政策及其他通信，均满足任何要求以书面形式进行通信的法律要求。
+Where applicable, your electronic acceptance of these Legal Terms or other platform policies shall constitute a legally binding agreement between you and us.
+在适用情况下，您以电子方式确认本法律条款或其他平台政策，应构成对您具有法律约束力的协议。
+Nothing in this section shall be construed as creating any obligation for us to provide transactional or payment processing services.
+本条款不应被解释为我们提供任何交易或支付处理服务的承诺。
+21. Miscellaneous｜21. 其他条款
+These Legal Terms and any policies or operating rules posted by us on the Services constitute the entire agreement and understanding between you and us. Our failure to exercise or enforce any right or provision of these Legal Terms shall not operate as a waiver of such right or provision.
+这些法律条款以及我们在服务中发布的任何政策或运营规则构成了你我之间的完整协议和共识。我们未行使或执行这些法律条款中的任何权利或规定，不应被视为放弃该权利或规定。
+22. Contact Us ｜22. 联系我们
+In order to resolve a complaint regarding the Services or to receive further information regarding use of the Services, please contact us at:
+JFO AI, Inc. 9F China Life Center, 18 Hung Luen Rd, Hung Hom, KL, Hong Kong
+Email: support@jfo.ai
+若要解决有关服务的投诉或获取有关服务使用的更多信息，请通过以下方式联系我们：
+香港九龍紅磡紅鸞道18號中國人壽中心9樓
+邮箱：support@jfo.ai
