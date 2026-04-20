@@ -199,50 +199,71 @@ export default function Index() {
         </section>
       </main>
 
-      <footer className="border-t border-white/[0.06] px-4 py-12 sm:px-6 md:px-10 lg:px-12">
-        <div className="mx-auto flex max-w-6xl flex-col gap-8 md:flex-row md:items-start md:justify-between md:gap-10 lg:gap-14">
-          <div className="shrink-0 md:max-w-xs">
-            <p className="font-display text-lg font-medium leading-none tracking-tight text-landing-accent">
-              合域
-            </p>
-            <p className="mt-2 max-w-xs text-[0.8rem] leading-relaxed text-muted-foreground">
-              以 AI Agent 为引擎的多家族联合投资决策辅助系统
-            </p>
-          </div>
-          <div className="grid grid-cols-1 gap-8 md:grid-cols-3 md:gap-x-8 md:gap-y-3 lg:gap-x-12">
-            <p className="flex flex-wrap items-baseline justify-start gap-x-2 text-[0.72rem] leading-none text-muted-foreground/80 md:col-start-1 md:row-start-1 md:w-full md:justify-end md:self-end">
-              <span className="font-medium uppercase tracking-[0.14em] text-muted-foreground/65">Legal</span>
-              <span className="text-muted-foreground/45" aria-hidden>
-                ·
-              </span>
-              <span className="font-medium text-muted-foreground/85">法律信息</span>
-            </p>
-            <Link
-              to="/privacy"
-              className="block text-left text-[0.78rem] text-muted-foreground/80 transition-colors hover:text-foreground md:col-start-1 md:row-start-2 md:text-right"
-            >
-              Privacy Policy（隐私政策）
-            </Link>
-            <Link
-              to="/terms"
-              className="block text-left text-[0.78rem] text-muted-foreground/80 transition-colors hover:text-foreground md:col-start-1 md:row-start-3 md:text-right"
-            >
-              Terms of Service（服务条款）
-            </Link>
-            <p className="flex flex-wrap items-baseline justify-start gap-x-2 text-[0.72rem] leading-none text-muted-foreground/80 md:col-start-2 md:row-start-1 md:w-full md:justify-end md:self-end">
-              <span className="font-medium uppercase tracking-[0.14em] text-muted-foreground/65">Contact</span>
-              <span className="text-muted-foreground/45" aria-hidden>
-                ·
-              </span>
-              <span className="font-medium text-muted-foreground/85">联系方式</span>
-            </p>
-            <a
-              href="mailto:support@jfo.ai"
-              className="block text-left text-[0.78rem] text-muted-foreground/80 transition-colors hover:text-foreground md:col-start-2 md:row-start-2 md:text-right"
-            >
-              Email: support@jfo.ai
-            </a>
-            <p className="text-left text-[0.78rem] leading-none text-muted-foreground/80 md:col-start-3 md:row-start-1 md:self-end md:text-right">
+      <footer className="border-t border-white/[0.06]">
+        <div className="mx-auto max-w-6xl px-4 py-14 sm:px-6 md:px-10 lg:px-12">
+          <div className="grid grid-cols-1 gap-10 sm:grid-cols-2 sm:gap-x-10 sm:gap-y-10 lg:grid-cols-[minmax(0,1.15fr)_auto_auto_auto] lg:items-start lg:gap-x-8 xl:gap-x-12">
+            {/* 品牌 */}
+            <div className="sm:col-span-2 lg:col-span-1 lg:max-w-[22rem]">
+              <p className="font-display text-xl font-medium tracking-tight text-landing-accent md:text-[1.35rem]">
+                合域
+              </p>
+              <p className="mt-3 max-w-[20rem] text-[0.8125rem] leading-[1.65] text-muted-foreground">
+                以 AI Agent 为引擎的多家族联合投资决策辅助系统
+              </p>
+            </div>
+
+            {/* 法律信息 */}
+            <div className="flex flex-col gap-3 sm:min-w-[11rem]">
+              <p className="flex flex-wrap items-baseline gap-x-1.5 text-[0.7rem] leading-none text-muted-foreground/85">
+                <span className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground/55">
+                  Legal
+                </span>
+                <span className="text-muted-foreground/35" aria-hidden>
+                  ·
+                </span>
+                <span className="text-[0.72rem] font-medium tracking-normal text-muted-foreground/88">
+                  法律信息
+                </span>
+              </p>
+              <nav className="flex flex-col gap-2.5" aria-label="法律信息">
+                <Link
+                  to="/privacy"
+                  className="text-left text-[0.8125rem] leading-snug text-muted-foreground/90 transition-colors hover:text-landing-accent"
+                >
+                  Privacy Policy（隐私政策）
+                </Link>
+                <Link
+                  to="/terms"
+                  className="text-left text-[0.8125rem] leading-snug text-muted-foreground/90 transition-colors hover:text-landing-accent"
+                >
+                  Terms of Service（服务条款）
+                </Link>
+              </nav>
+            </div>
+
+            {/* 联系方式 */}
+            <div className="flex flex-col gap-3 sm:min-w-[12rem]">
+              <p className="flex flex-wrap items-baseline gap-x-1.5 text-[0.7rem] leading-none text-muted-foreground/85">
+                <span className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-muted-foreground/55">
+                  Contact
+                </span>
+                <span className="text-muted-foreground/35" aria-hidden>
+                  ·
+                </span>
+                <span className="text-[0.72rem] font-medium tracking-normal text-muted-foreground/88">
+                  联系方式
+                </span>
+              </p>
+              <a
+                href="mailto:support@jfo.ai"
+                className="text-left text-[0.8125rem] leading-snug text-muted-foreground/90 transition-colors hover:text-landing-accent"
+              >
+                Email: support@jfo.ai
+              </a>
+            </div>
+
+            {/* 版权 — 大屏贴右对齐，与参考图一致 */}
+            <p className="text-[0.8125rem] leading-none text-muted-foreground/65 sm:col-span-2 sm:pt-1 lg:col-span-1 lg:justify-self-end lg:pt-0 lg:text-right">
               © {new Date().getFullYear()} 合域
             </p>
           </div>
