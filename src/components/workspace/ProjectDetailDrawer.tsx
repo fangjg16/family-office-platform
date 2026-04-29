@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { MessageSquare, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { WorkspaceProject } from "@/workspace/projects";
@@ -22,6 +22,7 @@ type ProjectDetailDrawerProps = {
 };
 
 const PANEL_MS = 300;
+const CHAT_ENTRY_TRANSITION_KEY = "workspace-chat-entry-transition";
 
 export function ProjectDetailDrawer({
   project,
@@ -30,7 +31,10 @@ export function ProjectDetailDrawer({
   onClose,
   onGuestTryChat,
 }: ProjectDetailDrawerProps) {
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  const [enteringChat, setEnteringChat] = useState(false);
+  const enterTimerRef = useRef<number | null>(null);
 
   const requestClose = useCallback(() => {
     setOpen(false);
@@ -55,6 +59,14 @@ export function ProjectDetailDrawer({
     return () => window.removeEventListener("keydown", onKey);
   }, [project, requestClose]);
 
+  useEffect(() => {
+    return () => {
+      if (enterTimerRef.current !== null) {
+        window.clearTimeout(enterTimerRef.current);
+      }
+    };
+  }, []);
+
   if (!project) return null;
 
   const role = getProjectRole(userId, project.id);
@@ -65,16 +77,19 @@ export function ProjectDetailDrawer({
     <>
       <div
         className={cn(
-          "fixed inset-0 z-[80] bg-black/40 backdrop-blur-[2px] transition-opacity duration-300",
-          open ? "opacity-100" : "opacity-0 pointer-events-none"
+          "fixed inset-0 z-[80] bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ease-out",
+          open ? "opacity-100" : "opacity-0 pointer-events-none",
+          enteringChat && "opacity-60"
         )}
         aria-hidden={!open}
         onClick={requestClose}
       />
       <aside
         className={cn(
-          "fixed right-0 top-0 z-[90] flex h-full w-full max-w-lg flex-col border-l border-border/80 bg-white shadow-[-12px_0_40px_-20px_rgba(15,23,42,0.2)] transition-transform duration-300 ease-out",
-          open ? "translate-x-0" : "translate-x-full"
+          "fixed right-0 top-0 z-[90] flex h-full w-full max-w-lg flex-col border-l border-border/80 bg-white shadow-[-12px_0_40px_-20px_rgba(15,23,42,0.2)]",
+          "transition-[transform,opacity,filter] duration-200 ease-out",
+          open ? "translate-x-0 opacity-100 blur-0" : "translate-x-full opacity-0",
+          enteringChat && "translate-x-1 opacity-95 blur-[1px]"
         )}
         role="dialog"
         aria-modal="true"
@@ -160,13 +175,30 @@ export function ProjectDetailDrawer({
 
         <footer className="shrink-0 border-t border-border/60 bg-white/95 px-5 py-4 backdrop-blur-md md:px-6">
           {chatOk ? (
-            <Link
-              to={`/app/chat/${project.id}`}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground shadow-[0_2px_12px_-2px_rgba(37,99,235,0.28)] transition-colors hover:bg-primary/92"
+            <button
+              type="button"
+              onClick={() => {
+                if (enteringChat) return;
+                setEnteringChat(true);
+                if (enterTimerRef.current !== null) {
+                  window.clearTimeout(enterTimerRef.current);
+                }
+                enterTimerRef.current = window.setTimeout(() => {
+                  if (typeof window !== "undefined") {
+                    window.sessionStorage.setItem(CHAT_ENTRY_TRANSITION_KEY, "1");
+                  }
+                  navigate(`/app/chat/${project.id}`);
+                }, 180);
+              }}
+              disabled={enteringChat}
+              className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground shadow-[0_2px_12px_-2px_rgba(37,99,235,0.28)] transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-primary/92 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-90"
             >
-              <MessageSquare className="h-4 w-4" strokeWidth={2} />
-              进入对话上下文
-            </Link>
+              <MessageSquare
+                className={cn("h-4 w-4", enteringChat && "animate-pulse")}
+                strokeWidth={2}
+              />
+              {enteringChat ? "进入中..." : "进入对话上下文"}
+            </button>
           ) : (
             <button
               type="button"

@@ -49,6 +49,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (loadSessionUserId()) {
@@ -63,6 +64,7 @@ export default function Login() {
   }, [navigate]);
 
   const submit = (u: string, p: string) => {
+    if (submitting) return;
     setError(null);
     const id = verifyLogin(u, p);
     if (!id) {
@@ -75,7 +77,10 @@ export default function Login() {
     } else {
       localStorage.removeItem(REMEMBER_USER_KEY);
     }
-    navigate("/app/projects", { replace: true });
+    setSubmitting(true);
+    window.setTimeout(() => {
+      navigate("/app/projects", { replace: true });
+    }, 140);
   };
 
   const onSubmitForm = (e: React.FormEvent) => {
@@ -214,6 +219,7 @@ export default function Login() {
                     autoComplete="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    disabled={submitting}
                     placeholder="请输入账号或邮箱"
                     className="block w-full rounded-xl border border-input bg-white py-3 pl-10 pr-4 text-base text-foreground shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                   />
@@ -236,6 +242,7 @@ export default function Login() {
                     autoComplete="current-password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
+                    disabled={submitting}
                     placeholder="请输入密码"
                     className="block w-full rounded-xl border border-input bg-white py-3 pl-10 pr-4 text-base text-foreground shadow-sm placeholder:text-muted-foreground/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
                   />
@@ -255,6 +262,7 @@ export default function Login() {
                     type="checkbox"
                     checked={rememberMe}
                     onChange={(e) => setRememberMe(e.target.checked)}
+                    disabled={submitting}
                     className="h-4 w-4 cursor-pointer rounded border-input text-primary accent-primary focus:ring-2 focus:ring-primary/25"
                   />
                   <label
@@ -274,9 +282,10 @@ export default function Login() {
 
               <button
                 type="submit"
-                className="group flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-base font-semibold text-primary-foreground shadow-md shadow-primary/20 transition-all hover:bg-primary/92 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 active:scale-[0.99]"
+                disabled={submitting}
+                className="group flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3.5 text-base font-semibold text-primary-foreground shadow-md shadow-primary/20 transition-[transform,background-color,box-shadow] duration-150 ease-out hover:bg-primary/92 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 focus-visible:ring-offset-2 active:scale-[0.99] disabled:pointer-events-none disabled:opacity-90"
               >
-                进入工作台
+                {submitting ? "进入中..." : "进入工作台"}
                 <ArrowRight
                   className="h-4 w-4 transition-transform group-hover:translate-x-0.5"
                   strokeWidth={2}
@@ -314,9 +323,10 @@ export default function Login() {
                     key={q.id}
                     type="button"
                     onClick={() => submit(q.id, MOCK_PASSWORD)}
+                    disabled={submitting}
                     className={cn(
-                      "flex min-h-[3.25rem] flex-row items-center justify-between gap-3 rounded-xl border border-border/80 bg-white px-4 py-3 text-left text-sm shadow-sm transition-all hover:border-primary/35 hover:shadow-md",
-                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25"
+                      "flex min-h-[3.25rem] flex-row items-center justify-between gap-3 rounded-xl border border-border/80 bg-white px-4 py-3 text-left text-sm shadow-sm transition-[transform,box-shadow,border-color,background-color] duration-150 ease-out hover:border-primary/35 hover:shadow-md",
+                      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 disabled:pointer-events-none disabled:opacity-80"
                     )}
                   >
                     <span className="min-w-0 flex-1 truncate font-semibold text-foreground">

@@ -11,6 +11,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
+import { ChatMarkdown } from "@/components/workspace/ChatMarkdown";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { cn } from "@/lib/utils";
 import {
@@ -43,6 +44,80 @@ type SessionConversationState = {
   conversations: SessionConversation[];
 };
 
+type LiveChatMessage = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  files?: { name: string }[];
+  time: string;
+};
+
+const LIVE_RAGFLOW_PROJECT_ID = "nn-fresh-port";
+const CHAT_ENTRY_TRANSITION_KEY = "workspace-chat-entry-transition";
+const RAGFLOW_CHAT_ENDPOINT =
+  (import.meta.env.VITE_RAGFLOW_CHAT_ENDPOINT as string | undefined)?.trim() ??
+  "";
+const RAGFLOW_API_KEY =
+  (import.meta.env.VITE_RAGFLOW_API_KEY as string | undefined)?.trim() ?? "";
+const RAGFLOW_MODE =
+  ((import.meta.env.VITE_RAGFLOW_MODE as string | undefined)?.trim().toLowerCase() ??
+    "native") as "native" | "openai" | "proxy";
+
+// 公域（GitHub Pages）无法运行/访问 RAGFlow 服务，因此在上传公开版本时强制禁用实时 RAGFlow 模式。
+const ENABLE_RAGFLOW_PUBLIC = false;
+
+function buildRagflowHealthProbeUrl(chatEndpoint: string): string | null {
+  const trimmed = chatEndpoint.trim();
+  if (!trimmed) return null;
+  try {
+    const u = new URL(trimmed);
+    const path = u.pathname.replace(/\/+$/u, "");
+    u.pathname = path;
+    if (path.endsWith("/api/ragflow/chat")) {
+      u.pathname = path.replace(/\/api\/ragflow\/chat$/u, "/api/ragflow/health");
+      return u.toString();
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function ragflowChatLooksLikeDirectService(url: string): boolean {
+  try {
+    const u = new URL(url.trim());
+    if (u.port === "9380") return true;
+    return /ragflow/i.test(u.hostname);
+  } catch {
+    return false;
+  }
+}
+
+function formatRagflowRequestError(message: string, endpoint: string): string {
+  const base = `请求失败：${message}`;
+  if (!message.toLowerCase().includes("failed to fetch")) return base;
+  const ep = endpoint.trim();
+  const extra: string[] = [];
+  if (ep) {
+    extra.push(`当前接口：${ep}`);
+  }
+  if (typeof window !== "undefined" && window.location.protocol === "https:" && ep.startsWith("http:")) {
+    extra.push("页面为 HTTPS，而接口为 HTTP，浏览器会拦截混合内容。请改用 https 代理，或本地用 http 访问前端。");
+  }
+  if (ep && ragflowChatLooksLikeDirectService(ep)) {
+    extra.push(
+      "浏览器通常无法直接访问 RAGFlow（跨域/CORS）。请在 `family-office-platform/proxy/` 启动本地代理，并在 `.env.local` 中将 `VITE_RAGFLOW_CHAT_ENDPOINT` 指向 `http://localhost:8787/api/ragflow/chat`，然后重启 `npm run dev`。",
+    );
+  } else if (ep.includes("8787") || ep.includes("/api/ragflow/chat")) {
+    extra.push(
+      "请确认已在本机运行代理：`cd family-office-platform/proxy` → `npm install` → `npm run dev`，并在浏览器打开 `http://localhost:8787/api/ragflow/health` 应返回 JSON。随后重启前端开发服务器以加载 `.env.local`。",
+    );
+  } else {
+    extra.push("请确认该地址在本机可访问、未被防火墙拦截，且与前端同源策略不冲突。");
+  }
+  return [base, ...extra].join(" ");
+}
+
 /**
  * 仅保留在当前网页会话内（内存）：
  * - 不刷新页面时，项目间切换可保留左侧操作
@@ -50,6 +125,20 @@ type SessionConversationState = {
  */
 const SESSION_CONVERSATION_CACHE: Record<string, SessionConversationState> = {};
 const DEFAULT_PROJECT_IDS = ["europe-hotel-ma", "shrimp"] as const;
+const DEMO_HISTORY_FILES: Record<string, string[]> = {
+  "nn-fresh-port": [
+    "尽调报告－嘉兴中润海盐冷链产业园区.pdf",
+    "南宁生鲜食品智慧港项目介绍.pdf",
+    "嘉兴中润项目推介.pdf",
+    "尽调报告二 南宁东盟生鲜食品智慧港.pdf",
+  ],
+};
+const NANNING_CITATION_MAP: Record<string, string> = {
+  "1": "《南宁生鲜食品智慧港项目介绍.pdf》",
+  "2": "《尽调报告二 南宁东盟生鲜食品智慧港.pdf》",
+  "3": "《尽调报告一 嘉兴中润海盐冷链产业园区.pdf》",
+  "4": "《嘉兴中润项目推介.pdf》",
+};
 const PROJECT_TIME_META: Record<
   string,
   {
@@ -110,6 +199,55 @@ function getCurrentDateTimeLabel() {
   return `${date} ${time}`;
 }
 
+function extractRagflowAnswer(payload: unknown): string {
+  if (typeof payload === "string") return payload.trim();
+  if (!payload || typeof payload !== "object") return "";
+
+  const obj = payload as Record<string, unknown>;
+  const picks: unknown[] = [
+    obj.answer,
+    obj.response,
+    obj.output,
+    obj.message,
+    (obj.data as Record<string, unknown> | undefined)?.answer,
+    (obj.data as Record<string, unknown> | undefined)?.response,
+    (obj.data as Record<string, unknown> | undefined)?.output,
+    (obj.result as Record<string, unknown> | undefined)?.answer,
+  ];
+
+  for (const item of picks) {
+    if (typeof item === "string" && item.trim()) return item.trim();
+  }
+  return "";
+}
+
+function extractRagflowSessionId(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const obj = payload as Record<string, unknown>;
+  const sid = (obj.data as Record<string, unknown> | undefined)?.session_id;
+  return typeof sid === "string" && sid.trim() ? sid.trim() : null;
+}
+
+function citationMarkerPrefix(id: string): string {
+  if (id === "1") return "🟣";
+  if (id === "2") return "🟢";
+  if (id === "3") return "🔵";
+  if (id === "4") return "🟡";
+  return "⚪";
+}
+
+function formatCitationMarkers(text: string): string {
+  if (!text.includes("[ID:")) return text;
+  return text
+    .replace(/\[ID\s*:\s*(\d+)\]/gu, (_raw, id: string) => {
+      const marker = `${citationMarkerPrefix(id)}`;
+      const title = NANNING_CITATION_MAP[id];
+      if (!title) return marker;
+      return `[${marker}](cite:${id} "${title}")`;
+    })
+    .replace(/([)\]）】])(?=[🟣🟢🔵🟡⚪])/gu, "$1 ");
+}
+
 function withCurrentPreviewTime(conversation: SessionConversation): SessionConversation {
   return {
     ...conversation,
@@ -130,6 +268,7 @@ function buildConversationFromProject(projectId: string): SessionConversation | 
       step.attachments.forEach((f) => names.push(f.name));
     }
   });
+  (DEMO_HISTORY_FILES[projectId] ?? []).forEach((name) => names.push(name));
 
   return {
     id: `${projectId}-main`,
@@ -168,7 +307,7 @@ function UserBubble({ children, time }: { children: ReactNode; time?: string }) 
       <div className="group inline-flex flex-col items-end">
         <div
           className={cn(
-            "max-w-[85%] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50",
+            "inline-block max-w-[32ch] sm:max-w-[42ch] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50 break-words whitespace-pre-line",
             "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]",
             "transition-transform duration-300 hover:scale-[1.005]"
           )}
@@ -585,7 +724,19 @@ export default function ConversationCenter() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [conversations, setConversations] = useState<SessionConversation[]>([]);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+  const [draftMessage, setDraftMessage] = useState("");
+  const [sending, setSending] = useState(false);
+  const [liveMessagesByConversation, setLiveMessagesByConversation] = useState<
+    Record<string, LiveChatMessage[]>
+  >({});
+  const [liveSessionByConversation, setLiveSessionByConversation] = useState<
+    Record<string, string>
+  >({});
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [newlyAddedConversationId, setNewlyAddedConversationId] = useState<string | null>(null);
+  const [entryReady, setEntryReady] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const newConversationTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const id = loadSessionUserId();
@@ -604,6 +755,28 @@ export default function ConversationCenter() {
     setUserId(id);
     setUser(u);
   }, [navigate]);
+
+  useEffect(() => {
+    return () => {
+      if (newConversationTimerRef.current !== null) {
+        window.clearTimeout(newConversationTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const shouldPlay = window.sessionStorage.getItem(CHAT_ENTRY_TRANSITION_KEY) === "1";
+    if (!shouldPlay) return;
+    window.sessionStorage.removeItem(CHAT_ENTRY_TRANSITION_KEY);
+    const shouldReduceMotion = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (shouldReduceMotion) {
+      setEntryReady(true);
+      return;
+    }
+    setEntryReady(false);
+    window.requestAnimationFrame(() => setEntryReady(true));
+  }, []);
 
   const project = projectId ? getProjectById(projectId) : undefined;
 
@@ -681,6 +854,52 @@ export default function ConversationCenter() {
     return conversations.find((item) => item.id === effectiveConversationId) ?? null;
   }, [conversations, effectiveConversationId]);
 
+  const isLiveRagflowMode =
+    ENABLE_RAGFLOW_PUBLIC &&
+    projectRole === "core" &&
+    projectId === LIVE_RAGFLOW_PROJECT_ID;
+  const liveMessages = effectiveConversationId
+    ? liveMessagesByConversation[effectiveConversationId] ?? []
+    : [];
+
+  useEffect(() => {
+    if (!isLiveRagflowMode || !RAGFLOW_CHAT_ENDPOINT) return;
+    const healthUrl = buildRagflowHealthProbeUrl(RAGFLOW_CHAT_ENDPOINT);
+    if (!healthUrl) return;
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await fetch(healthUrl, { method: "GET" });
+        if (cancelled) return;
+        if (!res.ok) {
+          setLiveError(
+            `无法连接 RAGFlow 代理（健康检查 ${res.status}）。请确认 proxy 已启动且 \`RAGFLOW_BASE\` 指向正在运行的 RAGFlow。`,
+          );
+          return;
+        }
+        setLiveError((prev) =>
+          prev &&
+          (prev.includes("无法连接 RAGFlow 代理（健康检查") ||
+            prev.includes("Failed to fetch（健康检查）"))
+            ? null
+            : prev,
+        );
+      } catch {
+        if (cancelled) return;
+        setLiveError(
+          formatRagflowRequestError(
+            "Failed to fetch（健康检查）",
+            healthUrl,
+          ),
+        );
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLiveRagflowMode, projectId, RAGFLOW_CHAT_ENDPOINT]);
+
   useEffect(() => {
     if (!projectId || !userId) return;
     if (!conversationId) return;
@@ -693,6 +912,7 @@ export default function ConversationCenter() {
 
   useEffect(() => {
     setShowHistoryMenu(false);
+    setLiveError(null);
   }, [projectId]);
 
   const addFiles = (files: FileList | null) => {
@@ -711,6 +931,152 @@ export default function ConversationCenter() {
 
   const removeFile = (idx: number) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const appendLiveMessage = (conversationKey: string, message: LiveChatMessage) => {
+    setLiveMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationKey]: [...(prev[conversationKey] ?? []), message],
+    }));
+  };
+
+  const updateConversationPreview = (preview: string, fileNames: string[] = []) => {
+    setConversations((prev) =>
+      prev.map((t) =>
+        t.id === effectiveConversationId
+          ? {
+              ...t,
+              files:
+                fileNames.length > 0
+                  ? Array.from(new Set([...t.files, ...fileNames]))
+                  : t.files,
+              preview,
+              updatedAt: getCurrentDateTimeLabel(),
+            }
+          : t
+      )
+    );
+  };
+
+  const handleSend = async () => {
+    if (!projectId) return;
+    const trimmed = draftMessage.trim();
+    const fileNames = selectedFiles.map((f) => f.name);
+
+    if (!isLiveRagflowMode) {
+      if (fileNames.length === 0) return;
+      updateConversationPreview(`已上传 ${fileNames.length} 个文件`, fileNames);
+      setSelectedFiles([]);
+      setShowUploadPanel(false);
+      return;
+    }
+
+    if (!effectiveConversationId || (!trimmed && fileNames.length === 0) || sending) return;
+
+    setLiveError(null);
+    const userText =
+      fileNames.length > 0 && !trimmed
+        ? `已发送 ${fileNames.length} 个文件，请基于资料继续回答。`
+        : trimmed;
+
+    appendLiveMessage(effectiveConversationId, {
+      id: `user-${Date.now()}`,
+      role: "user",
+      content: userText,
+      files: fileNames.length > 0 ? fileNames.map((name) => ({ name })) : undefined,
+      time: getCurrentDateTimeLabel(),
+    });
+    updateConversationPreview(trimmed || `已发送 ${fileNames.length} 个文件`, fileNames);
+    setDraftMessage("");
+    setSelectedFiles([]);
+    setShowUploadPanel(false);
+
+    if (!RAGFLOW_CHAT_ENDPOINT) {
+      const msg =
+        "尚未配置 RAGFlow 接口地址。请在 `.env` 中设置 `VITE_RAGFLOW_CHAT_ENDPOINT` 后重试。";
+      setLiveError(msg);
+      appendLiveMessage(effectiveConversationId, {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: msg,
+        time: getCurrentDateTimeLabel(),
+      });
+      return;
+    }
+
+    setSending(true);
+    try {
+      const history = liveMessages.map((m) => ({ role: m.role, content: m.content }));
+      const currentSessionId = liveSessionByConversation[effectiveConversationId];
+      const requestBody =
+        RAGFLOW_MODE === "native"
+          ? {
+              question: userText,
+              stream: false,
+              ...(currentSessionId ? { session_id: currentSessionId } : {}),
+              user_id: userId,
+            }
+          : RAGFLOW_MODE === "openai"
+            ? {
+                stream: false,
+                model: "ragflow",
+                messages: [...history, { role: "user", content: userText }],
+              }
+            : {
+                projectId,
+                conversationId: effectiveConversationId,
+                userId,
+                role: projectRole,
+                message: userText,
+                files: fileNames,
+                history,
+              };
+      const res = await fetch(RAGFLOW_CHAT_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(RAGFLOW_API_KEY ? { Authorization: `Bearer ${RAGFLOW_API_KEY}` } : {}),
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!res.ok) {
+        throw new Error(`RAGFlow 接口返回 ${res.status}`);
+      }
+      const payload: unknown = await res.json();
+      const sessionId = extractRagflowSessionId(payload);
+      if (sessionId) {
+        setLiveSessionByConversation((prev) => ({
+          ...prev,
+          [effectiveConversationId]: sessionId,
+        }));
+      }
+      const rawAnswer = extractRagflowAnswer(payload) || "已收到消息，但未返回可展示答案。";
+      const answer =
+        projectId === LIVE_RAGFLOW_PROJECT_ID
+          ? formatCitationMarkers(rawAnswer)
+          : rawAnswer;
+      setLiveError(null);
+      appendLiveMessage(effectiveConversationId, {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: answer,
+        time: getCurrentDateTimeLabel(),
+      });
+    } catch (error) {
+      const raw =
+        error instanceof Error ? error.message : "未知错误";
+      const errMsg = formatRagflowRequestError(raw, RAGFLOW_CHAT_ENDPOINT);
+      setLiveError(errMsg);
+      appendLiveMessage(effectiveConversationId, {
+        id: `assistant-${Date.now()}`,
+        role: "assistant",
+        content: errMsg,
+        time: getCurrentDateTimeLabel(),
+      });
+    } finally {
+      setSending(false);
+    }
   };
 
   if (!user || !userId || !tier || !projectRole) {
@@ -745,7 +1111,16 @@ export default function ConversationCenter() {
       shellClassName="h-screen overflow-hidden"
       contentClassName="overflow-hidden pb-3"
     >
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden md:rounded-[1.75rem] md:border md:border-border/45 md:bg-white/55 md:shadow-[0_28px_90px_-48px_rgba(37,99,235,0.2)] md:backdrop-blur-xl">
+      <div
+        className={cn(
+          "flex h-full min-h-0 flex-1 flex-col overflow-hidden md:rounded-[1.75rem] md:border md:border-border/45 md:bg-white/55 md:shadow-[0_28px_90px_-48px_rgba(37,99,235,0.2)] md:backdrop-blur-xl",
+          "transition-[opacity,transform,filter] duration-220",
+          entryReady
+            ? "opacity-100 translate-y-0 scale-100 blur-0"
+            : "opacity-0 translate-y-2 scale-[0.995] blur-[1px]",
+        )}
+        style={{ transitionTimingFunction: "cubic-bezier(0.23, 1, 0.32, 1)" }}
+      >
         <div className="flex min-h-0 flex-1 flex-col overflow-hidden md:flex-row">
         <aside className="flex w-full shrink-0 flex-col overflow-hidden border-b border-border/60 bg-white/70 backdrop-blur-md md:w-[17rem] md:rounded-tl-[1.75rem] md:border-b-0 md:border-r md:border-border/50">
         <div className="border-b border-border/60 px-4 py-4">
@@ -783,6 +1158,13 @@ export default function ConversationCenter() {
                 if (userId) SESSION_CONVERSATION_CACHE[userId] = { conversations: next };
                 return next;
               });
+              setNewlyAddedConversationId(newId);
+              if (newConversationTimerRef.current !== null) {
+                window.clearTimeout(newConversationTimerRef.current);
+              }
+              newConversationTimerRef.current = window.setTimeout(() => {
+                setNewlyAddedConversationId((prev) => (prev === newId ? null : prev));
+              }, 260);
               navigate(`/app/chat/${projectId}/${newId}`);
             }}
             className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 px-3 py-2.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
@@ -797,6 +1179,8 @@ export default function ConversationCenter() {
                 key={conversation.id}
                 className={cn(
                   "relative w-full rounded-xl border px-3 py-3 text-left transition-colors",
+                  conversation.id === newlyAddedConversationId &&
+                    "animate-in fade-in slide-in-from-top-1 duration-200",
                   active
                     ? "border-primary/30 bg-primary/[0.08]"
                     : "border-transparent bg-white/70 hover:border-border/80 hover:bg-white"
@@ -894,13 +1278,66 @@ export default function ConversationCenter() {
               {chatDayLabel}
             </span>
           </div>
-          {isBlankThread ? (
+          {isBlankThread && !isLiveRagflowMode ? (
             <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-white/40 px-6 py-16 text-center">
               <p className="text-sm font-semibold text-foreground">空白对话</p>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
                 在下方输入消息或上传文件，开始与 Master Agent 对话。
               </p>
             </div>
+          ) : isLiveRagflowMode ? (
+            <>
+              <AiShell>
+                <p className="text-sm font-semibold text-primary">
+                  RAGFlow 已接入（Core）
+                </p>
+                <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                  当前对话会实时调用 RAGFlow（原生接口优先）。请直接在下方输入问题，或上传文件后发送。
+                </p>
+              </AiShell>
+              {liveMessages.length === 0 ? (
+                <AiShell>
+                  <p className="text-sm text-muted-foreground">
+                    还没有消息。先发送一条问题试试，例如：「给出南宁港项目的首期招商优先级建议」。
+                  </p>
+                </AiShell>
+              ) : (
+                liveMessages.map((m) =>
+                  m.role === "user" ? (
+                    <div key={m.id} className="flex flex-col items-end gap-3">
+                      {m.files && m.files.length > 0 ? (
+                        <ChatSentFilesPanel files={m.files} />
+                      ) : null}
+                      <UserBubble>
+                        <ChatMarkdown text={m.content} variant="user" />
+                      </UserBubble>
+                    </div>
+                  ) : (
+                    <AiShell key={m.id}>
+                      <div className="text-sm">
+                        <ChatMarkdown text={m.content} variant="assistant" />
+                      </div>
+                      <p className="mt-2 text-[11px] text-muted-foreground">
+                        ● Master Agent · Core · RAGFlow 返回
+                      </p>
+                    </AiShell>
+                  )
+                )
+              )}
+              {sending ? (
+                <AiShell>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
+                    <span className="text-sm font-medium text-muted-foreground">
+                      思考中...
+                    </span>
+                  </div>
+                  <p className="mt-2 text-[11px] text-muted-foreground">
+                    ● Master Agent · Core · RAGFlow 处理中
+                  </p>
+                </AiShell>
+              ) : null}
+            </>
           ) : (
             <>
           {projectRole === "admin" ? (
@@ -1084,12 +1521,29 @@ export default function ConversationCenter() {
               ) : null}
             </div>
           ) : null}
+          {isLiveRagflowMode && liveError ? (
+            <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+              {liveError}
+            </div>
+          ) : null}
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <input
               type="text"
-              readOnly
-              placeholder="输入消息，与 Master Agent 对话…"
+              value={draftMessage}
+              onChange={(e) => setDraftMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleSend();
+                }
+              }}
+              readOnly={!isLiveRagflowMode || sending}
+              placeholder={
+                isLiveRagflowMode
+                  ? "输入消息，发送到 RAGFlow…"
+                  : "输入消息，与 Master Agent 对话…"
+              }
               className="h-12 min-h-[48px] flex-1 rounded-full border border-input bg-white px-5 text-sm font-medium text-muted-foreground shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             />
             <button
@@ -1107,29 +1561,18 @@ export default function ConversationCenter() {
             </button>
             <button
               type="button"
-              onClick={() => {
-                if (!projectId) return;
-                if (selectedFiles.length === 0) return;
-                const names = selectedFiles.map((f) => f.name);
-                setConversations((prev) =>
-                  prev.map((t) =>
-                    t.id === effectiveConversationId
-                      ? {
-                          ...t,
-                          files: Array.from(new Set([...t.files, ...names])),
-                          preview: `已上传 ${names.length} 个文件`,
-                          updatedAt: getCurrentDateTimeLabel(),
-                        }
-                      : t
-                  )
-                );
-                setSelectedFiles([]);
-                setShowUploadPanel(false);
-              }}
+              onClick={() => void handleSend()}
+              disabled={
+                sending ||
+                (!isLiveRagflowMode && selectedFiles.length === 0) ||
+                (isLiveRagflowMode &&
+                  draftMessage.trim().length === 0 &&
+                  selectedFiles.length === 0)
+              }
               className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-8 text-sm font-semibold text-primary-foreground shadow-[0_2px_12px_-2px_rgba(37,99,235,0.28)] transition-all hover:bg-primary/92 active:scale-[0.98]"
             >
               <Plane className="h-4 w-4" strokeWidth={2} />
-              发送
+              {sending ? "发送中…" : "发送"}
             </button>
           </div>
           <input

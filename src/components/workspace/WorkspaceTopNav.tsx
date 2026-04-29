@@ -26,6 +26,25 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
       : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
   );
 
+function initialsFromDisplayName(name: string | null | undefined): string {
+  const raw = (name ?? "").trim();
+  if (!raw) return "?";
+  const withSpaces = raw.replace(/([a-z])([A-Z])/g, "$1 $2");
+  const tokens = withSpaces
+    .split(/[\s-]+/)
+    .map((t) => t.trim())
+    .filter(Boolean);
+  if (tokens.length === 0) return "?";
+  if (tokens.length === 1) {
+    const token = tokens[0];
+    const first = token[0] ?? "";
+    const second = token[1] ?? "";
+    const picked = `${first}${second}`.trim();
+    return picked ? picked.toUpperCase() : "?";
+  }
+  return `${tokens[0][0] ?? ""}${tokens[1][0] ?? ""}`.toUpperCase();
+}
+
 export function WorkspaceTopNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -39,13 +58,7 @@ export function WorkspaceTopNav() {
   const isAdmin = user?.id === "candice-guo";
   const adminActive = pathname.startsWith("/app/admin");
   const projectsActive = pathname.startsWith("/app/projects");
-  const userInitial =
-    (user?.displayName ?? "?")
-      .split(/[\s-]+/)
-      .map((s) => s[0])
-      .join("")
-      .slice(0, 2)
-      .toUpperCase() || "?";
+  const userInitial = initialsFromDisplayName(user?.displayName);
 
   const [guestDialog, setGuestDialog] = useState(false);
 

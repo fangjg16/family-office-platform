@@ -138,6 +138,16 @@ export const ALL_PROJECTS: WorkspaceProject[] = [
     guestSummary:
       "职业教育标的并购与混改配套，尽调与对赌条款按权限展示。",
   },
+  {
+    id: "nn-fresh-port",
+    name: "南宁生鲜食品智慧港",
+    category: "食品农业",
+    phase: "Active（资源筹备中）",
+    summary:
+      "卡卡公司拟出资收购一期资产并投入改造资金，吉米公司承接园区招商与日常运营；项目已形成收并购+运营分工的意向框架。",
+    guestSummary:
+      "南宁经开区生鲜食品园区项目在管推进中，出资与运营分工已形成方向性方案，细节按权限展示。",
+  },
 ];
 
 export const TOTAL_PROJECT_COUNT = ALL_PROJECTS.length;

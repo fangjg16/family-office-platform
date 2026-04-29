@@ -1041,6 +1041,55 @@ const DEMOS: Record<string, ProjectResourceDemo> = {
       ],
     },
   },
+  "nn-fresh-port": {
+    coreRows: [
+      ["卡卡公司", "约 2.95 亿元", "意向（条款中）", "收购一期资产包 + 改造投入"],
+      ["吉米公司", "管理费 + 绩效提成", "意向（框架中）", "招商运营、客户服务与园区运维"],
+      ["地方协同资源方", "政策支持", "已沟通", "产业导入、通关与配套协调"],
+    ],
+    secondaryRows: [
+      ["参与方甲", "2.6-3.2 亿", "意向/混合", "收并购 + 改造预算"],
+      ["运营方乙", "费用区间隐藏", "意向", "招商、运营与 KPI 履约"],
+      ["协同方丙", "—", "理论", "产业资源导入与园区配套"],
+    ],
+    brokerRows: [
+      ["资产交割条件", "—", "推进中", "—"],
+      ["招商与运营方案", "—", "已启动", "—"],
+      ["合规与环保要求", "—", "部分覆盖", "—"],
+      ["经营指标闭合", "—", "未达最终签约门槛", "—"],
+    ],
+    coreWarn:
+      "提示：当前为意向框架阶段，交割先决与经营 KPI 未全部合同化，暂不宜按已签约项目计入。",
+    secondaryWarn:
+      "提示：二级用户可见金额与主体为区间/代号脱敏，具体分成与退出条款以核心级底稿为准。",
+    brokerWarn:
+      "提示：中介级仅展示环节状态，不含具体出资合同、分成比例与实名条款。",
+    chat: {
+      credibilityUserLine: "卡卡公司 2.95 亿与吉米公司运营方案的整体可信度如何？",
+      credibilityUserLineMid:
+        "参与方甲的 2.6-3.2 亿区间更靠近哪端？运营方乙这条「费用区间隐藏、意向」应如何理解风险等级？",
+      credibilityUserLineLow:
+        "在当前权限下，收并购与运营分工方案的可信度和执行风险应如何理解？",
+      sidebarPreview: "南宁生鲜项目收并购与运营协同方案已入库，待条款闭合…",
+      credibilityTitleCore: "卡卡公司",
+      credibilityTitleSecondary: "运营方乙",
+      rankingPlansCore: [
+        { rank: 1, name: "卡卡公司 + 吉米公司 + 地方协同资源方", score: 84, rec: true },
+        { rank: 2, name: "卡卡公司 + 吉米公司", score: 73, rec: false },
+        { rank: 3, name: "卡卡公司 + 地方协同资源方", score: 67, rec: false },
+      ],
+      rankingPlansSecondary: [
+        { rank: 1, name: "参与方甲 + 运营方乙 + 协同方丙", score: 84, rec: true },
+        { rank: 2, name: "参与方甲 + 运营方乙", score: 73, rec: false },
+        { rank: 3, name: "参与方甲 + 协同方丙", score: 67, rec: false },
+      ],
+      rankingBullets: [
+        "先闭合交割先决与历史租约风险，再推进资金首笔拨付。",
+        "把招商 KPI、冷链能耗与食品安全指标写入运营主合同。",
+        "设置季度经营复盘与纠偏机制，避免运营爬坡偏离投资假设。",
+      ],
+    },
+  },
 };
 
 export function getProjectResourceDemo(projectId: string): ProjectResourceDemo {

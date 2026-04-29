@@ -567,6 +567,8 @@ const POLICY_SECTIONS: PolicySection[] = [
     blocks: [
       {
         type: "bilingual",
+        // NOTE: 这里是隐私政策文本，而不是示例 URL/环境变量。
+        // 之前粘入的 `0.0.1:...` / `VITE_RAGFLOW_API_KEY=...` 破坏了 TSX 字符串语法，导致页面无法加载。
         en: "You may review, update, or request deletion of your personal information at any time by:",
         zh: "您可以随时通过以下方式查看、更新或请求删除您的个人信息：",
       },
