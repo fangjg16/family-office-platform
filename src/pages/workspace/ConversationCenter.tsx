@@ -1,7 +1,15 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
+  FileSpreadsheet,
   FileUp,
   FileText,
   MoreHorizontal,
@@ -52,27 +60,251 @@ type LiveChatMessage = {
   time: string;
 };
 
-const LIVE_RAGFLOW_PROJECT_ID = "nn-fresh-port";
+const EMPTY_LIVE_CHAT_MESSAGES: LiveChatMessage[] = [];
+
 const CHAT_ENTRY_TRANSITION_KEY = "workspace-chat-entry-transition";
-const RAGFLOW_CHAT_ENDPOINT =
-  (import.meta.env.VITE_RAGFLOW_CHAT_ENDPOINT as string | undefined)?.trim() ??
+/** 生产：GitHub Secret `VITE_AI_CHAT_ENDPOINT` → Cloudflare Worker `/api/chat` */
+const AI_CHAT_ENDPOINT =
+  (import.meta.env.VITE_AI_CHAT_ENDPOINT as string | undefined)?.trim() ||
+  (import.meta.env.VITE_RAGFLOW_CHAT_ENDPOINT as string | undefined)?.trim() ||
   "";
 const RAGFLOW_API_KEY =
   (import.meta.env.VITE_RAGFLOW_API_KEY as string | undefined)?.trim() ?? "";
 const RAGFLOW_MODE =
   ((import.meta.env.VITE_RAGFLOW_MODE as string | undefined)?.trim().toLowerCase() ??
-    "native") as "native" | "openai" | "proxy";
+    "proxy") as "native" | "openai" | "proxy";
 
-// 公域（GitHub Pages）无法运行/访问 RAGFlow 服务，因此在上传公开版本时强制禁用实时 RAGFlow 模式。
-const ENABLE_RAGFLOW_PUBLIC = false;
+/** 设为 1 且配置 AI_CHAT_ENDPOINT 后，GitHub Pages 可走真实 AI（经 Cloudflare Worker → Hermes → 千问） */
+const ENABLE_LIVE_CHAT =
+  import.meta.env.VITE_ENABLE_LIVE_CHAT === "1" ||
+  import.meta.env.VITE_ENABLE_LIVE_CHAT === "true";
 
-function buildRagflowHealthProbeUrl(chatEndpoint: string): string | null {
+/** 录制演示：空格填入下一条预设问题，发送后「思考中」再展示预设回复（时长随文案长度略增） */
+type DemoAssistantPiece =
+  | { type: "admin_intro" }
+  | { type: "resource_table" }
+  | { type: "supply_prompt"; body: string }
+  | { type: "supply_body"; body: string }
+  | { type: "credibility_mid"; summaryLines?: string[] }
+  | { type: "credibility_single"; tier: UiTier }
+  | { type: "mid_refusal"; body: string }
+  | { type: "mid_text"; title?: string; body: string }
+  | { type: "ranking" };
+
+type DemoPlaybackTimelineMsg =
+  | {
+      id: string;
+      kind: "user";
+      text: string;
+      files?: readonly { name: string }[];
+      time?: string;
+    }
+  | {
+      id: string;
+      kind: "assistant";
+      piece: DemoAssistantPiece;
+      time?: string;
+    };
+
+function demoThinkingDelayMs(userLine: string): number {
+  const base = 1600;
+  const perChar = 28;
+  const cap = 3400;
+  return Math.min(cap, base + userLine.length * perChar);
+}
+
+function buildDemoPlaybackRoundSpecs(
+  projectName: string,
+  tier: UiTier,
+  workspaceRole: WorkspaceRole,
+  chat: ProjectChatSnippet,
+): Array<{
+  userLine: string;
+  files?: readonly { name: string }[];
+  assistantPieces: DemoAssistantPiece[];
+}> {
+  const rounds: Array<{
+    userLine: string;
+    files?: readonly { name: string }[];
+    assistantPieces: DemoAssistantPiece[];
+  }> = [];
+
+  const tablePieces: DemoAssistantPiece[] = [];
+  if (workspaceRole === "admin") {
+    tablePieces.push({ type: "admin_intro" });
+  }
+  tablePieces.push({ type: "resource_table" });
+
+  rounds.push({
+    userLine: `请概述「${projectName}」目前的资源配置全貌`,
+    assistantPieces: tablePieces,
+  });
+
+  if (tier === "full" && chat.supplyExchanges && chat.supplyExchanges.length > 0) {
+    for (const ex of chat.supplyExchanges) {
+      if (ex.confirmation) {
+        rounds.push({
+          userLine: ex.userLine,
+          files: ex.attachments,
+          assistantPieces: [{ type: "supply_prompt", body: ex.confirmation.agentPrompt }],
+        });
+        rounds.push({
+          userLine: ex.confirmation.userConfirmLine,
+          assistantPieces: [{ type: "supply_body", body: ex.aiBody }],
+        });
+      } else {
+        rounds.push({
+          userLine: ex.userLine,
+          files: ex.attachments,
+          assistantPieces: [{ type: "supply_body", body: ex.aiBody }],
+        });
+      }
+    }
+  } else if (tier === "mid" && chat.midFollowUp && chat.midFollowUp.length > 0) {
+    for (const step of chat.midFollowUp) {
+      const pieces: DemoAssistantPiece[] = [];
+      if (step.kind === "credibility") {
+        pieces.push({
+          type: "credibility_mid",
+          summaryLines:
+            step.summaryLines && step.summaryLines.length > 0
+              ? [...step.summaryLines]
+              : undefined,
+        });
+      } else if (step.kind === "refusal") {
+        pieces.push({ type: "mid_refusal", body: step.body });
+      } else {
+        pieces.push({ type: "mid_text", title: step.title, body: step.body });
+      }
+      rounds.push({
+        userLine: step.userLine,
+        files: step.kind === "text" ? step.attachments : undefined,
+        assistantPieces: pieces,
+      });
+    }
+  } else {
+    const credibilityLine =
+      tier === "low"
+        ? chat.credibilityUserLineLow
+        : tier === "mid"
+          ? chat.credibilityUserLineMid
+          : chat.credibilityUserLine;
+    rounds.push({
+      userLine: credibilityLine,
+      assistantPieces: [{ type: "credibility_single", tier }],
+    });
+  }
+
+  rounds.push({
+    userLine: "推荐最佳合作方案",
+    assistantPieces: [{ type: "ranking" }],
+  });
+
+  return rounds;
+}
+
+function PlaybackAssistantRenderer({
+  piece,
+  tier,
+  workspaceRole,
+  projectId,
+  projectName,
+  chat,
+  time,
+}: {
+  piece: DemoAssistantPiece;
+  tier: UiTier;
+  workspaceRole: WorkspaceRole;
+  projectId: string;
+  projectName: string;
+  chat: ProjectChatSnippet;
+  time?: string;
+}) {
+  switch (piece.type) {
+    case "admin_intro":
+      return (
+        <AiShell time={time}>
+          <p className="text-sm font-semibold text-primary">Admin 控制台</p>
+          <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+            您可调整各维度评分权重。示例：供应链因素占比{" "}
+            <span className="font-mono text-foreground">20% → 25%</span>{" "}
+            已写入当前项目草稿；Core 用户可在本项目中维护本家族数据。
+          </p>
+        </AiShell>
+      );
+    case "resource_table":
+      return (
+        <ResourceTableBlock
+          tier={tier}
+          workspaceRole={workspaceRole}
+          projectId={projectId}
+          projectName={projectName}
+          time={time}
+        />
+      );
+    case "supply_prompt":
+      return (
+        <AiShell time={time}>
+          <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+            {piece.body}
+          </p>
+          <p className="mt-3 text-[11px] text-muted-foreground">● Master Agent · 待您确认</p>
+        </AiShell>
+      );
+    case "supply_body":
+      return (
+        <AiShell time={time}>
+          <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-line">
+            {piece.body}
+          </p>
+          <p className="mt-3 text-[11px] text-muted-foreground">
+            ● Master Agent · 已入库 · 与本项目智库字段联动
+          </p>
+        </AiShell>
+      );
+    case "credibility_mid":
+      return (
+        <CredibilityBlock
+          tier="mid"
+          chat={chat}
+          midSummaryLines={piece.summaryLines}
+          time={time}
+        />
+      );
+    case "credibility_single":
+      return <CredibilityBlock tier={piece.tier} chat={chat} time={time} />;
+    case "mid_refusal":
+      return <MidRefusalBlock body={piece.body} time={time} />;
+    case "mid_text":
+      return <MidTextBlock title={piece.title} body={piece.body} time={time} />;
+    case "ranking":
+      return <RankingBlock tier={tier} chat={chat} time={time} />;
+    default:
+      return null;
+  }
+}
+
+function apiBaseFromChatEndpoint(chatEndpoint: string): string {
+  const trimmed = chatEndpoint.trim().replace(/\/+$/u, "");
+  if (trimmed.endsWith("/api/chat")) {
+    return trimmed.replace(/\/api\/chat$/u, "");
+  }
+  if (trimmed.endsWith("/api/ragflow/chat")) {
+    return trimmed.replace(/\/api\/ragflow\/chat$/u, "");
+  }
+  return trimmed;
+}
+
+function buildApiHealthProbeUrl(chatEndpoint: string): string | null {
   const trimmed = chatEndpoint.trim();
   if (!trimmed) return null;
   try {
     const u = new URL(trimmed);
     const path = u.pathname.replace(/\/+$/u, "");
-    u.pathname = path;
+    if (path.endsWith("/api/chat")) {
+      u.pathname = path.replace(/\/api\/chat$/u, "/api/health");
+      return u.toString();
+    }
     if (path.endsWith("/api/ragflow/chat")) {
       u.pathname = path.replace(/\/api\/ragflow\/chat$/u, "/api/ragflow/health");
       return u.toString();
@@ -221,13 +453,6 @@ function extractRagflowAnswer(payload: unknown): string {
   return "";
 }
 
-function extractRagflowSessionId(payload: unknown): string | null {
-  if (!payload || typeof payload !== "object") return null;
-  const obj = payload as Record<string, unknown>;
-  const sid = (obj.data as Record<string, unknown> | undefined)?.session_id;
-  return typeof sid === "string" && sid.trim() ? sid.trim() : null;
-}
-
 function citationMarkerPrefix(id: string): string {
   if (id === "1") return "🟣";
   if (id === "2") return "🟢";
@@ -236,16 +461,42 @@ function citationMarkerPrefix(id: string): string {
   return "⚪";
 }
 
-function formatCitationMarkers(text: string): string {
+function formatCitationMarkers(
+  text: string,
+  map: Record<string, string> = NANNING_CITATION_MAP,
+): string {
   if (!text.includes("[ID:")) return text;
   return text
     .replace(/\[ID\s*:\s*(\d+)\]/gu, (_raw, id: string) => {
       const marker = `${citationMarkerPrefix(id)}`;
-      const title = NANNING_CITATION_MAP[id];
+      const title = map[id];
       if (!title) return marker;
       return `[${marker}](cite:${id} "${title}")`;
     })
     .replace(/([)\]）】])(?=[🟣🟢🔵🟡⚪])/gu, "$1 ");
+}
+
+async function uploadSessionFilesToApi(
+  chatEndpoint: string,
+  projectId: string,
+  conversationId: string,
+  files: File[],
+): Promise<void> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  for (const file of files) {
+    const form = new FormData();
+    form.append("file", file);
+    form.append("scope", "session");
+    form.append("conversationId", conversationId);
+    const res = await fetch(`${base}/api/projects/${projectId}/files`, {
+      method: "POST",
+      body: form,
+    });
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      throw new Error(err || `上传失败（${res.status}）`);
+    }
+  }
 }
 
 function withCurrentPreviewTime(conversation: SessionConversation): SessionConversation {
@@ -347,6 +598,17 @@ function AiShell({ children, time }: { children: ReactNode; time?: string }) {
       </div>
     </div>
   );
+}
+
+function UploadSelectedFileIcon({ name }: { name: string }) {
+  const lower = name.toLowerCase();
+  if (lower.endsWith(".xlsx") || lower.endsWith(".xls")) {
+    return <FileSpreadsheet className="h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2} aria-hidden />;
+  }
+  if (lower.endsWith(".pdf")) {
+    return <FileText className="h-4 w-4 shrink-0 text-rose-600" strokeWidth={2} aria-hidden />;
+  }
+  return <FileUp className="h-4 w-4 shrink-0 text-primary" strokeWidth={2} aria-hidden />;
 }
 
 /** 对话内「已发送附件」：与用户气泡同色系，仅展示文件名（非上传引导） */
@@ -729,14 +991,23 @@ export default function ConversationCenter() {
   const [liveMessagesByConversation, setLiveMessagesByConversation] = useState<
     Record<string, LiveChatMessage[]>
   >({});
-  const [liveSessionByConversation, setLiveSessionByConversation] = useState<
-    Record<string, string>
-  >({});
   const [liveError, setLiveError] = useState<string | null>(null);
+  const [liveCitationMap, setLiveCitationMap] = useState<Record<string, string>>({});
   const [newlyAddedConversationId, setNewlyAddedConversationId] = useState<string | null>(null);
   const [entryReady, setEntryReady] = useState(true);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const newConversationTimerRef = useRef<number | null>(null);
+  const playbackTimeoutRef = useRef<number | null>(null);
+  const playbackSeqRef = useRef(0);
+  const [searchParams] = useSearchParams();
+  /** `.env` 设为 `0` / `false` 时可关闭主对话的「默认逐步演示」 */
+  const playbackDisabledByEnv =
+    import.meta.env.VITE_CHAT_PLAYBACK === "0" ||
+    import.meta.env.VITE_CHAT_PLAYBACK === "false";
+  const [playbackMsgs, setPlaybackMsgs] = useState<DemoPlaybackTimelineMsg[]>([]);
+  const [playbackRoundIndex, setPlaybackRoundIndex] = useState(0);
+  const [playbackThinking, setPlaybackThinking] = useState(false);
 
   useEffect(() => {
     const id = loadSessionUserId();
@@ -760,6 +1031,9 @@ export default function ConversationCenter() {
     return () => {
       if (newConversationTimerRef.current !== null) {
         window.clearTimeout(newConversationTimerRef.current);
+      }
+      if (playbackTimeoutRef.current !== null) {
+        window.clearTimeout(playbackTimeoutRef.current);
       }
     };
   }, []);
@@ -806,6 +1080,11 @@ export default function ConversationCenter() {
     () => getProjectResourceDemo(projectId ?? ""),
     [projectId]
   );
+
+  const playbackRounds = useMemo(() => {
+    if (!project || !tier || !projectRole) return [];
+    return buildDemoPlaybackRoundSpecs(project.name, tier, projectRole, resourceDemo.chat);
+  }, [project, tier, projectRole, resourceDemo.chat]);
 
   const permissionSidebarHint = projectRole ? permissionLineSidebar(projectRole) : "";
   const defaultChatTitle = project ? `${project.name} · 全局分析` : "项目对话";
@@ -854,17 +1133,89 @@ export default function ConversationCenter() {
     return conversations.find((item) => item.id === effectiveConversationId) ?? null;
   }, [conversations, effectiveConversationId]);
 
-  const isLiveRagflowMode =
-    ENABLE_RAGFLOW_PUBLIC &&
-    projectRole === "core" &&
-    projectId === LIVE_RAGFLOW_PROJECT_ID;
-  const liveMessages = effectiveConversationId
-    ? liveMessagesByConversation[effectiveConversationId] ?? []
-    : [];
+  const isBlankThread = activeConversation?.variant === "blank";
+
+  const isLiveAiMode =
+    ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
+
+  /** 一次性展开原版预设剧本（不经空格步进） */
+  const instantStaticDemoPreferred =
+    searchParams.get("chatInstant") === "1" || searchParams.get("instant") === "1";
+
+  const playbackActive =
+    !playbackDisabledByEnv &&
+    searchParams.get("playback") !== "0" &&
+    !instantStaticDemoPreferred &&
+    !isLiveAiMode &&
+    !isBlankThread &&
+    Boolean(projectId && tier && projectRole);
 
   useEffect(() => {
-    if (!isLiveRagflowMode || !RAGFLOW_CHAT_ENDPOINT) return;
-    const healthUrl = buildRagflowHealthProbeUrl(RAGFLOW_CHAT_ENDPOINT);
+    if (!playbackActive) return;
+    setPlaybackMsgs([]);
+    setPlaybackRoundIndex(0);
+    setPlaybackThinking(false);
+    if (playbackTimeoutRef.current !== null) {
+      window.clearTimeout(playbackTimeoutRef.current);
+      playbackTimeoutRef.current = null;
+    }
+  }, [playbackActive, effectiveConversationId, playbackRounds]);
+
+  /** 切换侧边对话或路由会话时清空本地「待发送」附件，避免上方气泡已发出、底下仍挂着同一批待发送 */
+  useEffect(() => {
+    setSelectedFiles([]);
+    setShowUploadPanel(false);
+  }, [effectiveConversationId]);
+
+  const liveMessages = effectiveConversationId
+    ? liveMessagesByConversation[effectiveConversationId] ?? EMPTY_LIVE_CHAT_MESSAGES
+    : EMPTY_LIVE_CHAT_MESSAGES;
+
+  useLayoutEffect(() => {
+    const root = chatScrollRef.current;
+    if (!root) return;
+    const run = () => {
+      root.scrollTop = root.scrollHeight;
+    };
+    run();
+    requestAnimationFrame(() => {
+      run();
+      requestAnimationFrame(run);
+    });
+  }, [
+    effectiveConversationId,
+    liveMessages,
+    playbackMsgs,
+    playbackThinking,
+    sending,
+    showUploadPanel,
+  ]);
+
+  useEffect(() => {
+    if (!isLiveAiMode || !AI_CHAT_ENDPOINT || !projectId) return;
+    const base = apiBaseFromChatEndpoint(AI_CHAT_ENDPOINT);
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await fetch(`${base}/api/projects/${projectId}/citations`);
+        if (cancelled || !res.ok) return;
+        const data = (await res.json()) as { map?: Record<string, string> };
+        if (data.map && Object.keys(data.map).length > 0) {
+          setLiveCitationMap(data.map);
+        }
+      } catch {
+        /* 无 API 时沿用本地 NANNING 映射 */
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [isLiveAiMode, projectId, AI_CHAT_ENDPOINT]);
+
+  useEffect(() => {
+    if (!isLiveAiMode || !AI_CHAT_ENDPOINT) return;
+    const healthUrl = buildApiHealthProbeUrl(AI_CHAT_ENDPOINT);
     if (!healthUrl) return;
     let cancelled = false;
     const run = async () => {
@@ -873,13 +1224,13 @@ export default function ConversationCenter() {
         if (cancelled) return;
         if (!res.ok) {
           setLiveError(
-            `无法连接 RAGFlow 代理（健康检查 ${res.status}）。请确认 proxy 已启动且 \`RAGFLOW_BASE\` 指向正在运行的 RAGFlow。`,
+            `无法连接 AI 接口（健康检查 ${res.status}）。请确认 Cloudflare Worker 已部署，且 GitHub Secrets 已配置 VITE_AI_CHAT_ENDPOINT。`,
           );
           return;
         }
         setLiveError((prev) =>
           prev &&
-          (prev.includes("无法连接 RAGFlow 代理（健康检查") ||
+          (prev.includes("无法连接 AI 接口") ||
             prev.includes("Failed to fetch（健康检查）"))
             ? null
             : prev,
@@ -887,10 +1238,7 @@ export default function ConversationCenter() {
       } catch {
         if (cancelled) return;
         setLiveError(
-          formatRagflowRequestError(
-            "Failed to fetch（健康检查）",
-            healthUrl,
-          ),
+          formatRagflowRequestError("Failed to fetch（健康检查）", healthUrl),
         );
       }
     };
@@ -898,7 +1246,7 @@ export default function ConversationCenter() {
     return () => {
       cancelled = true;
     };
-  }, [isLiveRagflowMode, projectId, RAGFLOW_CHAT_ENDPOINT]);
+  }, [isLiveAiMode, AI_CHAT_ENDPOINT]);
 
   useEffect(() => {
     if (!projectId || !userId) return;
@@ -963,8 +1311,64 @@ export default function ConversationCenter() {
     const trimmed = draftMessage.trim();
     const fileNames = selectedFiles.map((f) => f.name);
 
-    if (!isLiveRagflowMode) {
+    if (playbackActive) {
+      if (playbackThinking || !trimmed) return;
+      const round = playbackRounds[playbackRoundIndex];
+      if (!round || trimmed !== round.userLine.trim()) return;
+
+      playbackSeqRef.current += 1;
+      const uid = `pb-u-${playbackSeqRef.current}`;
+      const slot = Math.min(playbackRoundIndex, 2);
+      const userTime = timeMeta.userTimes[slot];
+      const aiTime = timeMeta.aiTimes[slot];
+
+      setPlaybackMsgs((prev) => [
+        ...prev,
+        {
+          id: uid,
+          kind: "user",
+          text: round.userLine,
+          files: round.files,
+          time: userTime,
+        },
+      ]);
+      updateConversationPreview(round.userLine.length > 42 ? `${round.userLine.slice(0, 42)}…` : round.userLine);
+      setDraftMessage("");
+      setSelectedFiles([]);
+      setShowUploadPanel(false);
+      setPlaybackThinking(true);
+
+      if (playbackTimeoutRef.current !== null) {
+        window.clearTimeout(playbackTimeoutRef.current);
+      }
+      const delay = demoThinkingDelayMs(round.userLine);
+      playbackTimeoutRef.current = window.setTimeout(() => {
+        playbackSeqRef.current += 1;
+        const base = playbackSeqRef.current;
+        const additions: DemoPlaybackTimelineMsg[] = round.assistantPieces.map((piece, i) => ({
+          id: `pb-a-${base}-${i}`,
+          kind: "assistant",
+          piece,
+          time: aiTime,
+        }));
+        setPlaybackMsgs((prev) => [...prev, ...additions]);
+        setPlaybackThinking(false);
+        setPlaybackRoundIndex((n) => n + 1);
+        playbackTimeoutRef.current = null;
+      }, delay);
+      return;
+    }
+
+    if (!isLiveAiMode) {
+      if (trimmed && fileNames.length === 0) {
+        const hint = AI_CHAT_ENDPOINT
+          ? "真 AI 未开启：请在 GitHub Actions Secrets 设置 VITE_ENABLE_LIVE_CHAT=1，并重新部署 Pages 后强刷页面（Ctrl+F5）。"
+          : "真 AI 未配置：请在 GitHub Actions Secrets 添加 VITE_ENABLE_LIVE_CHAT=1 与 VITE_AI_CHAT_ENDPOINT（Worker 的 /api/chat 地址），并重新部署 Pages。";
+        setLiveError(hint);
+        return;
+      }
       if (fileNames.length === 0) return;
+      setLiveError(null);
       updateConversationPreview(`已上传 ${fileNames.length} 个文件`, fileNames);
       setSelectedFiles([]);
       setShowUploadPanel(false);
@@ -978,6 +1382,7 @@ export default function ConversationCenter() {
       fileNames.length > 0 && !trimmed
         ? `已发送 ${fileNames.length} 个文件，请基于资料继续回答。`
         : trimmed;
+    const filesToUpload = [...selectedFiles];
 
     appendLiveMessage(effectiveConversationId, {
       id: `user-${Date.now()}`,
@@ -991,9 +1396,9 @@ export default function ConversationCenter() {
     setSelectedFiles([]);
     setShowUploadPanel(false);
 
-    if (!RAGFLOW_CHAT_ENDPOINT) {
+    if (!AI_CHAT_ENDPOINT) {
       const msg =
-        "尚未配置 RAGFlow 接口地址。请在 `.env` 中设置 `VITE_RAGFLOW_CHAT_ENDPOINT` 后重试。";
+        "尚未配置 AI 接口。请在 GitHub Secrets 或 `.env.local` 中设置 VITE_AI_CHAT_ENDPOINT（Cloudflare Worker /api/chat）。";
       setLiveError(msg);
       appendLiveMessage(effectiveConversationId, {
         id: `assistant-${Date.now()}`,
@@ -1006,20 +1411,27 @@ export default function ConversationCenter() {
 
     setSending(true);
     try {
+      if (filesToUpload.length > 0) {
+        await uploadSessionFilesToApi(
+          AI_CHAT_ENDPOINT,
+          projectId,
+          effectiveConversationId,
+          filesToUpload,
+        );
+      }
+
       const history = liveMessages.map((m) => ({ role: m.role, content: m.content }));
-      const currentSessionId = liveSessionByConversation[effectiveConversationId];
       const requestBody =
         RAGFLOW_MODE === "native"
           ? {
               question: userText,
               stream: false,
-              ...(currentSessionId ? { session_id: currentSessionId } : {}),
               user_id: userId,
             }
           : RAGFLOW_MODE === "openai"
             ? {
                 stream: false,
-                model: "ragflow",
+                model: "qwen-plus",
                 messages: [...history, { role: "user", content: userText }],
               }
             : {
@@ -1031,7 +1443,7 @@ export default function ConversationCenter() {
                 files: fileNames,
                 history,
               };
-      const res = await fetch(RAGFLOW_CHAT_ENDPOINT, {
+      const res = await fetch(AI_CHAT_ENDPOINT, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -1041,21 +1453,23 @@ export default function ConversationCenter() {
       });
 
       if (!res.ok) {
-        throw new Error(`RAGFlow 接口返回 ${res.status}`);
+        throw new Error(`AI 接口返回 ${res.status}`);
       }
       const payload: unknown = await res.json();
-      const sessionId = extractRagflowSessionId(payload);
-      if (sessionId) {
-        setLiveSessionByConversation((prev) => ({
-          ...prev,
-          [effectiveConversationId]: sessionId,
-        }));
+      const citationFromApi =
+        payload && typeof payload === "object" && "citationMap" in payload
+          ? (payload as { citationMap?: Record<string, string> }).citationMap
+          : undefined;
+      const mergedCitationMap = {
+        ...NANNING_CITATION_MAP,
+        ...liveCitationMap,
+        ...citationFromApi,
+      };
+      if (citationFromApi && Object.keys(citationFromApi).length > 0) {
+        setLiveCitationMap((prev) => ({ ...prev, ...citationFromApi }));
       }
       const rawAnswer = extractRagflowAnswer(payload) || "已收到消息，但未返回可展示答案。";
-      const answer =
-        projectId === LIVE_RAGFLOW_PROJECT_ID
-          ? formatCitationMarkers(rawAnswer)
-          : rawAnswer;
+      const answer = formatCitationMarkers(rawAnswer, mergedCitationMap);
       setLiveError(null);
       appendLiveMessage(effectiveConversationId, {
         id: `assistant-${Date.now()}`,
@@ -1066,7 +1480,7 @@ export default function ConversationCenter() {
     } catch (error) {
       const raw =
         error instanceof Error ? error.message : "未知错误";
-      const errMsg = formatRagflowRequestError(raw, RAGFLOW_CHAT_ENDPOINT);
+      const errMsg = formatRagflowRequestError(raw, AI_CHAT_ENDPOINT);
       setLiveError(errMsg);
       appendLiveMessage(effectiveConversationId, {
         id: `assistant-${Date.now()}`,
@@ -1096,7 +1510,6 @@ export default function ConversationCenter() {
   }
 
   const chatTitle = activeConversation?.title ?? defaultChatTitle;
-  const isBlankThread = activeConversation?.variant === "blank";
   const chatDayLabel =
     isBlankThread
       ? new Intl.DateTimeFormat("zh-CN", {
@@ -1105,6 +1518,13 @@ export default function ConversationCenter() {
           day: "2-digit",
         }).format(new Date())
       : todayLabel;
+
+  const playbackRound = playbackActive ? playbackRounds[playbackRoundIndex] : undefined;
+  const playbackSendAllowed =
+    playbackActive &&
+    !playbackThinking &&
+    playbackRoundIndex < playbackRounds.length &&
+    draftMessage.trim() === playbackRound?.userLine.trim();
 
   return (
     <WorkspaceShell
@@ -1272,27 +1692,33 @@ export default function ConversationCenter() {
           </div>
         </header>
 
-        <div className="flex-1 space-y-6 overflow-y-auto px-4 py-6 md:px-8">
+        <div
+          ref={chatScrollRef}
+          className={cn(
+            "flex-1 space-y-6 overflow-y-auto px-4 py-6 md:px-8",
+            showUploadPanel && "pb-[min(42vh,22rem)]",
+          )}
+        >
           <div className="flex justify-center">
             <span className="rounded-full border border-border/70 bg-white/80 px-3 py-1 text-[11px] font-medium text-muted-foreground">
               {chatDayLabel}
             </span>
           </div>
-          {isBlankThread && !isLiveRagflowMode ? (
+          {isBlankThread && !isLiveAiMode ? (
             <div className="flex min-h-[40vh] flex-col items-center justify-center rounded-2xl border border-dashed border-border/70 bg-white/40 px-6 py-16 text-center">
               <p className="text-sm font-semibold text-foreground">空白对话</p>
               <p className="mt-2 max-w-md text-sm leading-relaxed text-muted-foreground">
                 在下方输入消息或上传文件，开始与 Master Agent 对话。
               </p>
             </div>
-          ) : isLiveRagflowMode ? (
+          ) : isLiveAiMode ? (
             <>
               <AiShell>
                 <p className="text-sm font-semibold text-primary">
-                  RAGFlow 已接入（Core）
+                  AI 助手已接入
                 </p>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  当前对话会实时调用 RAGFlow（原生接口优先）。请直接在下方输入问题，或上传文件后发送。
+                  经 Cloudflare API 调用 Hermes（千问）。请直接提问；上传 .txt/.md 可参与检索（PDF 需先转文本）。
                 </p>
               </AiShell>
               {liveMessages.length === 0 ? (
@@ -1318,7 +1744,7 @@ export default function ConversationCenter() {
                         <ChatMarkdown text={m.content} variant="assistant" />
                       </div>
                       <p className="mt-2 text-[11px] text-muted-foreground">
-                        ● Master Agent · Core · RAGFlow 返回
+                        ● Master Agent · AI 返回
                       </p>
                     </AiShell>
                   )
@@ -1332,8 +1758,43 @@ export default function ConversationCenter() {
                       思考中...
                     </span>
                   </div>
-                  <p className="mt-2 text-[11px] text-muted-foreground">
-                    ● Master Agent · Core · RAGFlow 处理中
+                  <p className="mt-2 whitespace-nowrap text-[11px] text-muted-foreground">
+                    ● Master Agent · AI 处理中
+                  </p>
+                </AiShell>
+              ) : null}
+            </>
+          ) : playbackActive ? (
+            <>
+              {playbackMsgs.map((m) =>
+                m.kind === "user" ? (
+                  <div key={m.id} className="flex flex-col items-end gap-3">
+                    {m.files && m.files.length > 0 ? (
+                      <ChatSentFilesPanel files={m.files} />
+                    ) : null}
+                    <UserBubble time={m.time}>{m.text}</UserBubble>
+                  </div>
+                ) : (
+                  <PlaybackAssistantRenderer
+                    key={m.id}
+                    piece={m.piece}
+                    tier={tier}
+                    workspaceRole={projectRole}
+                    projectId={project.id}
+                    projectName={project.name}
+                    chat={resourceDemo.chat}
+                    time={m.time}
+                  />
+                ),
+              )}
+              {playbackThinking ? (
+                <AiShell>
+                  <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
+                    <span className="text-sm font-medium text-muted-foreground">思考中...</span>
+                  </div>
+                  <p className="mt-2 whitespace-nowrap text-[11px] text-muted-foreground">
+                    ● Master Agent · 处理中
                   </p>
                 </AiShell>
               ) : null}
@@ -1471,8 +1932,8 @@ export default function ConversationCenter() {
             </Link>
           </div>
           <footer className="relative flex-1 px-4 py-4 md:rounded-br-[1.65rem] md:px-6">
-          {showUploadPanel ? (
-            <div className="mb-3 rounded-2xl border border-dashed border-primary/45 bg-white p-3 shadow-sm">
+          {showUploadPanel || selectedFiles.length > 0 ? (
+            <div className="absolute bottom-full left-4 right-4 z-30 mb-3 rounded-2xl border border-dashed border-primary/45 bg-white/95 p-3 shadow-[0_-8px_30px_-12px_rgba(15,23,42,0.12)] backdrop-blur-md md:left-6 md:right-6">
               <div
                 className="rounded-2xl border border-dashed border-border/70 bg-background/40 px-4 py-4"
                 onDragOver={(e) => e.preventDefault()}
@@ -1481,48 +1942,71 @@ export default function ConversationCenter() {
                   addFiles(e.dataTransfer.files);
                 }}
               >
-                <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                  <div className="flex min-h-9 items-center gap-2 text-sm font-semibold text-foreground">
-                    <FileUp className="h-4 w-4 text-primary" strokeWidth={2} />
-                    拖拽文件到此处上传
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex h-9 items-center justify-center rounded-full border border-primary px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/8"
-                  >
-                    选择文件
-                  </button>
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  支持格式：JPEG、DOC、PDF、PNG
-                </p>
-              </div>
-
-              {selectedFiles.length > 0 ? (
-                <div className="mt-3 space-y-2">
-                  {selectedFiles.map((f, idx) => (
-                    <div
-                      key={`${f.name}-${f.size}-${f.lastModified}`}
-                      className="flex items-center justify-between rounded-xl border border-border/70 bg-white px-3 py-2 text-xs"
-                    >
-                      <span className="truncate pr-3 text-foreground">{f.name}</span>
+                {showUploadPanel ? (
+                  <>
+                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
+                      <div className="flex min-h-9 items-center gap-2 text-sm font-semibold text-foreground">
+                        <FileUp className="h-4 w-4 text-primary" strokeWidth={2} />
+                        拖拽文件到此处上传
+                      </div>
                       <button
                         type="button"
-                        onClick={() => removeFile(idx)}
-                        className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                        aria-label="移除文件"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="inline-flex h-9 items-center justify-center rounded-full border border-primary px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/8"
                       >
-                        <X className="h-3.5 w-3.5" />
+                        选择文件
                       </button>
                     </div>
-                  ))}
-                </div>
-              ) : null}
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      支持格式：JPEG、PNG、PDF、DOC、DOCX、XLSX、XLS
+                    </p>
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
+                    <p className="text-[11px] font-semibold text-muted-foreground">
+                      已选 {selectedFiles.length} 个文件（点击回形针展开拖拽区）
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setShowUploadPanel(true)}
+                      className="text-[11px] font-semibold text-primary underline-offset-2 hover:underline"
+                    >
+                      添加更多
+                    </button>
+                  </div>
+                )}
+
+                {selectedFiles.length > 0 ? (
+                  <div className={cn(showUploadPanel ? "mt-4 border-t border-border/60 pt-4" : "mt-3")}>
+                    <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                      已添加 {selectedFiles.length} 个文件
+                    </p>
+                    <ul className="max-h-48 space-y-2 overflow-y-auto pr-0.5">
+                      {selectedFiles.map((f, idx) => (
+                        <li key={`${f.name}-${f.size}-${f.lastModified}`}>
+                          <div className="flex items-center gap-3 rounded-xl border border-primary/15 bg-white px-3 py-2.5 text-xs shadow-sm">
+                            <UploadSelectedFileIcon name={f.name} />
+                            <span className="min-w-0 flex-1 truncate font-medium text-foreground">{f.name}</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-primary">待发送</span>
+                            <button
+                              type="button"
+                              onClick={() => removeFile(idx)}
+                              className="shrink-0 rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                              aria-label="移除文件"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
             </div>
           ) : null}
-          {isLiveRagflowMode && liveError ? (
-            <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+          {liveError ? (
+            <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-700">
               {liveError}
             </div>
           ) : null}
@@ -1533,16 +2017,31 @@ export default function ConversationCenter() {
               value={draftMessage}
               onChange={(e) => setDraftMessage(e.target.value)}
               onKeyDown={(e) => {
+                if (
+                  playbackActive &&
+                  !playbackThinking &&
+                  playbackRoundIndex < playbackRounds.length &&
+                  draftMessage === "" &&
+                  e.key === " "
+                ) {
+                  e.preventDefault();
+                  setDraftMessage(playbackRounds[playbackRoundIndex].userLine);
+                  return;
+                }
                 if (e.key === "Enter") {
                   e.preventDefault();
                   void handleSend();
                 }
               }}
-              readOnly={!isLiveRagflowMode || sending}
+              readOnly={sending || playbackThinking}
               placeholder={
-                isLiveRagflowMode
-                  ? "输入消息，发送到 RAGFlow…"
-                  : "输入消息，与 Master Agent 对话…"
+                isLiveAiMode
+                  ? "输入消息，发送到 AI…"
+                  : playbackActive
+                    ? "按空格填入下一句演示问题，Enter 发送"
+                    : isBlankThread
+                      ? "输入消息（需开启 Live 后才能真正发送）"
+                      : "输入消息，与 Master Agent 对话…"
               }
               className="h-12 min-h-[48px] flex-1 rounded-full border border-input bg-white px-5 text-sm font-medium text-muted-foreground shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             />
@@ -1564,8 +2063,13 @@ export default function ConversationCenter() {
               onClick={() => void handleSend()}
               disabled={
                 sending ||
-                (!isLiveRagflowMode && selectedFiles.length === 0) ||
-                (isLiveRagflowMode &&
+                playbackThinking ||
+                (playbackActive ? !playbackSendAllowed : false) ||
+                (!playbackActive &&
+                  !isLiveAiMode &&
+                  selectedFiles.length === 0 &&
+                  draftMessage.trim().length === 0) ||
+                (isLiveAiMode &&
                   draftMessage.trim().length === 0 &&
                   selectedFiles.length === 0)
               }
@@ -1580,7 +2084,7 @@ export default function ConversationCenter() {
             type="file"
             className="hidden"
             multiple
-            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx"
+            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xlsx,.xls"
             onChange={(e) => {
               addFiles(e.target.files);
               e.currentTarget.value = "";

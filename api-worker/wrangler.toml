@@ -1,0 +1,19 @@
+name = "jfo-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+
+# 无自定义域名时使用：https://jfo-api.<子域>.workers.dev
+
+[[r2_buckets]]
+binding = "FILES"
+bucket_name = "jfo-files"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "jfo-meta"
+# 在 Cloudflare 创建 D1 后，把下面的 id 换成你的 Database ID
+database_id = "8dc29473-1d34-4c72-90ea-bf720d073daa"
+
+[vars]
+ALLOWED_ORIGIN = "https://fangjg16.github.io"
+HERMES_MODEL = "qwen-plus"

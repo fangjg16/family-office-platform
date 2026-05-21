@@ -5,3 +5,5 @@ dist
 .env
 .env.*
 !.env.example
+api-worker/.dev.vars
+api-worker/node_modules

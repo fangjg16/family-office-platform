@@ -1,0 +1,4 @@
+HERMES_BASE_URL=https://your-app.up.railway.app
+HERMES_API_KEY=your-hermes-api-server-key
+HERMES_MODEL=qwen-plus
+ALLOWED_ORIGIN=https://fangjg16.github.io
