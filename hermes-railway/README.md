@@ -47,13 +47,15 @@ hermes config set model.default qwen-plus
 
 Railway 会分配 **Public URL**，例如 `https://hermes-production-xxxx.up.railway.app`。
 
-Worker 里配置：
+Worker 里配置（**不要**加 `/v1` 后缀，Worker 会自动请求 `/api/v1/chat/completions`）：
 
 ```bash
-HERMES_BASE_URL=https://hermes-production-xxxx.up.railway.app
+HERMES_BASE_URL=https://hermes-agent-production-xxxx.up.railway.app
 HERMES_API_KEY=与 API_SERVER_KEY 相同
 HERMES_MODEL=qwen-plus
 ```
+
+**重要：** Railway 模板默认公网域名往往指向 **Dashboard（9119）**。OpenAI 兼容接口在 **`/api/v1/...`**。若 `/v1/chat/completions` 返回 405/HTML，说明地址指错了；本仓库 Worker 已改为请求 `/api/v1/chat/completions`。
 
 ## 4. 自测
 

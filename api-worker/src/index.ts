@@ -25,6 +25,17 @@ type ChatBody = {
 
 const GITHUB_PAGES_ORIGIN = "https://fangjg16.github.io";
 
+/** Railway 一键模板：公网域名多为 Dashboard(9119)，OpenAI 兼容 API 在 /api/v1/... */
+function resolveHermesApiRoot(base: string): string {
+  const trimmed = base.trim().replace(/\/$/, "");
+  if (trimmed.endsWith("/api")) return trimmed;
+  return `${trimmed}/api`;
+}
+
+function hermesChatCompletionsUrl(base: string): string {
+  return `${resolveHermesApiRoot(base)}/v1/chat/completions`;
+}
+
 function corsHeaders(origin: string | null, env: Env): HeadersInit {
   const allowed = (env.ALLOWED_ORIGIN || GITHUB_PAGES_ORIGIN).trim();
   const ok =
@@ -68,10 +79,13 @@ async function loadChunks(
 
 async function handleHealth(env: Env): Promise<Response> {
   const hermes = (env.HERMES_BASE_URL || "").trim();
+  const apiRoot = hermes ? resolveHermesApiRoot(hermes) : "";
   return json({
     ok: true,
     service: "jfo-api",
-    hermesConfigured: Boolean(hermes),
+    hermesConfigured: Boolean(hermes && env.HERMES_API_KEY),
+    hermesChatUrl: hermes ? hermesChatCompletionsUrl(hermes) : null,
+    apiRoot: apiRoot || null,
     origin: env.ALLOWED_ORIGIN || GITHUB_PAGES_ORIGIN,
   });
 }
@@ -175,7 +189,8 @@ async function callHermes(
     throw new Error("HERMES_BASE_URL 或 HERMES_API_KEY 未配置");
   }
 
-  const res = await fetch(`${base}/v1/chat/completions`, {
+  const url = hermesChatCompletionsUrl(base);
+  const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -184,10 +199,23 @@ async function callHermes(
     body: JSON.stringify({ model, messages, stream: false }),
   });
 
-  const raw = (await res.json().catch(() => ({}))) as Record<string, unknown>;
+  const rawText = await res.text();
+  let raw: Record<string, unknown> = {};
+  try {
+    raw = rawText ? (JSON.parse(rawText) as Record<string, unknown>) : {};
+  } catch {
+    if (/<!doctype html/i.test(rawText)) {
+      throw new Error(
+        "Hermes 返回了网页而非 API（常见：Railway 域名指向 Dashboard 9119）。请确认 HERMES_BASE_URL 为 API 根地址，且路径为 /api/v1/chat/completions。",
+      );
+    }
+    throw new Error(`Hermes 返回非 JSON（HTTP ${res.status}）`);
+  }
+
   if (!res.ok) {
     const err =
       (raw.error as { message?: string } | undefined)?.message ||
+      (raw.detail as string) ||
       (raw.message as string) ||
       `Hermes HTTP ${res.status}`;
     throw new Error(String(err));
