@@ -74,10 +74,11 @@ const RAGFLOW_MODE =
   ((import.meta.env.VITE_RAGFLOW_MODE as string | undefined)?.trim().toLowerCase() ??
     "proxy") as "native" | "openai" | "proxy";
 
-/** 设为 1 且配置 AI_CHAT_ENDPOINT 后，GitHub Pages 可走真实 AI（经 Cloudflare Worker → Hermes → 千问） */
+/** 构建时注入 VITE_ENABLE_LIVE_CHAT=1 或 VITE_AI_CHAT_ENDPOINT 后，走真实 AI */
 const ENABLE_LIVE_CHAT =
   import.meta.env.VITE_ENABLE_LIVE_CHAT === "1" ||
-  import.meta.env.VITE_ENABLE_LIVE_CHAT === "true";
+  import.meta.env.VITE_ENABLE_LIVE_CHAT === "true" ||
+  Boolean(AI_CHAT_ENDPOINT);
 
 /** 录制演示：空格填入下一条预设问题，发送后「思考中」再展示预设回复（时长随文案长度略增） */
 type DemoAssistantPiece =
@@ -2033,7 +2034,10 @@ export default function ConversationCenter() {
                   void handleSend();
                 }
               }}
-              readOnly={sending || playbackThinking}
+              disabled={sending || playbackThinking}
+              autoComplete="off"
+              spellCheck={false}
+              aria-label="对话输入"
               placeholder={
                 isLiveAiMode
                   ? "输入消息，发送到 AI…"
@@ -2041,9 +2045,13 @@ export default function ConversationCenter() {
                     ? "按空格填入下一句演示问题，Enter 发送"
                     : isBlankThread
                       ? "输入消息（需开启 Live 后才能真正发送）"
-                      : "输入消息，与 Master Agent 对话…"
+                      : "可直接输入；演示项目请按空格填入预设问题"
               }
-              className="h-12 min-h-[48px] flex-1 rounded-full border border-input bg-white px-5 text-sm font-medium text-muted-foreground shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              className={cn(
+                "h-12 min-h-[48px] flex-1 rounded-full border border-input bg-white px-5 text-sm font-medium shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                draftMessage ? "text-foreground" : "text-muted-foreground",
+                (sending || playbackThinking) && "opacity-70",
+              )}
             />
             <button
               type="button"
