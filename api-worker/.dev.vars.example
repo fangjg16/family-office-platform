@@ -1,5 +1,8 @@
-# 推荐：直连千问（与 Railway 里 DASHSCOPE_API_KEY 相同）
+# 推荐：直连千问（与百炼 / Railway 里 DASHSCOPE_API_KEY 相同）
 DASHSCOPE_API_KEY=sk-your-dashscope-key
+
+# 对话里说「查外部资料」等时联网搜索（与 Railway Hermes 的 TAVILY 可填同一 Key）
+TAVILY_API_KEY=tvly-your-tavily-key
 
 # 可选：不用 Hermes 时可不填下面两项
 HERMES_BASE_URL=https://hermes-agent-production-02eb.up.railway.app

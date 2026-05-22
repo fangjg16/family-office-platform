@@ -12,6 +12,12 @@ import {
   scoreChunks,
   type ChunkRow,
 } from "./search";
+import {
+  buildTavilyQuery,
+  formatTavilyBlock,
+  searchTavily,
+  wantsExternalSearch,
+} from "./tavily-search";
 
 export interface Env {
   FILES: R2Bucket;
@@ -22,6 +28,8 @@ export interface Env {
   HERMES_BASE_URL?: string;
   HERMES_API_KEY?: string;
   HERMES_MODEL?: string;
+  /** 用户说「查外部资料」等时联网检索（与 Railway Hermes 的 Tavily 独立配置） */
+  TAVILY_API_KEY?: string;
   ALLOWED_ORIGIN?: string;
 }
 
@@ -104,11 +112,13 @@ async function handleHealth(env: Env): Promise<Response> {
   const hermes = (env.HERMES_BASE_URL || "").trim();
   const apiRoot = hermes ? resolveHermesApiRoot(hermes) : "";
   const dashscope = Boolean((env.DASHSCOPE_API_KEY || "").trim());
+  const tavily = Boolean((env.TAVILY_API_KEY || "").trim());
   return json({
     ok: true,
     service: "jfo-api",
     llmMode: dashscope ? "dashscope" : hermes && env.HERMES_API_KEY ? "hermes" : "none",
     dashscopeConfigured: dashscope,
+    tavilyConfigured: tavily,
     hermesConfigured: Boolean(hermes && env.HERMES_API_KEY),
     hermesChatUrl: hermes ? hermesChatCompletionsUrl(hermes) : null,
     apiRoot: apiRoot || null,
@@ -392,20 +402,40 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
     /* D1 未初始化时仍可调 Hermes */
   }
 
+  let externalBlock = "";
+  let usedExternalSearch = false;
+  if (wantsExternalSearch(message)) {
+    usedExternalSearch = true;
+    const fileHint = (body.files ?? []).join(" ");
+    const tavilyQuery = buildTavilyQuery(message, fileHint);
+    const tavilyKey = (env.TAVILY_API_KEY || "").trim();
+    if (!tavilyKey) {
+      externalBlock = formatTavilyBlock([], "未配置 TAVILY_API_KEY（请在 Worker 执行 wrangler secret put TAVILY_API_KEY）");
+    } else {
+      const { hits, error } = await searchTavily(tavilyKey, tavilyQuery);
+      externalBlock = formatTavilyBlock(hits, error);
+    }
+  }
+
   const activeSlots =
     usedSlotIds.size > 0 ? slots.filter((s) => usedSlotIds.has(s.id)) : slots;
   const citationLines = buildCitationSystemLines(activeSlots);
 
   const systemParts = [
-    "你是联合家办平台项目助手。依据【资料摘录】回答；无摘录依据时说明不足，勿编造。",
+    "你是联合家办平台项目助手。优先依据【资料摘录】与（若有）【外部检索】作答；无依据时说明不足，勿编造。",
     "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；若与摘录中的「南宁东盟生鲜食品智慧港」等明显为同一项目，应正常作答，勿因简称不同而拒绝。",
-    "引用使用 [ID:n]；仅可引用【资料摘录】中实际出现且下方列表存在的编号，勿引用摘录未出现的编号。",
+    "引用上传资料使用 [ID:n]；仅可引用【资料摘录】中实际出现且下方列表存在的编号。",
+    "引用联网结果使用 [WEB:n] 并写明对应 URL，勿将 [WEB:n] 写成 [ID:n]。",
     "可用引用编号与文献名：",
     citationLines,
     "",
     "【资料摘录】",
     excerptBlock,
   ];
+
+  if (usedExternalSearch) {
+    systemParts.push("", "【外部检索（Tavily）】", externalBlock);
+  }
 
   const history = (body.history ?? []).filter(
     (m) => m.role === "user" || m.role === "assistant",
@@ -423,6 +453,7 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
       answer,
       citationMap,
       projectId,
+      externalSearch: usedExternalSearch,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

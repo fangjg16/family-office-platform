@@ -461,8 +461,9 @@ function formatCitationMarkers(
   text: string,
   map: Record<string, string> = NANNING_CITATION_MAP,
 ): string {
-  if (!text.includes("[ID:")) return text;
-  return text
+  let out = text.replace(/\[WEB\s*:\s*(\d+)\]/gu, "🌐[$1]");
+  if (!out.includes("[ID:")) return out;
+  return out
     .replace(/\[ID\s*:\s*(\d+)\]/gu, (_raw, id: string) => {
       const marker = `${citationMarkerPrefix(id)}`;
       const title = map[id];
@@ -2218,7 +2219,7 @@ export default function ConversationCenter() {
               aria-label="对话输入"
               placeholder={
                 isLiveAiMode
-                  ? "输入消息，发送到 AI…"
+                  ? "输入消息；可说「查外部资料」等触发 Tavily 联网搜索"
                   : playbackActive
                     ? "按空格填入下一句演示问题，Enter 发送"
                     : isBlankThread

@@ -124,6 +124,9 @@ HERMES_API_KEY=与 Railway API_SERVER_KEY 完全一致
 # 推荐（配置后 /api/health 显示 llmMode: dashscope）
 npx wrangler secret put DASHSCOPE_API_KEY
 
+# 可选：家办对话里说「查外部资料」等时走 Tavily 联网（/api/health 显示 tavilyConfigured: true）
+npx wrangler secret put TAVILY_API_KEY
+
 # 可选 Hermes 中继（HERMES_API_KEY 必须与 Railway API_SERVER_KEY 一字不差，否则 502 Unauthorized）
 npx wrangler secret put HERMES_BASE_URL
 npx wrangler secret put HERMES_API_KEY
@@ -200,6 +203,7 @@ scope: package
 4. `scope=session` + 表单字段 `conversationId=xxx` 表示对话里临时上传。
 5. **PDF**：Worker 已用 `unpdf`（PDF.js）提取**可选中文字**的正文并分块入库；**扫描版/图片 PDF** 仍需 OCR 或另附 `.txt/.md`。单文件建议 &lt; 12MB。
 6. **多账号（演示）**：上传与检索按 `userId` 隔离。对话列表与 Live 聊天记录同步到 D1（`GET/PUT /api/users/{userId}/chat-state`），本机 `localStorage` 作缓存，**换电脑登录同一账号可恢复对话**（需 Live 已开启）。旧的无 `uploaded_by` 文件需重新上传。
+7. **外部联网搜索（Tavily）**：与 Railway Hermes 独立，在 Worker 配置 `TAVILY_API_KEY`（可与 Railway 填同一 `tvly-` Key）。用户在家办对话里说 **「查外部资料」「联网搜索」「网上查」** 等时，Worker 先调 Tavily，再把结果与上传资料一并交给千问；回答中外部来源用 `[WEB:n]` + URL，上传资料仍用 `[ID:n]`。`/api/health` 应显示 `tavilyConfigured: true`。
 
 ---
 
@@ -236,6 +240,7 @@ A：不影响。`github.io` + `workers.dev` 即可。
 - [ ] Cloudflare 建好 R2 + D1  
 - [ ] `api-worker` 执行 `wrangler deploy`  
 - [ ] Worker 已配置 `DASHSCOPE_API_KEY`，或 Railway Hermes + `HERMES_API_KEY` 与 `API_SERVER_KEY` 一致
+- [ ] （可选）Worker `TAVILY_API_KEY` 已配置，health 显示 `tavilyConfigured: true`  
 - [ ] `curl .../api/health` 显示 `llmMode` 为 `dashscope` 或 `hermes`  
 - [ ] GitHub Secrets 填 `VITE_ENABLE_LIVE_CHAT` 和 `VITE_AI_CHAT_ENDPOINT`  
 - [ ] 推送 main，验证线上对话
