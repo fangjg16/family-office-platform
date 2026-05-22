@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS documents (
   r2_key TEXT NOT NULL,
   mime TEXT,
   scope TEXT NOT NULL DEFAULT 'package',
+  uploaded_by TEXT,
   created_at TEXT NOT NULL
 );
 
@@ -18,4 +19,5 @@ CREATE TABLE IF NOT EXISTS chunks (
 
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id);
 CREATE INDEX IF NOT EXISTS idx_documents_conversation ON documents(conversation_id);
+CREATE INDEX IF NOT EXISTS idx_documents_uploaded_by ON documents(uploaded_by);
 CREATE INDEX IF NOT EXISTS idx_chunks_document ON chunks(document_id);

@@ -168,6 +168,7 @@ export function ProjectDetailDrawer({
               ))}
               <ProjectMaterialsSection
                 projectId={project.id}
+                userId={userId}
                 canManage={chatOk && detailTier !== "guest"}
               />
             </>
@@ -176,7 +177,11 @@ export function ProjectDetailDrawer({
               <p className="text-sm text-muted-foreground">
                 暂无该项目的详情副本，请联系管理员。
               </p>
-              <ProjectMaterialsSection projectId={project.id} canManage={chatOk} />
+              <ProjectMaterialsSection
+                projectId={project.id}
+                userId={userId}
+                canManage={chatOk}
+              />
             </>
           )}
         </div>

@@ -72,9 +72,15 @@ function json(data: unknown, status = 200, extra: HeadersInit = {}): Response {
   });
 }
 
+function normalizeUserId(raw: string | null | undefined): string | null {
+  const id = (raw ?? "").trim();
+  return id.length > 0 ? id : null;
+}
+
 async function loadChunks(
   env: Env,
   projectId: string,
+  userId: string,
   conversationId?: string,
 ): Promise<ChunkRow[]> {
   const sql = `
@@ -82,12 +88,13 @@ async function loadChunks(
     FROM chunks c
     JOIN documents d ON d.id = c.document_id
     WHERE d.project_id = ?
+      AND d.uploaded_by = ?
       AND (d.scope = 'package' OR (d.scope = 'session' AND d.conversation_id = ?))
     ORDER BY c.document_id, c.chunk_index
     LIMIT 500
   `;
   const { results } = await env.DB.prepare(sql)
-    .bind(projectId, conversationId ?? "")
+    .bind(projectId, userId, conversationId ?? "")
     .all<ChunkRow>();
   return results ?? [];
 }
@@ -117,7 +124,11 @@ async function handleCitations(projectId: string): Promise<Response> {
   });
 }
 
-async function handleListFiles(env: Env, projectId: string): Promise<Response> {
+async function handleListFiles(
+  env: Env,
+  projectId: string,
+  userId: string,
+): Promise<Response> {
   type Row = {
     id: string;
     filename: string;
@@ -126,16 +137,17 @@ async function handleListFiles(env: Env, projectId: string): Promise<Response> {
     mime: string | null;
     created_at: string;
     chunk_count: number;
+    uploaded_by: string | null;
   };
   const { results } = await env.DB.prepare(
-    `SELECT d.id, d.filename, d.scope, d.conversation_id, d.mime, d.created_at,
+    `SELECT d.id, d.filename, d.scope, d.conversation_id, d.mime, d.created_at, d.uploaded_by,
             (SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
      FROM documents d
-     WHERE d.project_id = ?
+     WHERE d.project_id = ? AND d.uploaded_by = ?
      ORDER BY d.created_at DESC
      LIMIT 200`,
   )
-    .bind(projectId)
+    .bind(projectId, userId)
     .all<Row>();
 
   const files = (results ?? []).map((r) => ({
@@ -145,10 +157,11 @@ async function handleListFiles(env: Env, projectId: string): Promise<Response> {
     conversationId: r.conversation_id,
     mime: r.mime,
     createdAt: r.created_at,
+    uploadedBy: r.uploaded_by,
     chunkCount: Number(r.chunk_count) || 0,
   }));
 
-  return json({ projectId, files });
+  return json({ projectId, userId, files });
 }
 
 async function handleUpload(
@@ -162,16 +175,22 @@ async function handleUpload(
     return json({ error: "缺少 file 字段" }, 400);
   }
 
+  const uploadedBy = normalizeUserId(String(form.get("userId") || ""));
+  if (!uploadedBy) {
+    return json({ error: "缺少 userId（请登录后上传）" }, 400);
+  }
+
   const scope = String(form.get("scope") || "package");
   const conversationId = form.get("conversationId")
     ? String(form.get("conversationId"))
     : null;
   const docId = crypto.randomUUID();
   const safeName = file.name.replace(/[^\w.\-一-龥]/gu, "_");
+  const userRoot = `projects/${projectId}/users/${uploadedBy}`;
   const prefix =
     scope === "session" && conversationId
-      ? `projects/${projectId}/sessions/${conversationId}`
-      : `projects/${projectId}/package`;
+      ? `${userRoot}/sessions/${conversationId}`
+      : `${userRoot}/package`;
   const r2Key = `${prefix}/${docId}-${safeName}`;
 
   const mime = file.type || "";
@@ -209,8 +228,8 @@ async function handleUpload(
 
   const now = new Date().toISOString();
   await env.DB.prepare(
-    `INSERT INTO documents (id, project_id, conversation_id, filename, r2_key, mime, scope, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO documents (id, project_id, conversation_id, filename, r2_key, mime, scope, uploaded_by, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       docId,
@@ -220,6 +239,7 @@ async function handleUpload(
       r2Key,
       mime,
       scope === "session" ? "session" : "package",
+      uploadedBy,
       now,
     )
     .run();
@@ -332,13 +352,18 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
     return json({ error: "projectId 与 message 必填" }, 400);
   }
 
+  const userId = normalizeUserId(body.userId);
+  if (!userId) {
+    return json({ error: "userId 必填（请登录后对话）" }, 400);
+  }
+
   const slots = getCitationSlots(projectId);
   const citationMap = citationMapFromSlots(slots);
   const usedSlotIds = new Set<string>();
 
   let excerptBlock = "（未检索到资料摘录；请明确说明依据不足，勿编造。）";
   try {
-    const allChunks = await loadChunks(env, projectId, body.conversationId);
+    const allChunks = await loadChunks(env, projectId, userId, body.conversationId);
     const fileHint = (body.files ?? []).join(" ");
     const searchQuery = fileHint ? `${message} ${fileHint}` : message;
     let hits = scoreChunks(allChunks, searchQuery, 8);
@@ -430,7 +455,12 @@ export default {
       } else if (/^\/api\/projects\/[^/]+\/files$/u.test(path)) {
         const projectId = path.split("/")[3];
         if (request.method === "GET") {
-          response = await handleListFiles(env, projectId);
+          const uid = normalizeUserId(url.searchParams.get("userId"));
+          if (!uid) {
+            response = json({ error: "缺少 userId 查询参数" }, 400);
+          } else {
+            response = await handleListFiles(env, projectId, uid);
+          }
         } else if (request.method === "POST") {
           response = await handleUpload(request, env, projectId);
         } else {

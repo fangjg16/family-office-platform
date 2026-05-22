@@ -27,15 +27,18 @@ export type ProjectFileRecord = {
   conversationId: string | null;
   mime: string | null;
   createdAt: string;
+  uploadedBy?: string | null;
   chunkCount: number;
 };
 
 export async function fetchProjectFiles(
   projectId: string,
+  userId: string,
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<ProjectFileRecord[]> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
-  const res = await fetch(`${base}/api/projects/${projectId}/files`);
+  const q = new URLSearchParams({ userId });
+  const res = await fetch(`${base}/api/projects/${projectId}/files?${q}`);
   if (!res.ok) {
     const err = await res.text().catch(() => "");
     throw new Error(err || `资料列表加载失败（${res.status}）`);
@@ -75,12 +78,14 @@ export function dedupeFilesByFilename(
 
 export async function uploadProjectPackageFile(
   projectId: string,
+  userId: string,
   file: File,
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<void> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
   const form = new FormData();
   form.append("file", file);
+  form.append("userId", userId);
   form.append("scope", "package");
   const res = await fetch(`${base}/api/projects/${projectId}/files`, {
     method: "POST",

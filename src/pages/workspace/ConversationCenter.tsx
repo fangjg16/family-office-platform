@@ -28,6 +28,13 @@ import {
   filterConversationSessionFiles,
   type ProjectFileRecord,
 } from "@/lib/project-api";
+import type { LiveChatMessage } from "@/workspace/chat-types";
+import {
+  loadPersistedConversations,
+  loadPersistedLiveMessages,
+  savePersistedConversations,
+  savePersistedLiveMessages,
+} from "@/workspace/chat-persistence";
 import {
   getProjectResourceDemo,
   type ProjectChatSnippet,
@@ -56,14 +63,6 @@ type SessionConversation = {
 
 type SessionConversationState = {
   conversations: SessionConversation[];
-};
-
-type LiveChatMessage = {
-  id: string;
-  role: "user" | "assistant";
-  content: string;
-  files?: { name: string }[];
-  time: string;
 };
 
 const EMPTY_LIVE_CHAT_MESSAGES: LiveChatMessage[] = [];
@@ -493,6 +492,7 @@ type UploadFileResult = {
 async function uploadSessionFilesToApi(
   chatEndpoint: string,
   projectId: string,
+  userId: string,
   conversationId: string,
   files: File[],
 ): Promise<UploadFileResult[]> {
@@ -501,6 +501,7 @@ async function uploadSessionFilesToApi(
   for (const file of files) {
     const form = new FormData();
     form.append("file", file);
+    form.append("userId", userId);
     form.append("scope", "session");
     form.append("conversationId", conversationId);
     const res = await fetch(`${base}/api/projects/${projectId}/files`, {
@@ -1136,10 +1137,24 @@ export default function ConversationCenter() {
   useEffect(() => {
     if (!projectId || !userId) return;
     const cacheKey = userId;
-    const cached = SESSION_CONVERSATION_CACHE[cacheKey];
+    const persistedMsgs = loadPersistedLiveMessages(userId);
+    setLiveMessagesByConversation(persistedMsgs ?? {});
+
+    const persistedConvs = loadPersistedConversations(userId);
     const currentConversation = buildConversationFromProject(projectId);
     if (!currentConversation) return;
 
+    if (persistedConvs && persistedConvs.length > 0) {
+      const hasCurrent = persistedConvs.some((item) => item.projectId === projectId);
+      const next = hasCurrent
+        ? persistedConvs
+        : [withCurrentPreviewTime(currentConversation), ...persistedConvs];
+      setConversations(next);
+      SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
+      return;
+    }
+
+    const cached = SESSION_CONVERSATION_CACHE[cacheKey];
     if (!cached || cached.conversations.length === 0) {
       const defaults = getDefaultConversations();
       const hasCurrent = defaults.some((item) => item.projectId === projectId);
@@ -1162,10 +1177,14 @@ export default function ConversationCenter() {
 
   useEffect(() => {
     if (!userId || conversations.length === 0) return;
-    SESSION_CONVERSATION_CACHE[userId] = {
-      conversations,
-    };
+    SESSION_CONVERSATION_CACHE[userId] = { conversations };
+    savePersistedConversations(userId, conversations);
   }, [userId, conversations]);
+
+  useEffect(() => {
+    if (!userId) return;
+    savePersistedLiveMessages(userId, liveMessagesByConversation);
+  }, [userId, liveMessagesByConversation]);
 
   const effectiveConversationId =
     projectId && conversationId ? conversationId : projectId ? `${projectId}-main` : "";
@@ -1256,14 +1275,14 @@ export default function ConversationCenter() {
   }, [isLiveAiMode, projectId, AI_CHAT_ENDPOINT]);
 
   useEffect(() => {
-    if (!isLiveAiMode || !AI_CHAT_ENDPOINT || !projectId || !effectiveConversationId) {
+    if (!isLiveAiMode || !AI_CHAT_ENDPOINT || !projectId || !effectiveConversationId || !userId) {
       setConversationFileRecords([]);
       return;
     }
     let cancelled = false;
     const run = async () => {
       try {
-        const all = await fetchProjectFiles(projectId);
+        const all = await fetchProjectFiles(projectId, userId);
         if (cancelled) return;
         const session = filterConversationSessionFiles(all, effectiveConversationId);
         setConversationFileRecords(dedupeFilesByFilename(session));
@@ -1278,6 +1297,7 @@ export default function ConversationCenter() {
   }, [
     isLiveAiMode,
     projectId,
+    userId,
     effectiveConversationId,
     fileTreeRefreshKey,
     AI_CHAT_ENDPOINT,
@@ -1529,6 +1549,7 @@ export default function ConversationCenter() {
         const uploaded = await uploadSessionFilesToApi(
           AI_CHAT_ENDPOINT,
           projectId,
+          userId!,
           effectiveConversationId,
           filesToUpload,
         );
@@ -1698,7 +1719,7 @@ export default function ConversationCenter() {
             type="button"
             onClick={() => {
               if (!projectId || !project) return;
-              const newId = `${projectId}-blank-${Date.now()}`;
+              const newId = `${projectId}-blank-${userId}-${Date.now()}`;
               const newConv: SessionConversation = {
                 id: newId,
                 projectId,

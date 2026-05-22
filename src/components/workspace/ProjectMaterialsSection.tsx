@@ -12,6 +12,7 @@ import { getDemoProjectFileNames } from "@/workspace/project-materials";
 
 type ProjectMaterialsSectionProps = {
   projectId: string;
+  userId: string;
   /** 有对话权限时允许上传项目级资料包 */
   canManage?: boolean;
 };
@@ -37,6 +38,7 @@ function scopeLabel(scope: ProjectFileRecord["scope"]): string {
 
 export function ProjectMaterialsSection({
   projectId,
+  userId,
   canManage = true,
 }: ProjectMaterialsSectionProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -49,7 +51,7 @@ export function ProjectMaterialsSection({
   const useLive = ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT);
 
   const reload = useCallback(async () => {
-    if (!useLive) {
+    if (!useLive || !userId) {
       setLiveFiles(null);
       setError(null);
       return;
@@ -57,7 +59,7 @@ export function ProjectMaterialsSection({
     setLoading(true);
     setError(null);
     try {
-      const files = await fetchProjectFiles(projectId);
+      const files = await fetchProjectFiles(projectId, userId);
       setLiveFiles(files);
     } catch (e) {
       setLiveFiles([]);
@@ -65,7 +67,7 @@ export function ProjectMaterialsSection({
     } finally {
       setLoading(false);
     }
-  }, [projectId, useLive]);
+  }, [projectId, userId, useLive]);
 
   useEffect(() => {
     void reload();
@@ -77,7 +79,7 @@ export function ProjectMaterialsSection({
     setError(null);
     try {
       for (const file of Array.from(list)) {
-        await uploadProjectPackageFile(projectId, file);
+        await uploadProjectPackageFile(projectId, userId, file);
       }
       await reload();
     } catch (e) {
