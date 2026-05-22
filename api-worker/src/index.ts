@@ -4,6 +4,7 @@ import {
   getCitationSlots,
   matchCitationSlot,
 } from "./citations";
+import { handleGetChatState, handlePutChatState } from "./chat-sync";
 import { extractPdfPlainText } from "./pdf-text";
 import {
   chunkPlainText,
@@ -468,6 +469,18 @@ export default {
         }
       } else if (path === "/api/chat" && request.method === "POST") {
         response = await handleChat(request, env);
+      } else if (/^\/api\/users\/[^/]+\/chat-state$/u.test(path)) {
+        const routeUserId = normalizeUserId(path.split("/")[3]);
+        if (!routeUserId) {
+          response = json({ error: "无效 userId" }, 400);
+        } else if (request.method === "GET") {
+          response = await handleGetChatState(env, routeUserId);
+        } else if (request.method === "PUT") {
+          const body = (await request.json()) as Parameters<typeof handlePutChatState>[2];
+          response = await handlePutChatState(env, routeUserId, body);
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
       } else {
         response = json({ error: "Not Found" }, 404);
       }

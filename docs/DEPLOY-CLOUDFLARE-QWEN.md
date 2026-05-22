@@ -199,7 +199,7 @@ scope: package
 
 4. `scope=session` + 表单字段 `conversationId=xxx` 表示对话里临时上传。
 5. **PDF**：Worker 已用 `unpdf`（PDF.js）提取**可选中文字**的正文并分块入库；**扫描版/图片 PDF** 仍需 OCR 或另附 `.txt/.md`。单文件建议 &lt; 12MB。
-6. **多账号（演示）**：上传与检索按 `userId`（登录账号 id）隔离；对话列表与 Live 聊天记录保存在浏览器 `localStorage`（按账号分 key）。旧的无 `uploaded_by` 记录不再参与检索，需各账号重新上传资料。
+6. **多账号（演示）**：上传与检索按 `userId` 隔离。对话列表与 Live 聊天记录同步到 D1（`GET/PUT /api/users/{userId}/chat-state`），本机 `localStorage` 作缓存，**换电脑登录同一账号可恢复对话**（需 Live 已开启）。旧的无 `uploaded_by` 文件需重新上传。
 
 ---
 

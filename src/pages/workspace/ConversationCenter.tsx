@@ -30,10 +30,8 @@ import {
 } from "@/lib/project-api";
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
-  loadPersistedConversations,
-  loadPersistedLiveMessages,
-  savePersistedConversations,
-  savePersistedLiveMessages,
+  loadChatStateForUser,
+  persistChatStateForUser,
 } from "@/workspace/chat-persistence";
 import {
   getProjectResourceDemo,
@@ -1029,6 +1027,7 @@ export default function ConversationCenter() {
     ProjectFileRecord[]
   >([]);
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
+  const [chatSyncReady, setChatSyncReady] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [liveMessagesByConversation, setLiveMessagesByConversation] = useState<
@@ -1134,58 +1133,6 @@ export default function ConversationCenter() {
   const timeMeta = projectId ? getProjectTimeMeta(projectId) : getProjectTimeMeta("");
   const todayLabel = timeMeta.dayLabel;
 
-  useEffect(() => {
-    if (!projectId || !userId) return;
-    const cacheKey = userId;
-    const persistedMsgs = loadPersistedLiveMessages(userId);
-    setLiveMessagesByConversation(persistedMsgs ?? {});
-
-    const persistedConvs = loadPersistedConversations(userId);
-    const currentConversation = buildConversationFromProject(projectId);
-    if (!currentConversation) return;
-
-    if (persistedConvs && persistedConvs.length > 0) {
-      const hasCurrent = persistedConvs.some((item) => item.projectId === projectId);
-      const next = hasCurrent
-        ? persistedConvs
-        : [withCurrentPreviewTime(currentConversation), ...persistedConvs];
-      setConversations(next);
-      SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
-      return;
-    }
-
-    const cached = SESSION_CONVERSATION_CACHE[cacheKey];
-    if (!cached || cached.conversations.length === 0) {
-      const defaults = getDefaultConversations();
-      const hasCurrent = defaults.some((item) => item.projectId === projectId);
-      const next = hasCurrent ? defaults : [withCurrentPreviewTime(currentConversation), ...defaults];
-      setConversations(next);
-      SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
-      return;
-    }
-
-    const hasCurrent = cached.conversations.some((item) => item.projectId === projectId);
-    if (hasCurrent) {
-      setConversations(cached.conversations);
-      return;
-    }
-
-    const next = [withCurrentPreviewTime(currentConversation), ...cached.conversations];
-    setConversations(next);
-    SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
-  }, [projectId, userId]);
-
-  useEffect(() => {
-    if (!userId || conversations.length === 0) return;
-    SESSION_CONVERSATION_CACHE[userId] = { conversations };
-    savePersistedConversations(userId, conversations);
-  }, [userId, conversations]);
-
-  useEffect(() => {
-    if (!userId) return;
-    savePersistedLiveMessages(userId, liveMessagesByConversation);
-  }, [userId, liveMessagesByConversation]);
-
   const effectiveConversationId =
     projectId && conversationId ? conversationId : projectId ? `${projectId}-main` : "";
 
@@ -1198,6 +1145,79 @@ export default function ConversationCenter() {
 
   const isLiveAiMode =
     ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
+
+  useEffect(() => {
+    if (!projectId || !userId) return;
+    let cancelled = false;
+    setChatSyncReady(false);
+
+    const bootstrap = async () => {
+      const cacheKey = userId;
+      const currentConversation = buildConversationFromProject(projectId);
+      if (!currentConversation) return;
+
+      const remote = await loadChatStateForUser(userId);
+      if (cancelled) return;
+
+      setLiveMessagesByConversation(remote?.messagesByConversation ?? {});
+
+      const persistedConvs = remote?.conversations ?? [];
+      if (persistedConvs.length > 0) {
+        const hasCurrent = persistedConvs.some((item) => item.projectId === projectId);
+        const next = hasCurrent
+          ? persistedConvs
+          : [withCurrentPreviewTime(currentConversation), ...persistedConvs];
+        setConversations(next);
+        SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
+        setChatSyncReady(true);
+        return;
+      }
+
+      const cached = SESSION_CONVERSATION_CACHE[cacheKey];
+      if (!cached || cached.conversations.length === 0) {
+        const defaults = getDefaultConversations();
+        const hasCurrent = defaults.some((item) => item.projectId === projectId);
+        const next = hasCurrent
+          ? defaults
+          : [withCurrentPreviewTime(currentConversation), ...defaults];
+        setConversations(next);
+        SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
+        if (isLiveAiMode) {
+          await persistChatStateForUser(userId, {
+            conversations: next,
+            messagesByConversation: remote?.messagesByConversation ?? {},
+          });
+        }
+        setChatSyncReady(true);
+        return;
+      }
+
+      const hasCurrent = cached.conversations.some((item) => item.projectId === projectId);
+      const next = hasCurrent
+        ? cached.conversations
+        : [withCurrentPreviewTime(currentConversation), ...cached.conversations];
+      setConversations(next);
+      SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
+      setChatSyncReady(true);
+    };
+
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, userId, isLiveAiMode]);
+
+  useEffect(() => {
+    if (!userId || !chatSyncReady || conversations.length === 0) return;
+    SESSION_CONVERSATION_CACHE[userId] = { conversations };
+    const timer = window.setTimeout(() => {
+      void persistChatStateForUser(userId, {
+        conversations,
+        messagesByConversation: liveMessagesByConversation,
+      });
+    }, 900);
+    return () => window.clearTimeout(timer);
+  }, [userId, chatSyncReady, conversations, liveMessagesByConversation]);
 
   /** 一次性展开原版预设剧本（不经空格步进） */
   const instantStaticDemoPreferred =
