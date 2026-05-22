@@ -2,11 +2,6 @@ import { getProjectResourceDemo } from "@/workspace/project-resource-demos";
 
 /** 演示：南宁等项目在对话侧栏展示的历史文件名 */
 const DEMO_PACKAGE_FILE_NAMES: Record<string, string[]> = {
-  shrimp: [
-    "厄瓜多尔直采质量与农残检测报告（2025Q1）.pdf",
-    "华东冷链干线运价与舱位备忘录.docx",
-    "白虾渠道分销框架协议（脱敏版）.pdf",
-  ],
   "europe-hotel-ma": [
     "葡西酒店市场速览（内部调研）.pdf",
     "初筛标的清单.xlsx",

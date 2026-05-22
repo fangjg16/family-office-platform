@@ -121,7 +121,7 @@ export function ProjectDetailDrawer({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 pb-8 md:px-6">
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 pb-6 md:px-6">
           {detail ? (
             <>
               <p className="text-sm leading-relaxed text-foreground">
@@ -154,10 +154,6 @@ export function ProjectDetailDrawer({
                   </div>
                 ))}
               </dl>
-              <ProjectMaterialsSection
-                projectId={project.id}
-                canManage={chatOk && detailTier !== "guest"}
-              />
               {detail.sections.map((sec) => (
                 <section key={sec.title} className="mt-6">
                   <h3 className="text-xs font-bold uppercase tracking-wide text-foreground">
@@ -170,6 +166,10 @@ export function ProjectDetailDrawer({
                   </ul>
                 </section>
               ))}
+              <ProjectMaterialsSection
+                projectId={project.id}
+                canManage={chatOk && detailTier !== "guest"}
+              />
             </>
           ) : (
             <>
