@@ -3,6 +3,7 @@ import {
   citationMapFromSlots,
   getCitationSlots,
 } from "./citations";
+import { extractPdfPlainText } from "./pdf-text";
 import { chunkPlainText, scoreChunks, type ChunkRow } from "./search";
 
 export interface Env {
@@ -162,22 +163,36 @@ async function handleUpload(
       : `projects/${projectId}/package`;
   const r2Key = `${prefix}/${docId}-${safeName}`;
 
-  await env.FILES.put(r2Key, file.stream(), {
-    httpMetadata: { contentType: file.type || "application/octet-stream" },
+  const mime = file.type || "";
+  const bytes = await file.arrayBuffer();
+
+  await env.FILES.put(r2Key, bytes, {
+    httpMetadata: { contentType: mime || "application/octet-stream" },
   });
 
-  const mime = file.type || "";
   const isText =
     mime.startsWith("text/") ||
     safeName.endsWith(".txt") ||
     safeName.endsWith(".md");
+  const isPdf = mime === "application/pdf" || safeName.endsWith(".pdf");
 
   let text = "";
+  let pdfWarning: string | undefined;
+  let parsed = isText || isPdf;
+
   if (isText) {
-    text = await file.text();
-  } else if (safeName.endsWith(".pdf")) {
-    text = `（已上传 PDF：${file.name}。当前 MVP 未在云端解析 PDF，请补充同内容的 .txt/.md 以便检索与引用。）`;
+    text = new TextDecoder().decode(bytes);
+  } else if (isPdf) {
+    const extracted = await extractPdfPlainText(bytes, file.name);
+    pdfWarning = extracted.warning;
+    if (extracted.parsed && extracted.text) {
+      text = extracted.text;
+    } else {
+      parsed = false;
+      text = `（已上传 PDF：${file.name}。${extracted.warning ?? "未能提取正文"}）`;
+    }
   } else {
+    parsed = false;
     text = `（已上传文件：${file.name}，类型 ${mime || "未知"}，暂未解析正文。）`;
   }
 
@@ -213,7 +228,8 @@ async function handleUpload(
     filename: file.name,
     r2Key,
     chunks: parts.length,
-    parsed: isText || safeName.endsWith(".pdf"),
+    parsed,
+    pdfWarning: pdfWarning ?? null,
   });
 }
 
