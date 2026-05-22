@@ -97,7 +97,10 @@ export function ProjectMaterialsSection({
     (showDemoOnly && demoNames.length > 0);
 
   return (
-    <section className="mt-6 border-t border-border/60 pt-6" aria-labelledby="project-materials-heading">
+    <section
+      className="mt-5 rounded-2xl border border-primary/15 bg-primary/[0.03] p-4"
+      aria-labelledby="project-materials-heading"
+    >
       <div className="flex items-start justify-between gap-3">
         <div>
           <h3
