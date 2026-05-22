@@ -16,6 +16,7 @@ import {
   buildTavilyQuery,
   formatTavilyBlock,
   searchTavily,
+  tavilyCapabilitySystemLines,
   wantsExternalSearch,
 } from "./tavily-search";
 
@@ -407,7 +408,10 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
   if (wantsExternalSearch(message)) {
     usedExternalSearch = true;
     const fileHint = (body.files ?? []).join(" ");
-    const tavilyQuery = buildTavilyQuery(message, fileHint);
+    const historyForQuery = (body.history ?? []).filter(
+      (m) => m.role === "user" || m.role === "assistant",
+    );
+    const tavilyQuery = buildTavilyQuery(message, fileHint, historyForQuery);
     const tavilyKey = (env.TAVILY_API_KEY || "").trim();
     if (!tavilyKey) {
       externalBlock = formatTavilyBlock([], "未配置 TAVILY_API_KEY（请在 Worker 执行 wrangler secret put TAVILY_API_KEY）");
@@ -421,11 +425,15 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
     usedSlotIds.size > 0 ? slots.filter((s) => usedSlotIds.has(s.id)) : slots;
   const citationLines = buildCitationSystemLines(activeSlots);
 
+  const tavilyConfigured = Boolean((env.TAVILY_API_KEY || "").trim());
+
   const systemParts = [
-    "你是联合家办平台项目助手。优先依据【资料摘录】与（若有）【外部检索】作答；无依据时说明不足，勿编造。",
-    "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；若与摘录中的「南宁东盟生鲜食品智慧港」等明显为同一项目，应正常作答，勿因简称不同而拒绝。",
-    "引用上传资料使用 [ID:n]；仅可引用【资料摘录】中实际出现且下方列表存在的编号。",
-    "引用联网结果使用 [WEB:n] 并写明对应 URL，勿将 [WEB:n] 写成 [ID:n]。",
+    "你是联合家办平台项目助手，服务机会型投资尽调场景。回答须综合三类依据：（1）【资料摘录】中的项目内事实；（2）若有【外部检索】则纳入公开网页信息；（3）为衔接上下文的行业/流程推论——须标明「推论」或「待核实」，不得冒充已核实事实。",
+    "你不是「只能读上传 PDF」的机器人：项目内问题以摘录为主；公开信息、政策、市场动态在触发联网或摘录不足时，应结合外部检索或明确说明缺口与下一步（如建议用户说「查外部资料：…」）。",
+    "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；与摘录中「南宁东盟生鲜食品智慧港」等明显同一项目时，应正常作答，勿因简称不同而拒绝。",
+    "引用规范：上传资料用 [ID:n]（仅可引用摘录中实际出现且下列存在的编号）；网页用 [WEB:n] 并附 URL；勿混用。",
+    "若用户需要系统化公开信息搜集、更新项目知识网络 HTML 或 IC 备忘录，说明该深度工作流在 Hermes 投资智库 skills 中完成，本对话侧重即时问答与对照核实。",
+    ...tavilyCapabilitySystemLines(tavilyConfigured),
     "可用引用编号与文献名：",
     citationLines,
     "",
@@ -434,7 +442,13 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
   ];
 
   if (usedExternalSearch) {
-    systemParts.push("", "【外部检索（Tavily）】", externalBlock);
+    systemParts.push(
+      "",
+      "【外部检索（Tavily）】",
+      externalBlock,
+      "",
+      "【本轮指令】用户需要公开信息。以【外部检索】为主、与【资料摘录】交叉验证：一致处可加强信心，冲突处分别列出并建议待核项；勿否认本轮已具备的联网结果。",
+    );
   }
 
   const history = (body.history ?? []).filter(
