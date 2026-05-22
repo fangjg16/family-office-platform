@@ -89,12 +89,8 @@ export function ProjectMaterialsSection({
   };
 
   const packageLive = (liveFiles ?? []).filter((f) => f.scope === "package");
-  const sessionLive = (liveFiles ?? []).filter((f) => f.scope === "session");
-  const showDemoOnly = !useLive || (liveFiles !== null && liveFiles.length === 0 && demoNames.length > 0);
-  const hasAny =
-    packageLive.length > 0 ||
-    sessionLive.length > 0 ||
-    (showDemoOnly && demoNames.length > 0);
+  const showDemoOnly = !useLive || (liveFiles !== null && packageLive.length === 0 && demoNames.length > 0);
+  const hasAny = packageLive.length > 0 || (showDemoOnly && demoNames.length > 0);
 
   return (
     <section
@@ -110,7 +106,8 @@ export function ProjectMaterialsSection({
             项目资料与附件
           </h3>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            项目级资料包供 AI 检索引用；对话内上传为单次会话临时文件。
+            仅展示<strong className="font-semibold text-foreground">项目级资料包</strong>
+            （全项目、各对话共用）。在对话里用回形针上传的文件，请在对话页右上角「本对话文件」查看。
           </p>
         </div>
         {useLive && canManage ? (
@@ -149,7 +146,7 @@ export function ProjectMaterialsSection({
       {!loading && !hasAny ? (
         <p className="mt-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-4 text-[11px] leading-relaxed text-muted-foreground">
           {useLive
-            ? "暂无已入库资料。可在此上传 .txt / .md，或在对话中附加文件后由 AI 引用。"
+            ? "暂无项目资料包。可在此上传全项目共用的 .txt / .md / PDF；单次对话附件请在对话里上传。"
             : "暂无资料列表。开启 Live 对话并上传后，或进入对话页附加演示附件。"}
         </p>
       ) : null}
@@ -163,10 +160,6 @@ export function ProjectMaterialsSection({
           title={useLive ? "演示参考附件（未入库）" : "演示参考附件"}
           items={demoNames.map((name) => ({ name, meta: "演示剧本" }))}
         />
-      ) : null}
-
-      {sessionLive.length > 0 ? (
-        <MaterialsList title="对话中已上传（临时）" items={sessionLive.map(liveToRow)} />
       ) : null}
 
       <input

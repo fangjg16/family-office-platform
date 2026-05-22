@@ -28,3 +28,38 @@ export function buildCitationSystemLines(slots: CitationSlot[]): string {
   }
   return slots.map((s) => `[ID:${s.id}] ${s.title}`).join("\n");
 }
+
+/** 按上传文件名对齐预置引用（勿用检索结果下标硬套 [ID:1][ID:2]） */
+export function matchCitationSlot(
+  slots: CitationSlot[],
+  filename: string,
+): CitationSlot | undefined {
+  if (!filename || slots.length === 0) return undefined;
+  const f = filename.toLowerCase().replace(/\s+/gu, "");
+
+  for (const slot of slots) {
+    const core = slot.title
+      .replace(/[《》]/gu, "")
+      .replace(/\.pdf$/iu, "")
+      .toLowerCase()
+      .replace(/\s+/gu, "");
+    if (core.length >= 4 && (f.includes(core) || core.includes(f.replace(/\.pdf$/iu, "")))) {
+      return slot;
+    }
+  }
+
+  if (/尽调报告二|东盟生鲜.*智慧港/u.test(filename)) {
+    return slots.find((s) => s.id === "2");
+  }
+  if (/项目介绍/u.test(filename)) {
+    return slots.find((s) => s.id === "1");
+  }
+  if (/尽调报告一|嘉兴中润海盐/u.test(filename)) {
+    return slots.find((s) => s.id === "3");
+  }
+  if (/嘉兴中润项目推介/u.test(filename)) {
+    return slots.find((s) => s.id === "4");
+  }
+
+  return undefined;
+}

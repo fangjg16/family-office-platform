@@ -23,6 +23,12 @@ import { ChatMarkdown } from "@/components/workspace/ChatMarkdown";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { cn } from "@/lib/utils";
 import {
+  dedupeFilesByFilename,
+  fetchProjectFiles,
+  filterConversationSessionFiles,
+  type ProjectFileRecord,
+} from "@/lib/project-api";
+import {
   getProjectResourceDemo,
   type ProjectChatSnippet,
 } from "@/workspace/project-resource-demos";
@@ -549,7 +555,9 @@ function buildConversationFromProject(projectId: string): SessionConversation | 
       step.attachments.forEach((f) => names.push(f.name));
     }
   });
-  (DEMO_HISTORY_FILES[projectId] ?? []).forEach((name) => names.push(name));
+  if (!ENABLE_LIVE_CHAT) {
+    (DEMO_HISTORY_FILES[projectId] ?? []).forEach((name) => names.push(name));
+  }
 
   return {
     id: `${projectId}-main`,
@@ -1016,6 +1024,10 @@ export default function ConversationCenter() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [conversations, setConversations] = useState<SessionConversation[]>([]);
   const [showHistoryMenu, setShowHistoryMenu] = useState(false);
+  const [conversationFileRecords, setConversationFileRecords] = useState<
+    ProjectFileRecord[]
+  >([]);
+  const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [draftMessage, setDraftMessage] = useState("");
   const [sending, setSending] = useState(false);
   const [liveMessagesByConversation, setLiveMessagesByConversation] = useState<
@@ -1242,6 +1254,65 @@ export default function ConversationCenter() {
       cancelled = true;
     };
   }, [isLiveAiMode, projectId, AI_CHAT_ENDPOINT]);
+
+  useEffect(() => {
+    if (!isLiveAiMode || !AI_CHAT_ENDPOINT || !projectId || !effectiveConversationId) {
+      setConversationFileRecords([]);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const all = await fetchProjectFiles(projectId);
+        if (cancelled) return;
+        const session = filterConversationSessionFiles(all, effectiveConversationId);
+        setConversationFileRecords(dedupeFilesByFilename(session));
+      } catch {
+        if (!cancelled) setConversationFileRecords([]);
+      }
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isLiveAiMode,
+    projectId,
+    effectiveConversationId,
+    fileTreeRefreshKey,
+    AI_CHAT_ENDPOINT,
+  ]);
+
+  const conversationFileTreeItems = useMemo(() => {
+    if (isLiveAiMode && conversationFileRecords.length > 0) {
+      return conversationFileRecords.map((f) => ({
+        key: f.id,
+        name: f.filename,
+        meta: `${f.chunkCount} 段 · ${new Date(f.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
+      }));
+    }
+    if (!isLiveAiMode && activeConversation) {
+      const demo = DEMO_HISTORY_FILES[projectId ?? ""] ?? [];
+      const merged = Array.from(
+        new Set([...activeConversation.files, ...demo]),
+      );
+      return merged.map((name) => ({
+        key: name,
+        name,
+        meta: "演示清单",
+      }));
+    }
+    return (activeConversation?.files ?? []).map((name) => ({
+      key: name,
+      name,
+      meta: undefined as string | undefined,
+    }));
+  }, [
+    isLiveAiMode,
+    conversationFileRecords,
+    activeConversation,
+    projectId,
+  ]);
 
   useEffect(() => {
     if (!isLiveAiMode || !AI_CHAT_ENDPOINT) return;
@@ -1475,6 +1546,7 @@ export default function ConversationCenter() {
           uploadNotes = `\n\n【上传提示】\n${warnings.join("\n")}`;
           setLiveError(warnings[0]);
         }
+        setFileTreeRefreshKey((k) => k + 1);
       }
 
       const history = liveMessages.map((m) => ({ role: m.role, content: m.content }));
@@ -1726,25 +1798,39 @@ export default function ConversationCenter() {
               className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/85 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/25 hover:text-foreground"
             >
               <MoreHorizontal className="h-4 w-4" />
-              历史文件
+              本对话文件
             </button>
             {showHistoryMenu ? (
               <div className="absolute right-0 top-10 z-20 w-[18rem] rounded-2xl border border-border/70 bg-white/95 p-2 shadow-[0_12px_32px_-16px_rgba(15,23,42,0.35)] backdrop-blur-md">
                 <p className="px-2 py-1 text-[11px] font-semibold text-muted-foreground">
-                  历史文件树（{activeConversation?.files.length ?? 0}）
+                  本对话文件（{conversationFileTreeItems.length}）
+                </p>
+                <p className="px-2 pb-1 text-[10px] leading-snug text-muted-foreground">
+                  {isLiveAiMode
+                    ? "仅含当前对话内上传、已入库的附件（非项目总览里的资料包）。"
+                    : "演示模式：展示预设文件名清单。"}
                 </p>
                 <div className="max-h-52 overflow-y-auto rounded-xl border border-border/60 bg-background/50 p-2">
-                  {!activeConversation || activeConversation.files.length === 0 ? (
-                    <p className="text-[11px] text-muted-foreground">暂无历史文件</p>
+                  {conversationFileTreeItems.length === 0 ? (
+                    <p className="text-[11px] text-muted-foreground">
+                      暂无文件。请用输入栏回形针上传。
+                    </p>
                   ) : (
-                    <ul className="space-y-1">
-                      {activeConversation.files.map((name) => (
+                    <ul className="space-y-1.5">
+                      {conversationFileTreeItems.map((item) => (
                         <li
-                          key={`${activeConversation.id}-${name}`}
-                          className="flex items-center gap-1.5 text-[11px] text-foreground"
+                          key={item.key}
+                          className="rounded-lg border border-border/50 bg-white/80 px-2 py-1.5"
                         >
-                          <FileText className="h-3.5 w-3.5 text-primary/80" />
-                          <span className="truncate">{name}</span>
+                          <div className="flex items-start gap-1.5 text-[11px] text-foreground">
+                            <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
+                            <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
+                          </div>
+                          {item.meta ? (
+                            <p className="mt-0.5 pl-5 text-[10px] text-muted-foreground">
+                              {item.meta}
+                            </p>
+                          ) : null}
                         </li>
                       ))}
                     </ul>

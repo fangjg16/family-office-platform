@@ -44,6 +44,35 @@ export async function fetchProjectFiles(
   return data.files ?? [];
 }
 
+export function filterPackageFiles(files: ProjectFileRecord[]): ProjectFileRecord[] {
+  return files.filter((f) => f.scope === "package");
+}
+
+export function filterConversationSessionFiles(
+  files: ProjectFileRecord[],
+  conversationId: string,
+): ProjectFileRecord[] {
+  return files.filter(
+    (f) => f.scope === "session" && f.conversationId === conversationId,
+  );
+}
+
+/** 同名文件保留最新一条，避免重复上传占满列表 */
+export function dedupeFilesByFilename(
+  files: ProjectFileRecord[],
+): ProjectFileRecord[] {
+  const byName = new Map<string, ProjectFileRecord>();
+  for (const f of files) {
+    const prev = byName.get(f.filename);
+    if (!prev || f.createdAt > prev.createdAt) {
+      byName.set(f.filename, f);
+    }
+  }
+  return Array.from(byName.values()).sort((a, b) =>
+    b.createdAt.localeCompare(a.createdAt),
+  );
+}
+
 export async function uploadProjectPackageFile(
   projectId: string,
   file: File,

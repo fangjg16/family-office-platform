@@ -2,9 +2,15 @@ import {
   buildCitationSystemLines,
   citationMapFromSlots,
   getCitationSlots,
+  matchCitationSlot,
 } from "./citations";
 import { extractPdfPlainText } from "./pdf-text";
-import { chunkPlainText, scoreChunks, type ChunkRow } from "./search";
+import {
+  chunkPlainText,
+  isPlaceholderChunkText,
+  scoreChunks,
+  type ChunkRow,
+} from "./search";
 
 export interface Env {
   FILES: R2Bucket;
@@ -328,7 +334,7 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
 
   const slots = getCitationSlots(projectId);
   const citationMap = citationMapFromSlots(slots);
-  const citationLines = buildCitationSystemLines(slots);
+  const usedSlotIds = new Set<string>();
 
   let excerptBlock = "（未检索到资料摘录；请明确说明依据不足，勿编造。）";
   try {
@@ -337,23 +343,38 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
     const searchQuery = fileHint ? `${message} ${fileHint}` : message;
     let hits = scoreChunks(allChunks, searchQuery, 8);
     if (hits.length === 0 && allChunks.length > 0 && FILE_ONLY_USER_PROMPT.test(message)) {
-      hits = allChunks.slice(-8);
+      hits = allChunks.filter((c) => !isPlaceholderChunkText(c.text)).slice(-8);
+      if (hits.length === 0) hits = allChunks.slice(-8);
     }
     if (hits.length > 0) {
-      excerptBlock = hits
-        .map((h, idx) => {
-          const slotHint = slots[idx]?.id ? `[ID:${slots[idx].id}]` : "";
-          return `${slotHint} 文件：${h.filename ?? "资料"}\n${h.text}`;
-        })
-        .join("\n\n---\n\n");
+      const onlyPlaceholders = hits.every((h) => isPlaceholderChunkText(h.text));
+      if (onlyPlaceholders) {
+        excerptBlock =
+          "（资料文件已上传，但正文未解析成功，多为扫描版 PDF。请改传可复制文字的 PDF 或 .txt/.md，或重新上传后重试。）";
+      } else {
+        excerptBlock = hits
+          .map((h) => {
+            const slot = matchCitationSlot(slots, h.filename ?? "");
+            if (slot) usedSlotIds.add(slot.id);
+            const slotHint = slot ? `[ID:${slot.id}]` : "";
+            return `${slotHint} 文件：${h.filename ?? "资料"}\n${h.text}`;
+          })
+          .join("\n\n---\n\n");
+      }
     }
   } catch {
     /* D1 未初始化时仍可调 Hermes */
   }
 
+  const activeSlots =
+    usedSlotIds.size > 0 ? slots.filter((s) => usedSlotIds.has(s.id)) : slots;
+  const citationLines = buildCitationSystemLines(activeSlots);
+
   const systemParts = [
-    "你是联合家办平台项目助手。仅依据【资料摘录】回答；无依据须说明。",
-    "引用必须使用 [ID:n] 格式，n 只能使用下列编号：",
+    "你是联合家办平台项目助手。依据【资料摘录】回答；无摘录依据时说明不足，勿编造。",
+    "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；若与摘录中的「南宁东盟生鲜食品智慧港」等明显为同一项目，应正常作答，勿因简称不同而拒绝。",
+    "引用使用 [ID:n]；仅可引用【资料摘录】中实际出现且下方列表存在的编号，勿引用摘录未出现的编号。",
+    "可用引用编号与文献名：",
     citationLines,
     "",
     "【资料摘录】",
