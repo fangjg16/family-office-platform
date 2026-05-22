@@ -9,3 +9,7 @@ HERMES_BASE_URL=https://hermes-agent-production-02eb.up.railway.app
 HERMES_API_KEY=your-hermes-api-server-key
 HERMES_MODEL=qwen-plus
 ALLOWED_ORIGIN=https://fangjg16.github.io
+
+# Hermes 只读网站资料（与 HERMES_API_KEY 不同，见 docs/HERMES-R2-手把手.md）
+JFO_INTERNAL_KEY=请设一串随机密码
+# JFO_API_PUBLIC_BASE=https://jfo-api.jfo-api.workers.dev

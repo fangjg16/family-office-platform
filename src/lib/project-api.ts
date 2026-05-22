@@ -31,6 +31,7 @@ export type ProjectFileRecord = {
   chunkCount: number;
 };
 
+/** 项目资料包按 projectId 共享；userId 仅用于拉取该用户的对话临时文件 */
 export async function fetchProjectFiles(
   projectId: string,
   userId: string,

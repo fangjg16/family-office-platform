@@ -202,7 +202,7 @@ scope: package
 
 4. `scope=session` + 表单字段 `conversationId=xxx` 表示对话里临时上传。
 5. **PDF**：Worker 已用 `unpdf`（PDF.js）提取**可选中文字**的正文并分块入库；**扫描版/图片 PDF** 仍需 OCR 或另附 `.txt/.md`。单文件建议 &lt; 12MB。
-6. **多账号（演示）**：上传与检索按 `userId` 隔离。对话列表与 Live 聊天记录同步到 D1（`GET/PUT /api/users/{userId}/chat-state`），本机 `localStorage` 作缓存，**换电脑登录同一账号可恢复对话**（需 Live 已开启）。旧的无 `uploaded_by` 文件需重新上传。
+6. **资料隔离**：**项目资料包**（`scope=package`）按 `projectId` **全项目共享**；**对话临时文件**（`scope=session`）按 `userId` + `conversationId` 隔离。对话列表与 Live 聊天记录同步到 D1（`GET/PUT /api/users/{userId}/chat-state`）。旧的无 `uploaded_by` 文件需重新上传。
 7. **外部联网搜索（Tavily）**：与 Railway Hermes 独立，在 Worker 配置 `TAVILY_API_KEY`（可与 Railway 填同一 `tvly-` Key）。用户在家办对话里说 **「查外部资料」「联网搜索」「网上查」** 等时，Worker 先调 Tavily，再把结果与上传资料一并交给千问；回答中外部来源用 `[WEB:n]` + URL，上传资料仍用 `[ID:n]`。`/api/health` 应显示 `tavilyConfigured: true`。
 
 ---

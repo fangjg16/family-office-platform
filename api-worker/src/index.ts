@@ -13,6 +13,13 @@ import {
   type ChunkRow,
 } from "./search";
 import {
+  LIST_FILES_SQL,
+  LOAD_CHUNKS_SQL,
+  packageR2Key,
+  sessionR2Key,
+} from "./documents-access";
+import { tryHandleHermesRoutes } from "./hermes-bridge";
+import {
   buildTavilyQuery,
   formatTavilyBlock,
   searchTavily,
@@ -31,6 +38,9 @@ export interface Env {
   HERMES_MODEL?: string;
   /** 用户说「查外部资料」等时联网检索（与 Railway Hermes 的 Tavily 独立配置） */
   TAVILY_API_KEY?: string;
+  /** Hermes 只读拉取网站 R2 资料（见 docs/HERMES-R2-READ.md） */
+  JFO_INTERNAL_KEY?: string;
+  JFO_API_PUBLIC_BASE?: string;
   ALLOWED_ORIGIN?: string;
 }
 
@@ -93,17 +103,7 @@ async function loadChunks(
   userId: string,
   conversationId?: string,
 ): Promise<ChunkRow[]> {
-  const sql = `
-    SELECT c.id, c.document_id, c.chunk_index, c.text, d.filename
-    FROM chunks c
-    JOIN documents d ON d.id = c.document_id
-    WHERE d.project_id = ?
-      AND d.uploaded_by = ?
-      AND (d.scope = 'package' OR (d.scope = 'session' AND d.conversation_id = ?))
-    ORDER BY c.document_id, c.chunk_index
-    LIMIT 500
-  `;
-  const { results } = await env.DB.prepare(sql)
+  const { results } = await env.DB.prepare(LOAD_CHUNKS_SQL)
     .bind(projectId, userId, conversationId ?? "")
     .all<ChunkRow>();
   return results ?? [];
@@ -114,12 +114,14 @@ async function handleHealth(env: Env): Promise<Response> {
   const apiRoot = hermes ? resolveHermesApiRoot(hermes) : "";
   const dashscope = Boolean((env.DASHSCOPE_API_KEY || "").trim());
   const tavily = Boolean((env.TAVILY_API_KEY || "").trim());
+  const hermesBridge = Boolean((env.JFO_INTERNAL_KEY || "").trim());
   return json({
     ok: true,
     service: "jfo-api",
     llmMode: dashscope ? "dashscope" : hermes && env.HERMES_API_KEY ? "hermes" : "none",
     dashscopeConfigured: dashscope,
     tavilyConfigured: tavily,
+    hermesBridgeConfigured: hermesBridge,
     hermesConfigured: Boolean(hermes && env.HERMES_API_KEY),
     hermesChatUrl: hermes ? hermesChatCompletionsUrl(hermes) : null,
     apiRoot: apiRoot || null,
@@ -151,14 +153,7 @@ async function handleListFiles(
     chunk_count: number;
     uploaded_by: string | null;
   };
-  const { results } = await env.DB.prepare(
-    `SELECT d.id, d.filename, d.scope, d.conversation_id, d.mime, d.created_at, d.uploaded_by,
-            (SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
-     FROM documents d
-     WHERE d.project_id = ? AND d.uploaded_by = ?
-     ORDER BY d.created_at DESC
-     LIMIT 200`,
-  )
+  const { results } = await env.DB.prepare(LIST_FILES_SQL)
     .bind(projectId, userId)
     .all<Row>();
 
@@ -173,7 +168,12 @@ async function handleListFiles(
     chunkCount: Number(r.chunk_count) || 0,
   }));
 
-  return json({ projectId, userId, files });
+  return json({
+    projectId,
+    userId,
+    packageScope: "project",
+    files,
+  });
 }
 
 async function handleUpload(
@@ -198,12 +198,10 @@ async function handleUpload(
     : null;
   const docId = crypto.randomUUID();
   const safeName = file.name.replace(/[^\w.\-一-龥]/gu, "_");
-  const userRoot = `projects/${projectId}/users/${uploadedBy}`;
-  const prefix =
+  const r2Key =
     scope === "session" && conversationId
-      ? `${userRoot}/sessions/${conversationId}`
-      : `${userRoot}/package`;
-  const r2Key = `${prefix}/${docId}-${safeName}`;
+      ? sessionR2Key(projectId, uploadedBy, conversationId, docId, safeName)
+      : packageR2Key(projectId, docId, safeName);
 
   const mime = file.type || "";
   const bytes = await file.arrayBuffer();
@@ -492,6 +490,9 @@ export default {
 
       if (path === "/api/health" && request.method === "GET") {
         response = await handleHealth(env);
+      } else if (path.startsWith("/api/hermes")) {
+        const hermesRes = await tryHandleHermesRoutes(request, env, path);
+        response = hermesRes ?? json({ error: "Not Found" }, 404);
       } else if (
         /^\/api\/projects\/[^/]+\/citations$/u.test(path) &&
         request.method === "GET"

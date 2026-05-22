@@ -2,6 +2,13 @@
 
 本目录是**配置说明**，不是可执行代码。Hermes 需在 Railway（或其它 VPS）上单独安装运行。
 
+## Skills（GitHub Raw 安装）
+
+合域 v2.2 的 16 个 skill + 家办桥接 `jfo-r2-materials` 已放在 `hermes-railway/skills/`。  
+推送到 GitHub 后，在容器内用 Raw URL 安装，见 **[INSTALL-SKILLS-FROM-GITHUB.md](./INSTALL-SKILLS-FROM-GITHUB.md)**（免 nano）。
+
+参考文档：`reference/STYLE_GUIDE.md`、`reference/skills_reference.md`。
+
 ## 1. 创建 Railway 项目
 
 1. 登录 [Railway](https://railway.app)。
