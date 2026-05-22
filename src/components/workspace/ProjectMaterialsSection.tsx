@@ -8,7 +8,6 @@ import {
   uploadProjectPackageFile,
   type ProjectFileRecord,
 } from "@/lib/project-api";
-import { getDemoProjectFileNames } from "@/workspace/project-materials";
 
 type ProjectMaterialsSectionProps = {
   projectId: string;
@@ -47,7 +46,6 @@ export function ProjectMaterialsSection({
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const demoNames = getDemoProjectFileNames(projectId);
   const useLive = ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT);
 
   const reload = useCallback(async () => {
@@ -91,8 +89,7 @@ export function ProjectMaterialsSection({
   };
 
   const packageLive = (liveFiles ?? []).filter((f) => f.scope === "package");
-  const showDemoOnly = !useLive || (liveFiles !== null && packageLive.length === 0 && demoNames.length > 0);
-  const hasAny = packageLive.length > 0 || (showDemoOnly && demoNames.length > 0);
+  const hasAny = packageLive.length > 0;
 
   return (
     <section
@@ -149,19 +146,12 @@ export function ProjectMaterialsSection({
         <p className="mt-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-4 text-[11px] leading-relaxed text-muted-foreground">
           {useLive
             ? "暂无项目资料包。可在此上传全项目共用的 .txt / .md / PDF；单次对话附件请在对话里上传。"
-            : "暂无资料列表。开启 Live 对话并上传后，或进入对话页附加演示附件。"}
+            : "暂无资料列表。开启 Live 对话并上传后可见。"}
         </p>
       ) : null}
 
       {packageLive.length > 0 ? (
         <MaterialsList title="项目资料包" items={packageLive.map(liveToRow)} />
-      ) : null}
-
-      {showDemoOnly && demoNames.length > 0 ? (
-        <MaterialsList
-          title={useLive ? "演示参考附件（未入库）" : "演示参考附件"}
-          items={demoNames.map((name) => ({ name, meta: "演示剧本" }))}
-        />
       ) : null}
 
       <input

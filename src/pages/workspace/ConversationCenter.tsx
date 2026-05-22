@@ -361,14 +361,6 @@ function formatRagflowRequestError(message: string, endpoint: string): string {
  */
 const SESSION_CONVERSATION_CACHE: Record<string, SessionConversationState> = {};
 const DEFAULT_PROJECT_IDS = ["europe-hotel-ma", "shrimp"] as const;
-const DEMO_HISTORY_FILES: Record<string, string[]> = {
-  "nn-fresh-port": [
-    "尽调报告－嘉兴中润海盐冷链产业园区.pdf",
-    "南宁生鲜食品智慧港项目介绍.pdf",
-    "嘉兴中润项目推介.pdf",
-    "尽调报告二 南宁东盟生鲜食品智慧港.pdf",
-  ],
-};
 const NANNING_CITATION_MAP: Record<string, string> = {
   "1": "《南宁生鲜食品智慧港项目介绍.pdf》",
   "2": "《尽调报告二 南宁东盟生鲜食品智慧港.pdf》",
@@ -554,10 +546,6 @@ function buildConversationFromProject(projectId: string): SessionConversation | 
       step.attachments.forEach((f) => names.push(f.name));
     }
   });
-  if (!ENABLE_LIVE_CHAT) {
-    (DEMO_HISTORY_FILES[projectId] ?? []).forEach((name) => names.push(name));
-  }
-
   return {
     id: `${projectId}-main`,
     projectId,
@@ -1331,17 +1319,6 @@ export default function ConversationCenter() {
         meta: `${f.chunkCount} 段 · ${new Date(f.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
       }));
     }
-    if (!isLiveAiMode && activeConversation) {
-      const demo = DEMO_HISTORY_FILES[projectId ?? ""] ?? [];
-      const merged = Array.from(
-        new Set([...activeConversation.files, ...demo]),
-      );
-      return merged.map((name) => ({
-        key: name,
-        name,
-        meta: "演示清单",
-      }));
-    }
     return (activeConversation?.files ?? []).map((name) => ({
       key: name,
       name,
@@ -1847,9 +1824,7 @@ export default function ConversationCenter() {
                   本对话文件（{conversationFileTreeItems.length}）
                 </p>
                 <p className="px-2 pb-1 text-[10px] leading-snug text-muted-foreground">
-                  {isLiveAiMode
-                    ? "仅含当前对话内上传、已入库的附件（非项目总览里的资料包）。"
-                    : "演示模式：展示预设文件名清单。"}
+                  仅含当前对话内上传、已入库的附件（非项目总览里的资料包）。
                 </p>
                 <div className="max-h-52 overflow-y-auto rounded-xl border border-border/60 bg-background/50 p-2">
                   {conversationFileTreeItems.length === 0 ? (
