@@ -1,9 +1,22 @@
+import fs from "node:fs";
 import path from "node:path";
-import { defineConfig } from "vite";
+import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
+/** GitHub Pages 刷新子路由时回退到 index，避免 404（见 https://github.com/rafgraph/spa-github-pages） */
+function githubPagesSpaFallback(): Plugin {
+  return {
+    name: "github-pages-spa-fallback",
+    closeBundle() {
+      const index = path.resolve(__dirname, "dist/index.html");
+      const fallback = path.resolve(__dirname, "dist/404.html");
+      fs.copyFileSync(index, fallback);
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), githubPagesSpaFallback()],
   base: "/family-office-platform/",
   resolve: {
     alias: { "@": path.resolve(__dirname, "./src") },
