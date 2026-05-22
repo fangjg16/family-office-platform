@@ -22,7 +22,7 @@ export function scoreChunks(chunks: ChunkRow[], query: string, topK = 6): ChunkR
   if (terms.length === 0) return chunks.slice(0, topK);
 
   const scored = chunks.map((c) => {
-    const hay = c.text.toLowerCase();
+    const hay = `${c.text} ${c.filename ?? ""}`.toLowerCase();
     let score = 0;
     for (const term of terms) {
       if (hay.includes(term)) score += 1;

@@ -24,8 +24,13 @@ type ChatBody = {
   userId?: string;
   role?: string;
   message?: string;
+  /** 本轮附带的文件名，用于检索 */
+  files?: string[];
   history?: { role: string; content: string }[];
 };
+
+const FILE_ONLY_USER_PROMPT =
+  /已发送\s*\d+\s*个文件|请基于资料继续|请阅读刚上传/u;
 
 const GITHUB_PAGES_ORIGIN = "https://fangjg16.github.io";
 
@@ -328,7 +333,12 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
   let excerptBlock = "（未检索到资料摘录；请明确说明依据不足，勿编造。）";
   try {
     const allChunks = await loadChunks(env, projectId, body.conversationId);
-    const hits = scoreChunks(allChunks, message, 6);
+    const fileHint = (body.files ?? []).join(" ");
+    const searchQuery = fileHint ? `${message} ${fileHint}` : message;
+    let hits = scoreChunks(allChunks, searchQuery, 8);
+    if (hits.length === 0 && allChunks.length > 0 && FILE_ONLY_USER_PROMPT.test(message)) {
+      hits = allChunks.slice(-8);
+    }
     if (hits.length > 0) {
       excerptBlock = hits
         .map((h, idx) => {

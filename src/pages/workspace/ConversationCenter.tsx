@@ -477,13 +477,21 @@ function formatCitationMarkers(
     .replace(/([)\]）】])(?=[🟣🟢🔵🟡⚪])/gu, "$1 ");
 }
 
+type UploadFileResult = {
+  filename: string;
+  parsed: boolean;
+  chunks: number;
+  pdfWarning?: string | null;
+};
+
 async function uploadSessionFilesToApi(
   chatEndpoint: string,
   projectId: string,
   conversationId: string,
   files: File[],
-): Promise<void> {
+): Promise<UploadFileResult[]> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
+  const results: UploadFileResult[] = [];
   for (const file of files) {
     const form = new FormData();
     form.append("file", file);
@@ -493,11 +501,32 @@ async function uploadSessionFilesToApi(
       method: "POST",
       body: form,
     });
+    const payload = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      filename?: string;
+      parsed?: boolean;
+      chunks?: number;
+      pdfWarning?: string | null;
+    };
     if (!res.ok) {
-      const err = await res.text().catch(() => "");
-      throw new Error(err || `上传失败（${res.status}）`);
+      throw new Error(payload.error || `上传失败（${res.status}）`);
     }
+    results.push({
+      filename: payload.filename ?? file.name,
+      parsed: Boolean(payload.parsed),
+      chunks: payload.chunks ?? 0,
+      pdfWarning: payload.pdfWarning ?? null,
+    });
   }
+  return results;
+}
+
+function isGenericFileOnlyUserText(text: string): boolean {
+  return /^已发送\s*\d+\s*个文件/u.test(text.trim());
+}
+
+function buildFileUploadApiMessage(fileNames: string[]): string {
+  return `请阅读刚上传的项目资料并回答用户后续问题。附件：${fileNames.join("、")}`;
 }
 
 function withCurrentPreviewTime(conversation: SessionConversation): SessionConversation {
@@ -1312,6 +1341,21 @@ export default function ConversationCenter() {
     const trimmed = draftMessage.trim();
     const fileNames = selectedFiles.map((f) => f.name);
 
+    /** 仅附件、无文字：演示剧本模式下也可发送（更新侧栏预览）；Live 走下方正式上传 */
+    if (fileNames.length > 0 && !trimmed && !isLiveAiMode) {
+      if (sending) return;
+      setLiveError(null);
+      updateConversationPreview(`已选择 ${fileNames.length} 个文件`, fileNames);
+      setSelectedFiles([]);
+      setShowUploadPanel(false);
+      if (!AI_CHAT_ENDPOINT) {
+        setLiveError(
+          "演示模式：附件仅本地展示。请在 GitHub Secrets 配置 VITE_ENABLE_LIVE_CHAT=1 与 VITE_AI_CHAT_ENDPOINT 后重新部署，即可真实上传并由 AI 引用。",
+        );
+      }
+      return;
+    }
+
     if (playbackActive) {
       if (playbackThinking || !trimmed) return;
       const round = playbackRounds[playbackRoundIndex];
@@ -1369,30 +1413,27 @@ export default function ConversationCenter() {
         return;
       }
       if (fileNames.length === 0) return;
-      setLiveError(null);
-      updateConversationPreview(`已上传 ${fileNames.length} 个文件`, fileNames);
-      setSelectedFiles([]);
-      setShowUploadPanel(false);
       return;
     }
 
     if (!effectiveConversationId || (!trimmed && fileNames.length === 0) || sending) return;
 
     setLiveError(null);
-    const userText =
-      fileNames.length > 0 && !trimmed
-        ? `已发送 ${fileNames.length} 个文件，请基于资料继续回答。`
-        : trimmed;
     const filesToUpload = [...selectedFiles];
+    const displayText =
+      trimmed ||
+      (fileNames.length > 0 ? `已发送 ${fileNames.length} 个文件` : "");
+    const apiMessage =
+      trimmed || (fileNames.length > 0 ? buildFileUploadApiMessage(fileNames) : "");
 
     appendLiveMessage(effectiveConversationId, {
       id: `user-${Date.now()}`,
       role: "user",
-      content: userText,
+      content: displayText,
       files: fileNames.length > 0 ? fileNames.map((name) => ({ name })) : undefined,
       time: getCurrentDateTimeLabel(),
     });
-    updateConversationPreview(trimmed || `已发送 ${fileNames.length} 个文件`, fileNames);
+    updateConversationPreview(displayText || `已发送 ${fileNames.length} 个文件`, fileNames);
     setDraftMessage("");
     setSelectedFiles([]);
     setShowUploadPanel(false);
@@ -1412,20 +1453,35 @@ export default function ConversationCenter() {
 
     setSending(true);
     try {
+      let uploadNotes = "";
       if (filesToUpload.length > 0) {
-        await uploadSessionFilesToApi(
+        const uploaded = await uploadSessionFilesToApi(
           AI_CHAT_ENDPOINT,
           projectId,
           effectiveConversationId,
           filesToUpload,
         );
+        const warnings = uploaded
+          .filter((u) => u.pdfWarning || !u.parsed || u.chunks === 0)
+          .map((u) => {
+            if (u.pdfWarning) return `${u.filename}：${u.pdfWarning}`;
+            if (!u.parsed || u.chunks === 0) {
+              return `${u.filename}：未解析出可检索正文，建议改传 .txt/.md 或可选中文字的 PDF`;
+            }
+            return "";
+          })
+          .filter(Boolean);
+        if (warnings.length > 0) {
+          uploadNotes = `\n\n【上传提示】\n${warnings.join("\n")}`;
+          setLiveError(warnings[0]);
+        }
       }
 
       const history = liveMessages.map((m) => ({ role: m.role, content: m.content }));
       const requestBody =
         RAGFLOW_MODE === "native"
           ? {
-              question: userText,
+              question: apiMessage,
               stream: false,
               user_id: userId,
             }
@@ -1433,14 +1489,14 @@ export default function ConversationCenter() {
             ? {
                 stream: false,
                 model: "qwen-plus",
-                messages: [...history, { role: "user", content: userText }],
+                messages: [...history, { role: "user", content: apiMessage }],
               }
             : {
                 projectId,
                 conversationId: effectiveConversationId,
                 userId,
                 role: projectRole,
-                message: userText,
+                message: apiMessage,
                 files: fileNames,
                 history,
               };
@@ -1476,7 +1532,7 @@ export default function ConversationCenter() {
         setLiveCitationMap((prev) => ({ ...prev, ...citationFromApi }));
       }
       const rawAnswer = extractRagflowAnswer(payload) || "已收到消息，但未返回可展示答案。";
-      const answer = formatCitationMarkers(rawAnswer, mergedCitationMap);
+      const answer = formatCitationMarkers(rawAnswer + uploadNotes, mergedCitationMap);
       setLiveError(null);
       appendLiveMessage(effectiveConversationId, {
         id: `assistant-${Date.now()}`,
@@ -1725,7 +1781,7 @@ export default function ConversationCenter() {
                   AI 助手已接入
                 </p>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
-                  经 Cloudflare API 调用 Hermes（千问）。请直接提问；上传 .txt/.md 可参与检索（PDF 需先转文本）。
+                  经 Cloudflare API 调用千问。可上传 .txt / .md / 电子版 PDF；仅发附件后请再提一个具体问题。
                 </p>
               </AiShell>
               {liveMessages.length === 0 ? (
@@ -1741,9 +1797,11 @@ export default function ConversationCenter() {
                       {m.files && m.files.length > 0 ? (
                         <ChatSentFilesPanel files={m.files} />
                       ) : null}
-                      <UserBubble>
-                        <ChatMarkdown text={m.content} variant="user" />
-                      </UserBubble>
+                      {m.content.trim() && !isGenericFileOnlyUserText(m.content) ? (
+                        <UserBubble>
+                          <ChatMarkdown text={m.content} variant="user" />
+                        </UserBubble>
+                      ) : null}
                     </div>
                   ) : (
                     <AiShell key={m.id}>
@@ -1939,6 +1997,19 @@ export default function ConversationCenter() {
             </Link>
           </div>
           <footer className="relative flex-1 px-4 py-4 md:rounded-br-[1.65rem] md:px-6">
+          <input
+            id="jfo-chat-file-input"
+            ref={fileInputRef}
+            type="file"
+            multiple
+            tabIndex={-1}
+            className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"
+            accept=".pdf,.txt,.md,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg"
+            onChange={(e) => {
+              addFiles(e.target.files);
+              e.currentTarget.value = "";
+            }}
+          />
           {showUploadPanel || selectedFiles.length > 0 ? (
             <div className="absolute bottom-full left-4 right-4 z-30 mb-3 rounded-2xl border border-dashed border-primary/45 bg-white/95 p-3 shadow-[0_-8px_30px_-12px_rgba(15,23,42,0.12)] backdrop-blur-md md:left-6 md:right-6">
               <div
@@ -1956,16 +2027,15 @@ export default function ConversationCenter() {
                         <FileUp className="h-4 w-4 text-primary" strokeWidth={2} />
                         拖拽文件到此处上传
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="inline-flex h-9 items-center justify-center rounded-full border border-primary px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/8"
+                      <label
+                        htmlFor="jfo-chat-file-input"
+                        className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-primary px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/8"
                       >
                         选择文件
-                      </button>
+                      </label>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      支持格式：JPEG、PNG、PDF、DOC、DOCX、XLSX、XLS
+                      AI 检索优先支持 .txt / .md；亦可上传 PDF、Word、Excel、图片（PDF 等暂仅入库摘要）
                     </p>
                   </>
                 ) : (
@@ -2059,19 +2129,19 @@ export default function ConversationCenter() {
                 (sending || playbackThinking) && "opacity-70",
               )}
             />
-            <button
-              type="button"
-              onClick={() => setShowUploadPanel((v) => !v)}
+            <label
+              htmlFor="jfo-chat-file-input"
+              onClick={() => setShowUploadPanel(true)}
               className={cn(
-                "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full border text-muted-foreground transition-colors",
-                showUploadPanel
+                "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full border text-muted-foreground transition-colors",
+                showUploadPanel || selectedFiles.length > 0
                   ? "border-primary/35 bg-primary/10 text-primary"
-                  : "border-input bg-white hover:bg-muted hover:text-foreground"
+                  : "border-input bg-white hover:bg-muted hover:text-foreground",
               )}
-              aria-label="上传文件"
+              aria-label="选择并上传文件"
             >
               <Paperclip className="h-4 w-4" strokeWidth={2} />
-            </button>
+            </label>
             <button
               type="button"
               onClick={() => void handleSend()}
@@ -2093,17 +2163,6 @@ export default function ConversationCenter() {
               {sending ? "发送中…" : "发送"}
             </button>
           </div>
-          <input
-            ref={fileInputRef}
-            type="file"
-            className="hidden"
-            multiple
-            accept=".jpg,.jpeg,.png,.pdf,.doc,.docx,.xlsx,.xls"
-            onChange={(e) => {
-              addFiles(e.target.files);
-              e.currentTarget.value = "";
-            }}
-          />
         </footer>
         </div>
     </div>

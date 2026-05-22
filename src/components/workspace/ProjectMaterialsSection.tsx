@@ -174,7 +174,7 @@ export function ProjectMaterialsSection({
         type="file"
         className="sr-only"
         multiple
-        accept=".txt,.md,text/plain,text/markdown,application/pdf"
+        accept=".txt,.md,.pdf,.doc,.docx,.xlsx,.xls,.jpg,.jpeg,.png,text/plain,text/markdown,application/pdf"
         onChange={(e) => void onPickFiles(e.target.files)}
       />
     </section>

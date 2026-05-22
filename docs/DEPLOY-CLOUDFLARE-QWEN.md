@@ -198,7 +198,7 @@ scope: package
 ```
 
 4. `scope=session` + 表单字段 `conversationId=xxx` 表示对话里临时上传。
-5. PDF 会先存入 R2；**文本检索 MVP 优先支持 .txt/.md**，PDF 需后续加解析服务。
+5. **PDF**：Worker 已用 `unpdf`（PDF.js）提取**可选中文字**的正文并分块入库；**扫描版/图片 PDF** 仍需 OCR 或另附 `.txt/.md`。单文件建议 &lt; 12MB。
 
 ---
 
