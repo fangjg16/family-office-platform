@@ -1,4 +1,8 @@
-HERMES_BASE_URL=https://your-app.up.railway.app
+# 推荐：直连千问（与 Railway 里 DASHSCOPE_API_KEY 相同）
+DASHSCOPE_API_KEY=sk-your-dashscope-key
+
+# 可选：不用 Hermes 时可不填下面两项
+HERMES_BASE_URL=https://hermes-agent-production-02eb.up.railway.app
 HERMES_API_KEY=your-hermes-api-server-key
 HERMES_MODEL=qwen-plus
 ALLOWED_ORIGIN=https://fangjg16.github.io

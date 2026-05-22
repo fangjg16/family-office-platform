@@ -7,6 +7,7 @@ import {
   getProjectDetailContent,
   type ProjectDetailTier,
 } from "@/workspace/project-details";
+import { ProjectMaterialsSection } from "@/components/workspace/ProjectMaterialsSection";
 import {
   canEnterChat,
   getProjectRole,
@@ -165,11 +166,18 @@ export function ProjectDetailDrawer({
                   </ul>
                 </section>
               ))}
+              <ProjectMaterialsSection
+                projectId={project.id}
+                canManage={chatOk && detailTier !== "guest"}
+              />
             </>
           ) : (
-            <p className="text-sm text-muted-foreground">
-              暂无该项目的详情副本，请联系管理员。
-            </p>
+            <>
+              <p className="text-sm text-muted-foreground">
+                暂无该项目的详情副本，请联系管理员。
+              </p>
+              <ProjectMaterialsSection projectId={project.id} canManage={chatOk} />
+            </>
           )}
         </div>
 

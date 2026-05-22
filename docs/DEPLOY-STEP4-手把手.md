@@ -122,21 +122,28 @@ https://jfo-api.XXXXXXXX.workers.dev/api/health
 
 Railway 上 Hermes 还没部署好时，**第 5 步已经算完成第四步**；只是聊天会提示 AI 不可用。
 
-等 Railway 有地址后，在 `api-worker` 目录执行（每条会提示你粘贴内容）：
+在 `api-worker` 目录执行（每条会提示你粘贴内容）：
+
+**推荐（直连千问，避免 Hermes 401/502）：**
 
 ```powershell
-npx wrangler secret put HERMES_BASE_URL
-# 粘贴：https://你的应用.up.railway.app  （不要带 /v1）
-
-npx wrangler secret put HERMES_API_KEY
-# 粘贴：与 Hermes 里 API_SERVER_KEY 相同的一长串密码
-
-npx wrangler secret put HERMES_MODEL
-# 粘贴：qwen-plus  （或你在千问用的模型名）
-
-npx wrangler secret put ALLOWED_ORIGIN
-# 粘贴：https://fangjg16.github.io
+npx.cmd wrangler secret put DASHSCOPE_API_KEY
+# 粘贴：与 Railway 变量 DASHSCOPE_API_KEY 相同（sk- 开头）
 ```
+
+设完后打开 `https://jfo-api.jfo-api.workers.dev/api/health`，应看到 `"llmMode":"dashscope"`。
+
+**可选（走 Railway Hermes）：** `HERMES_API_KEY` 必须与 Railway 的 `API_SERVER_KEY` **完全一致**，否则聊天会 502 且提示 Unauthorized。
+
+```powershell
+npx.cmd wrangler secret put HERMES_BASE_URL
+# 粘贴：https://hermes-agent-production-02eb.up.railway.app
+
+npx.cmd wrangler secret put HERMES_API_KEY
+# 粘贴：与 Railway API_SERVER_KEY 相同
+```
+
+`HERMES_MODEL`、`ALLOWED_ORIGIN` 已在 `wrangler.toml`，不要再用 secret put 同名变量。
 
 每设完一个 secret，无需重新 deploy（会自动生效）。
 
@@ -197,7 +204,7 @@ Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 | 找不到 `wrangler` | 一定在 `api-worker` 目录下用 `npx wrangler`，不要全局装也行 |
 | `REPLACE_WITH_YOUR_D1` 没改 | 第 3 步必改，否则 deploy 失败 |
 | R2 桶名不一致 | `wrangler.toml` 里 `bucket_name` 必须和 Dashboard 里完全一致 |
-| deploy 成功但 chat 502 | 正常，先完成 Railway Hermes + 第 6 步 secret |
+| deploy 成功但 chat 502 / Unauthorized | 执行 `secret put DASHSCOPE_API_KEY`，或核对 `HERMES_API_KEY` = Railway `API_SERVER_KEY` |
 | 不知道 Worker 地址 | 再看一遍 `npx wrangler deploy` 输出里的 `https://...workers.dev` |
 
 ---

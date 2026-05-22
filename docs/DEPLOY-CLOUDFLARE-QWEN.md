@@ -108,21 +108,28 @@ copy .dev.vars.example .dev.vars
 编辑 `.dev.vars`（本地测试用）：
 
 ```bash
-HERMES_BASE_URL=https://你的服务.up.railway.app
-HERMES_API_KEY=你在Hermes里设的API_SERVER_KEY
+# 推荐：与 Railway 里 DASHSCOPE_API_KEY 相同，Worker 直连千问（不依赖 Hermes 鉴权）
+DASHSCOPE_API_KEY=sk-你的密钥
 HERMES_MODEL=qwen-plus
 ALLOWED_ORIGIN=https://fangjg16.github.io
+
+# 可选：仅当不用 DASHSCOPE 时才走 Hermes
+HERMES_BASE_URL=https://你的服务.up.railway.app
+HERMES_API_KEY=与 Railway API_SERVER_KEY 完全一致
 ```
 
-线上 Secrets（生产）：
+线上 Secrets（生产，**至少配置其一**）：
 
 ```bash
+# 推荐（配置后 /api/health 显示 llmMode: dashscope）
+npx wrangler secret put DASHSCOPE_API_KEY
+
+# 可选 Hermes 中继（HERMES_API_KEY 必须与 Railway API_SERVER_KEY 一字不差，否则 502 Unauthorized）
 npx wrangler secret put HERMES_BASE_URL
 npx wrangler secret put HERMES_API_KEY
-npx wrangler secret put HERMES_MODEL
-npx wrangler secret put ALLOWED_ORIGIN
-# 粘贴：https://fangjg16.github.io
 ```
+
+`HERMES_MODEL`、`ALLOWED_ORIGIN` 已在 `wrangler.toml` 的 `[vars]`，勿再 `secret put` 同名变量。
 
 ### 4.4 部署
 
@@ -178,17 +185,20 @@ curl https://jfo-api.xxx.workers.dev/api/health
 
 ## 第七步：上传项目资料（MVP）
 
-1. 用接口上传（可用 Postman，或之后前端接好上传）：
+1. **网页**：项目总览 → 卡片「查看详情」→ 侧栏 **「项目资料与附件」**（可上传、列表）。
+2. **对话**：输入区回形针上传为 `scope=session` 临时文件。
+3. **接口**：
 
 ```http
+GET  https://你的worker.dev/api/projects/nn-fresh-port/files
 POST https://你的worker.dev/api/projects/nn-fresh-port/files
 Content-Type: multipart/form-data
 file: （选择 .txt / .md，MVP 最易解析）
 scope: package
 ```
 
-2. `scope=session` + 表单字段 `conversationId=xxx` 表示对话里临时上传。
-3. PDF 会先存入 R2；**文本检索 MVP 优先支持 .txt/.md**，PDF 需后续加解析服务。
+4. `scope=session` + 表单字段 `conversationId=xxx` 表示对话里临时上传。
+5. PDF 会先存入 R2；**文本检索 MVP 优先支持 .txt/.md**，PDF 需后续加解析服务。
 
 ---
 
@@ -218,7 +228,8 @@ A：不影响。`github.io` + `workers.dev` 即可。
 - [ ] DashScope 拿到 API Key  
 - [ ] Cloudflare 建好 R2 + D1  
 - [ ] `api-worker` 执行 `wrangler deploy`  
-- [ ] Railway 跑通 Hermes，健康检查 `curl $HERMES_BASE_URL/v1/models -H "Authorization: Bearer $KEY"`  
+- [ ] Worker 已配置 `DASHSCOPE_API_KEY`，或 Railway Hermes + `HERMES_API_KEY` 与 `API_SERVER_KEY` 一致
+- [ ] `curl .../api/health` 显示 `llmMode` 为 `dashscope` 或 `hermes`  
 - [ ] GitHub Secrets 填 `VITE_ENABLE_LIVE_CHAT` 和 `VITE_AI_CHAT_ENDPOINT`  
 - [ ] 推送 main，验证线上对话
 

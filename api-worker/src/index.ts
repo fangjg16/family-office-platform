@@ -8,6 +8,9 @@ import { chunkPlainText, scoreChunks, type ChunkRow } from "./search";
 export interface Env {
   FILES: R2Bucket;
   DB: D1Database;
+  /** 推荐：直连千问，绕过 Railway Hermes 鉴权问题 */
+  DASHSCOPE_API_KEY?: string;
+  DASHSCOPE_BASE_URL?: string;
   HERMES_BASE_URL?: string;
   HERMES_API_KEY?: string;
   HERMES_MODEL?: string;
@@ -80,9 +83,12 @@ async function loadChunks(
 async function handleHealth(env: Env): Promise<Response> {
   const hermes = (env.HERMES_BASE_URL || "").trim();
   const apiRoot = hermes ? resolveHermesApiRoot(hermes) : "";
+  const dashscope = Boolean((env.DASHSCOPE_API_KEY || "").trim());
   return json({
     ok: true,
     service: "jfo-api",
+    llmMode: dashscope ? "dashscope" : hermes && env.HERMES_API_KEY ? "hermes" : "none",
+    dashscopeConfigured: dashscope,
     hermesConfigured: Boolean(hermes && env.HERMES_API_KEY),
     hermesChatUrl: hermes ? hermesChatCompletionsUrl(hermes) : null,
     apiRoot: apiRoot || null,
@@ -97,6 +103,40 @@ async function handleCitations(projectId: string): Promise<Response> {
     slots,
     map: citationMapFromSlots(slots),
   });
+}
+
+async function handleListFiles(env: Env, projectId: string): Promise<Response> {
+  type Row = {
+    id: string;
+    filename: string;
+    scope: string;
+    conversation_id: string | null;
+    mime: string | null;
+    created_at: string;
+    chunk_count: number;
+  };
+  const { results } = await env.DB.prepare(
+    `SELECT d.id, d.filename, d.scope, d.conversation_id, d.mime, d.created_at,
+            (SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count
+     FROM documents d
+     WHERE d.project_id = ?
+     ORDER BY d.created_at DESC
+     LIMIT 200`,
+  )
+    .bind(projectId)
+    .all<Row>();
+
+  const files = (results ?? []).map((r) => ({
+    id: r.id,
+    filename: r.filename,
+    scope: r.scope === "session" ? "session" : "package",
+    conversationId: r.conversation_id,
+    mime: r.mime,
+    createdAt: r.created_at,
+    chunkCount: Number(r.chunk_count) || 0,
+  }));
+
+  return json({ projectId, files });
 }
 
 async function handleUpload(
@@ -177,24 +217,18 @@ async function handleUpload(
   });
 }
 
-async function callHermes(
-  env: Env,
+async function callChatCompletions(
+  url: string,
+  apiKey: string,
+  model: string,
   messages: { role: string; content: string }[],
+  label: string,
 ): Promise<{ answer: string; raw: unknown }> {
-  const base = (env.HERMES_BASE_URL || "").trim().replace(/\/$/, "");
-  const key = (env.HERMES_API_KEY || "").trim();
-  const model = (env.HERMES_MODEL || "qwen-plus").trim();
-
-  if (!base || !key) {
-    throw new Error("HERMES_BASE_URL 或 HERMES_API_KEY 未配置");
-  }
-
-  const url = hermesChatCompletionsUrl(base);
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${key}`,
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({ model, messages, stream: false }),
   });
@@ -206,10 +240,10 @@ async function callHermes(
   } catch {
     if (/<!doctype html/i.test(rawText)) {
       throw new Error(
-        "Hermes 返回了网页而非 API（常见：Railway 域名指向 Dashboard 9119）。请确认 HERMES_BASE_URL 为 API 根地址，且路径为 /api/v1/chat/completions。",
+        `${label} 返回了网页而非 API。请检查服务地址（Railway 常见误指 Dashboard 9119）。`,
       );
     }
-    throw new Error(`Hermes 返回非 JSON（HTTP ${res.status}）`);
+    throw new Error(`${label} 返回非 JSON（HTTP ${res.status}）`);
   }
 
   if (!res.ok) {
@@ -217,7 +251,7 @@ async function callHermes(
       (raw.error as { message?: string } | undefined)?.message ||
       (raw.detail as string) ||
       (raw.message as string) ||
-      `Hermes HTTP ${res.status}`;
+      `${label} HTTP ${res.status}`;
     throw new Error(String(err));
   }
 
@@ -229,6 +263,37 @@ async function callHermes(
     "";
 
   return { answer: answer || "模型未返回正文。", raw };
+}
+
+async function callQwen(env: Env, messages: { role: string; content: string }[]) {
+  const key = (env.DASHSCOPE_API_KEY || "").trim();
+  const model = (env.HERMES_MODEL || "qwen-plus").trim();
+  const base = (
+    env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
+  )
+    .trim()
+    .replace(/\/$/, "");
+  if (!key) {
+    throw new Error("未配置 DASHSCOPE_API_KEY");
+  }
+  return callChatCompletions(`${base}/chat/completions`, key, model, messages, "千问");
+}
+
+async function callHermes(env: Env, messages: { role: string; content: string }[]) {
+  const base = (env.HERMES_BASE_URL || "").trim().replace(/\/$/, "");
+  const key = (env.HERMES_API_KEY || "").trim();
+  const model = (env.HERMES_MODEL || "qwen-plus").trim();
+  if (!base || !key) {
+    throw new Error("HERMES_BASE_URL 或 HERMES_API_KEY 未配置");
+  }
+  return callChatCompletions(hermesChatCompletionsUrl(base), key, model, messages, "Hermes");
+}
+
+async function callLlm(env: Env, messages: { role: string; content: string }[]) {
+  if ((env.DASHSCOPE_API_KEY || "").trim()) {
+    return callQwen(env, messages);
+  }
+  return callHermes(env, messages);
 }
 
 async function handleChat(request: Request, env: Env): Promise<Response> {
@@ -280,7 +345,7 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
   ];
 
   try {
-    const { answer } = await callHermes(env, messages);
+    const { answer } = await callLlm(env, messages);
     return json({
       answer,
       citationMap,
@@ -315,12 +380,15 @@ export default {
       ) {
         const projectId = path.split("/")[3];
         response = await handleCitations(projectId);
-      } else if (
-        /^\/api\/projects\/[^/]+\/files$/u.test(path) &&
-        request.method === "POST"
-      ) {
+      } else if (/^\/api\/projects\/[^/]+\/files$/u.test(path)) {
         const projectId = path.split("/")[3];
-        response = await handleUpload(request, env, projectId);
+        if (request.method === "GET") {
+          response = await handleListFiles(env, projectId);
+        } else if (request.method === "POST") {
+          response = await handleUpload(request, env, projectId);
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
       } else if (path === "/api/chat" && request.method === "POST") {
         response = await handleChat(request, env);
       } else {

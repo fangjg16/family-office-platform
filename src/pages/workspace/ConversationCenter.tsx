@@ -1453,10 +1453,16 @@ export default function ConversationCenter() {
         body: JSON.stringify(requestBody),
       });
 
+      const payload: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
-        throw new Error(`AI 接口返回 ${res.status}`);
+        const bodyAnswer =
+          payload && typeof payload === "object" && "answer" in payload
+            ? String((payload as { answer?: string }).answer ?? "")
+            : "";
+        throw new Error(
+          bodyAnswer.trim() || `AI 接口返回 ${res.status}`,
+        );
       }
-      const payload: unknown = await res.json();
       const citationFromApi =
         payload && typeof payload === "object" && "citationMap" in payload
           ? (payload as { citationMap?: Record<string, string> }).citationMap
