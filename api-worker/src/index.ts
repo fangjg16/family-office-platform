@@ -7,9 +7,16 @@ import {
 import { handleGetChatState, handlePutChatState } from "./chat-sync";
 import { extractPdfPlainText } from "./pdf-text";
 import {
+  detectChatMode,
+  deepAnalysisSystemLines,
+  extractKnowledgeNetworkHtml,
+  knowledgeNetworkSystemLines,
+  type ChatMode,
+} from "./chat-modes";
+import {
   chunkPlainText,
   isPlaceholderChunkText,
-  scoreChunks,
+  selectChunksForChat,
   type ChunkRow,
 } from "./search";
 import {
@@ -57,6 +64,9 @@ type ChatBody = {
 
 const FILE_ONLY_USER_PROMPT =
   /已发送\s*\d+\s*个文件|请基于资料继续|请阅读刚上传/u;
+
+/** 深度 / 知识网络模式注入资料摘录的上限（字符） */
+const DEEP_EXCERPT_MAX_CHARS = 95_000;
 
 const GITHUB_PAGES_ORIGIN = "https://fangjg16.github.io";
 
@@ -370,13 +380,19 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
   const slots = getCitationSlots(projectId);
   const citationMap = citationMapFromSlots(slots);
   const usedSlotIds = new Set<string>();
+  const chatMode: ChatMode = detectChatMode(message);
+  const deepMode = chatMode !== "standard";
 
   let excerptBlock = "（未检索到资料摘录；请明确说明依据不足，勿编造。）";
   try {
     const allChunks = await loadChunks(env, projectId, userId, body.conversationId);
     const fileHint = (body.files ?? []).join(" ");
     const searchQuery = fileHint ? `${message} ${fileHint}` : message;
-    let hits = scoreChunks(allChunks, searchQuery, 8);
+    let hits = selectChunksForChat(allChunks, searchQuery, {
+      deep: deepMode,
+      maxChars: DEEP_EXCERPT_MAX_CHARS,
+      topK: 8,
+    });
     if (hits.length === 0 && allChunks.length > 0 && FILE_ONLY_USER_PROMPT.test(message)) {
       hits = allChunks.filter((c) => !isPlaceholderChunkText(c.text)).slice(-8);
       if (hits.length === 0) hits = allChunks.slice(-8);
@@ -425,12 +441,23 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
 
   const tavilyConfigured = Boolean((env.TAVILY_API_KEY || "").trim());
 
+  const projectTitleHint =
+    projectId === "nn-fresh-port" ? "南宁东盟生鲜食品智慧港" : projectId;
+
   const systemParts = [
     "你是联合家办平台项目助手，服务机会型投资尽调场景。回答须综合三类依据：（1）【资料摘录】中的项目内事实；（2）若有【外部检索】则纳入公开网页信息；（3）为衔接上下文的行业/流程推论——须标明「推论」或「待核实」，不得冒充已核实事实。",
     "你不是「只能读上传 PDF」的机器人：项目内问题以摘录为主；公开信息、政策、市场动态在触发联网或摘录不足时，应结合外部检索或明确说明缺口与下一步（如建议用户说「查外部资料：…」）。",
     "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；与摘录中「南宁东盟生鲜食品智慧港」等明显同一项目时，应正常作答，勿因简称不同而拒绝。",
     "引用规范：上传资料用 [ID:n]（仅可引用摘录中实际出现且下列存在的编号）；网页用 [WEB:n] 并附 URL；勿混用。",
-    "若用户需要系统化公开信息搜集、更新项目知识网络 HTML 或 IC 备忘录，说明该深度工作流在 Hermes 投资智库 skills 中完成，本对话侧重即时问答与对照核实。",
+    ...(chatMode === "standard"
+      ? [
+          "若用户需要系统化公开信息搜集、更新项目知识网络 HTML 或 IC 备忘录，可在本对话中直接提出（平台将注入完整资料摘录并生成结构化结果或 HTML）；也可在 Hermes 投资智库中跑完整 skill 链。",
+        ]
+      : []),
+    ...(chatMode === "deep" ? deepAnalysisSystemLines() : []),
+    ...(chatMode === "knowledge_network"
+      ? [...deepAnalysisSystemLines(), ...knowledgeNetworkSystemLines(projectTitleHint)]
+      : []),
     ...tavilyCapabilitySystemLines(tavilyConfigured),
     "可用引用编号与文献名：",
     citationLines,
@@ -461,11 +488,15 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
 
   try {
     const { answer } = await callLlm(env, messages);
+    const knowledgeNetworkHtml =
+      chatMode === "knowledge_network" ? extractKnowledgeNetworkHtml(answer) : null;
     return json({
       answer,
       citationMap,
       projectId,
       externalSearch: usedExternalSearch,
+      chatMode,
+      knowledgeNetworkHtml,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

@@ -42,7 +42,7 @@ export const LIST_FILES_SQL = `
 
 /** 对话 RAG：项目资料包（共享）+ 当前用户当前对话的 session */
 export const LOAD_CHUNKS_SQL = `
-  SELECT c.id, c.document_id, c.chunk_index, c.text, d.filename
+  SELECT c.id, c.document_id, c.chunk_index, c.text, d.filename, d.scope
   FROM chunks c
   JOIN documents d ON d.id = c.document_id
   WHERE d.project_id = ?

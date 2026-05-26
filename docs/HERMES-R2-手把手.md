@@ -113,11 +113,38 @@ Invoke-RestMethod "$base/api/hermes/projects/nn-fresh-port/documents/abc-123/tex
 
 ## 第 7 步：在 Hermes 里说一句人话
 
+在 **Hermes Dashboard → CHAT**（需 `HERMES_DASHBOARD_TUI=1`）里发，**不要**在家办网站对话里测 curl。
+
 ```text
 请按 jfo-r2-materials：projectId=nn-fresh-port，拉取网站项目资料包全文（scope=package），然后执行 project-intake。
 ```
 
 Agent 应先 curl/API 拉 manifest，再读 text，再跑 intake。
+
+---
+
+## 网站对话也要「齐全」（已支持）
+
+家办 **项目对话** 会根据关键词自动切换模式（Worker `/api/chat`）：
+
+| 你说的话里包含 | 模式 |
+|----------------|------|
+| intake、五维、尽调覆盖度、深度分析… | **深度尽调**：注入项目资料包几乎全部正文 |
+| 知识网络、生成 HTML、更新 KB… | **知识网络**：同上 + 要求输出合域 Portable 主题 HTML |
+
+示例（在 **网站** 项目页对话里发）：
+
+```text
+基于已上传尽调资料，做 project-intake 五维覆盖度检查（✅/⚠️/❌）。
+```
+
+```text
+生成 [AI] 南宁东盟生鲜食品智慧港_知识网络.html，合域 Portable 主题，先含项目快照与已有资料板块。
+```
+
+回复若含 HTML，会出现 **「预览知识网络 HTML」** 按钮。
+
+部署 Worker 后生效：`cd api-worker` → `npx.cmd wrangler deploy`。
 
 ---
 
@@ -129,6 +156,8 @@ Agent 应先 curl/API 拉 manifest，再读 text，再跑 intake。
 | `hermesBridgeConfigured: false` | 没执行 `secret put JFO_INTERNAL_KEY` 或没 deploy |
 | manifest 空 | 网站该项目未上传项目资料包 |
 | PowerShell 不让跑 npx | 用 `npx.cmd` 代替 `npx` |
+| Hermes `Arrearage` / 400 | 阿里云百炼账户欠费或额度用尽；充值后 Restart Gateway，或检查 `DASHSCOPE_API_KEY` |
+| 网站说「无法 curl」 | 正常：网站不走终端；用深度/知识网络话术或 Hermes CHAT |
 
 ---
 

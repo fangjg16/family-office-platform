@@ -20,6 +20,10 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/workspace/ChatMarkdown";
+import {
+  extractKnowledgeNetworkHtmlFromMarkdown,
+  KnowledgeNetworkPreview,
+} from "@/components/workspace/KnowledgeNetworkPreview";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { cn } from "@/lib/utils";
 import {
@@ -1624,12 +1628,22 @@ export default function ConversationCenter() {
       }
       const rawAnswer = extractRagflowAnswer(payload) || "已收到消息，但未返回可展示答案。";
       const answer = formatCitationMarkers(rawAnswer + uploadNotes, mergedCitationMap);
+      const knFromApi =
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { knowledgeNetworkHtml?: unknown }).knowledgeNetworkHtml ===
+          "string"
+          ? (payload as { knowledgeNetworkHtml: string }).knowledgeNetworkHtml
+          : null;
+      const knowledgeNetworkHtml =
+        knFromApi?.trim() || extractKnowledgeNetworkHtmlFromMarkdown(answer);
       setLiveError(null);
       appendLiveMessage(effectiveConversationId, {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: answer,
         time: getCurrentDateTimeLabel(),
+        knowledgeNetworkHtml: knowledgeNetworkHtml || undefined,
       });
     } catch (error) {
       const raw =
@@ -1911,8 +1925,12 @@ export default function ConversationCenter() {
                       <div className="text-sm">
                         <ChatMarkdown text={m.content} variant="assistant" />
                       </div>
+                      {m.knowledgeNetworkHtml ? (
+                        <KnowledgeNetworkPreview html={m.knowledgeNetworkHtml} />
+                      ) : null}
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         ● Master Agent · AI 返回
+                        {m.knowledgeNetworkHtml ? " · 含知识网络 HTML" : ""}
                       </p>
                     </AiShell>
                   )
