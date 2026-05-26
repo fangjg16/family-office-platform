@@ -324,6 +324,96 @@ function buildApiHealthProbeUrl(chatEndpoint: string): string | null {
   return null;
 }
 
+const AGENT_JOB_POLL_MS = 3000;
+/** 深度任务最长轮询约 12 分钟（与 Worker waitForHermesRun 10 分钟 + 缓冲对齐） */
+const AGENT_JOB_MAX_POLLS = 240;
+
+type AgentJobPollPayload = {
+  status?: string;
+  answer?: string | null;
+  knowledgeNetworkHtml?: string | null;
+  error?: string | null;
+  progressLabel?: string;
+  hermesStatus?: string | null;
+  elapsedSec?: number;
+  deepPath?: string | null;
+};
+
+async function pollAgentJobUntilDone(params: {
+  apiBase: string;
+  userId: string;
+  jobId: string;
+  conversationKey: string;
+  assistantMsgId: string;
+  citationMap: Record<string, string>;
+  onUpdate: (
+    conversationKey: string,
+    messageId: string,
+    patch: Partial<LiveChatMessage>,
+  ) => void;
+  onError: (msg: string) => void;
+}): Promise<void> {
+  const {
+    apiBase,
+    userId,
+    jobId,
+    conversationKey,
+    assistantMsgId,
+    citationMap,
+    onUpdate,
+    onError,
+  } = params;
+  const root = apiBase.replace(/\/+$/u, "");
+  for (let i = 0; i < AGENT_JOB_MAX_POLLS; i++) {
+    await new Promise((r) => setTimeout(r, AGENT_JOB_POLL_MS));
+    try {
+      const url = `${root}/api/agent-jobs/${encodeURIComponent(jobId)}?userId=${encodeURIComponent(userId)}`;
+      const res = await fetch(url);
+      const data = (await res.json().catch(() => ({}))) as AgentJobPollPayload;
+      if (!res.ok) continue;
+      if (data.status === "running" || data.status === "pending") {
+        const label =
+          typeof data.progressLabel === "string" && data.progressLabel.trim()
+            ? data.progressLabel.trim()
+            : "深度分析进行中…";
+        onUpdate(conversationKey, assistantMsgId, { jobProgressLabel: label });
+      }
+      if (data.status === "completed") {
+        const raw = String(data.answer ?? "").trim() || "（任务已完成，但未返回正文。）";
+        const answer = formatCitationMarkers(raw, citationMap);
+        const kn =
+          (typeof data.knowledgeNetworkHtml === "string"
+            ? data.knowledgeNetworkHtml.trim()
+            : "") || extractKnowledgeNetworkHtmlFromMarkdown(answer);
+        onUpdate(conversationKey, assistantMsgId, {
+          content: answer,
+          knowledgeNetworkHtml: kn || undefined,
+          pendingJobId: undefined,
+          jobProgressLabel: undefined,
+        });
+        return;
+      }
+      if (data.status === "failed") {
+        const errText = String(data.error ?? "未知错误");
+        onUpdate(conversationKey, assistantMsgId, {
+          content: `深度分析未完成：${errText}`,
+          pendingJobId: undefined,
+          jobProgressLabel: undefined,
+        });
+        onError(errText);
+        return;
+      }
+    } catch {
+      /* 单轮轮询失败则继续 */
+    }
+  }
+  onUpdate(conversationKey, assistantMsgId, {
+    content:
+      "本轮页面轮询已结束，任务可能仍在后台运行。刷新本页会自动继续等待结果；若久无结果可重试一次。",
+    jobProgressLabel: "等待刷新后继续轮询…",
+  });
+}
+
 function ragflowChatLooksLikeDirectService(url: string): boolean {
   try {
     const u = new URL(url.trim());
@@ -1036,6 +1126,7 @@ export default function ConversationCenter() {
   const newConversationTimerRef = useRef<number | null>(null);
   const playbackTimeoutRef = useRef<number | null>(null);
   const playbackSeqRef = useRef(0);
+  const resumedAgentJobIdsRef = useRef<Set<string>>(new Set());
   const [searchParams] = useSearchParams();
   /** `.env` 设为 `0` / `false` 时可关闭主对话的「默认逐步演示」 */
   const playbackDisabledByEnv =
@@ -1412,6 +1503,50 @@ export default function ConversationCenter() {
     }));
   };
 
+  const updateLiveMessage = (
+    conversationKey: string,
+    messageId: string,
+    patch: Partial<LiveChatMessage>,
+  ) => {
+    setLiveMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationKey]: (prev[conversationKey] ?? []).map((m) =>
+        m.id === messageId ? { ...m, ...patch } : m,
+      ),
+    }));
+  };
+
+  /** 刷新页面后恢复未完成的 Hermes 异步任务轮询 */
+  useEffect(() => {
+    if (!userId || !chatSyncReady || !isLiveAiMode || !AI_CHAT_ENDPOINT) return;
+    const apiBase = apiBaseFromChatEndpoint(AI_CHAT_ENDPOINT);
+    const citationMap = { ...NANNING_CITATION_MAP, ...liveCitationMap };
+    for (const [conversationKey, messages] of Object.entries(liveMessagesByConversation)) {
+      for (const m of messages) {
+        if (m.role !== "assistant" || !m.pendingJobId) continue;
+        if (resumedAgentJobIdsRef.current.has(m.pendingJobId)) continue;
+        resumedAgentJobIdsRef.current.add(m.pendingJobId);
+        void pollAgentJobUntilDone({
+          apiBase,
+          userId,
+          jobId: m.pendingJobId,
+          conversationKey,
+          assistantMsgId: m.id,
+          citationMap,
+          onUpdate: updateLiveMessage,
+          onError: setLiveError,
+        });
+      }
+    }
+  }, [
+    userId,
+    chatSyncReady,
+    isLiveAiMode,
+    AI_CHAT_ENDPOINT,
+    liveMessagesByConversation,
+    liveCitationMap,
+  ]);
+
   const updateConversationPreview = (preview: string, fileNames: string[] = []) => {
     setConversations((prev) =>
       prev.map((t) =>
@@ -1611,8 +1746,12 @@ export default function ConversationCenter() {
           payload && typeof payload === "object" && "answer" in payload
             ? String((payload as { answer?: string }).answer ?? "")
             : "";
+        const bodyError =
+          payload && typeof payload === "object" && "error" in payload
+            ? String((payload as { error?: string }).error ?? "")
+            : "";
         throw new Error(
-          bodyAnswer.trim() || `AI 接口返回 ${res.status}`,
+          bodyAnswer.trim() || bodyError.trim() || `AI 接口返回 ${res.status}`,
         );
       }
       const citationFromApi =
@@ -1627,6 +1766,43 @@ export default function ConversationCenter() {
       if (citationFromApi && Object.keys(citationFromApi).length > 0) {
         setLiveCitationMap((prev) => ({ ...prev, ...citationFromApi }));
       }
+
+      const isAsyncJob =
+        payload &&
+        typeof payload === "object" &&
+        (payload as { async?: boolean }).async === true &&
+        typeof (payload as { jobId?: unknown }).jobId === "string";
+
+      if (isAsyncJob) {
+        const jobId = (payload as { jobId: string }).jobId;
+        const placeholderAnswer = formatCitationMarkers(
+          String((payload as { answer?: string }).answer ?? "正在深度分析…"),
+          mergedCitationMap,
+        );
+        const assistantId = `assistant-${Date.now()}`;
+        setLiveError(null);
+        appendLiveMessage(effectiveConversationId, {
+          id: assistantId,
+          role: "assistant",
+          content: placeholderAnswer,
+          time: getCurrentDateTimeLabel(),
+          pendingJobId: jobId,
+          jobProgressLabel: "任务已提交，正在连接引擎…",
+        });
+        resumedAgentJobIdsRef.current.add(jobId);
+        void pollAgentJobUntilDone({
+          apiBase: apiBaseFromChatEndpoint(AI_CHAT_ENDPOINT),
+          userId,
+          jobId,
+          conversationKey: effectiveConversationId,
+          assistantMsgId: assistantId,
+          citationMap: mergedCitationMap,
+          onUpdate: updateLiveMessage,
+          onError: setLiveError,
+        });
+        return;
+      }
+
       const rawAnswer = extractRagflowAnswer(payload) || "已收到消息，但未返回可展示答案。";
       const answer = formatCitationMarkers(rawAnswer + uploadNotes, mergedCitationMap);
       const knFromApi =
@@ -1926,11 +2102,25 @@ export default function ConversationCenter() {
                       <div className="text-sm">
                         <ChatMarkdown text={m.content} variant="assistant" />
                       </div>
+                      {m.pendingJobId ? (
+                        <div className="mt-3 flex flex-col gap-1.5">
+                          <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
+                            <span className="text-sm font-medium text-muted-foreground">
+                              {m.jobProgressLabel?.trim() || "深度分析中，请稍候…"}
+                            </span>
+                          </div>
+                          <p className="text-[11px] text-muted-foreground/90">
+                            可保持本页打开；刷新后会自动继续等待结果。
+                          </p>
+                        </div>
+                      ) : null}
                       {m.knowledgeNetworkHtml ? (
                         <KnowledgeNetworkPreview html={m.knowledgeNetworkHtml} />
                       ) : null}
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         ● Master Agent · AI 返回
+                        {m.pendingJobId ? " · 后台分析" : ""}
                         {m.knowledgeNetworkHtml ? " · 含知识网络 HTML" : ""}
                       </p>
                     </AiShell>

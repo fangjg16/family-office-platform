@@ -10,11 +10,30 @@ import {
   detectSkillIntent,
   extractKnowledgeNetworkHtml,
   shouldForceExternalSearch,
+  shouldRouteToHermes,
   skillIntentSystemLines,
   usesFullPackageCorpus,
   websitePlatformIdentityLines,
   type SkillIntent,
 } from "./chat-modes";
+import {
+  completeAgentJob,
+  createAgentJob,
+  failAgentJob,
+  getAgentJob,
+  markAgentJobRunning,
+} from "./agent-jobs";
+import {
+  buildHermesAgentInstructions,
+  finalizeHermesOutput,
+  isHermesAgentConfigured,
+  normalizeHermesApiKey,
+  probeHermesAuth,
+  probeHermesRunsStart,
+  pollHermesRun,
+  startHermesRun,
+  waitForHermesRun,
+} from "./hermes-agent";
 import {
   chunkPlainText,
   isPlaceholderChunkText,
@@ -35,11 +54,18 @@ import {
   tavilyCapabilitySystemLines,
   wantsExternalSearch,
 } from "./tavily-search";
+import {
+  assertValidHermesBaseUrl,
+  hermesChatCompletionsUrl,
+  listHermesChatCompletionsUrls,
+  normalizeHermesBaseUrl,
+  resolveHermesApiRoot,
+} from "./hermes-url";
 
 export interface Env {
   FILES: R2Bucket;
   DB: D1Database;
-  /** 推荐：直连千问，绕过 Railway Hermes 鉴权问题 */
+  /** 可选：Hermes 未配置时，同步快答降级为直连千问 */
   DASHSCOPE_API_KEY?: string;
   DASHSCOPE_BASE_URL?: string;
   HERMES_BASE_URL?: string;
@@ -71,17 +97,6 @@ const FILE_ONLY_USER_PROMPT =
 const DEEP_EXCERPT_MAX_CHARS = 95_000;
 
 const GITHUB_PAGES_ORIGIN = "https://fangjg16.github.io";
-
-/** Railway 一键模板：公网域名多为 Dashboard(9119)，OpenAI 兼容 API 在 /api/v1/... */
-function resolveHermesApiRoot(base: string): string {
-  const trimmed = base.trim().replace(/\/$/, "");
-  if (trimmed.endsWith("/api")) return trimmed;
-  return `${trimmed}/api`;
-}
-
-function hermesChatCompletionsUrl(base: string): string {
-  return `${resolveHermesApiRoot(base)}/v1/chat/completions`;
-}
 
 function corsHeaders(origin: string | null, env: Env): HeadersInit {
   const allowed = (env.ALLOWED_ORIGIN || GITHUB_PAGES_ORIGIN).trim();
@@ -125,16 +140,46 @@ async function handleHealth(env: Env): Promise<Response> {
   const hermes = (env.HERMES_BASE_URL || "").trim();
   const apiRoot = hermes ? resolveHermesApiRoot(hermes) : "";
   const dashscope = Boolean((env.DASHSCOPE_API_KEY || "").trim());
+  const hermesUnified = isHermesAgentConfigured(env);
   const tavily = Boolean((env.TAVILY_API_KEY || "").trim());
   const hermesBridge = Boolean((env.JFO_INTERNAL_KEY || "").trim());
+  const hermesAuth =
+    hermesUnified ? await probeHermesAuth(env) : { ok: false, httpStatus: 0, probeUrl: "", bodyPreview: "" };
+  const hermesRuns = hermesUnified
+    ? await probeHermesRunsStart(env)
+    : { ok: false, httpStatus: 0, probeUrl: "", bodyPreview: "", runId: null };
   return json({
     ok: true,
     service: "jfo-api",
-    llmMode: dashscope ? "dashscope" : hermes && env.HERMES_API_KEY ? "hermes" : "none",
+    llmMode: hermesUnified ? "hermes-unified" : dashscope ? "dashscope-fallback" : "none",
+    llmFastPath: hermesUnified ? "hermes-chat-completions" : dashscope ? "dashscope" : null,
+    llmDeepPath: hermesUnified ? "hermes-runs-async" : dashscope ? "dashscope-deep-sync" : null,
     dashscopeConfigured: dashscope,
+    dashscopeFallbackAvailable: dashscope && hermesUnified,
     tavilyConfigured: tavily,
     hermesBridgeConfigured: hermesBridge,
     hermesConfigured: Boolean(hermes && env.HERMES_API_KEY),
+    hermesAgentRunsConfigured: hermesUnified,
+    hermesAuthOk: hermesAuth.ok,
+    hermesAuthHttpStatus: hermesAuth.httpStatus,
+    hermesAuthProbeUrl: hermesAuth.probeUrl || null,
+    hermesAuthHint: hermesAuth.ok
+      ? "Hermes GET /v1/models 密钥有效"
+      : hermesAuth.httpStatus === 401
+        ? "Hermes 返回 401：Railway API_SERVER_KEY 与 Worker HERMES_API_KEY 须完全一致（纯 ASCII）"
+        : hermesAuth.httpStatus === 404 && (hermesAuth.probeUrl || "").includes("/api/v1")
+          ? "误探测 /api/v1/models（8642 请用 /v1/models）；若本地 runs 已通，请 wrangler secret put HERMES_API_KEY 后 deploy"
+          : hermesAuth.bodyPreview || "Hermes 鉴权探测失败",
+    hermesRunsOk: hermesRuns.ok,
+    hermesRunsHttpStatus: hermesRuns.httpStatus,
+    hermesRunsProbeUrl: hermesRuns.probeUrl || null,
+    hermesRunsHint: hermesRuns.ok
+      ? "POST /v1/runs 可用"
+      : hermesRuns.httpStatus === 401
+        ? "Runs 401：请 npx.cmd wrangler secret put HERMES_API_KEY（与 Railway API_SERVER_KEY 相同）"
+        : hermesAuth.ok
+          ? `models 通但 runs 失败（HTTP ${hermesRuns.httpStatus}）：${hermesRuns.bodyPreview}`
+          : `Runs 探测失败（HTTP ${hermesRuns.httpStatus}）：${hermesRuns.bodyPreview || "见 hermesAuthHint"}`,
     hermesChatUrl: hermes ? hermesChatCompletionsUrl(hermes) : null,
     apiRoot: apiRoot || null,
     origin: env.ALLOWED_ORIGIN || GITHUB_PAGES_ORIGIN,
@@ -349,23 +394,317 @@ async function callQwen(env: Env, messages: { role: string; content: string }[])
 }
 
 async function callHermes(env: Env, messages: { role: string; content: string }[]) {
-  const base = (env.HERMES_BASE_URL || "").trim().replace(/\/$/, "");
-  const key = (env.HERMES_API_KEY || "").trim();
+  const rawBase = (env.HERMES_BASE_URL || "").trim();
+  const key = normalizeHermesApiKey(env.HERMES_API_KEY);
   const model = (env.HERMES_MODEL || "qwen-plus").trim();
-  if (!base || !key) {
+  if (!rawBase || !key) {
     throw new Error("HERMES_BASE_URL 或 HERMES_API_KEY 未配置");
   }
-  return callChatCompletions(hermesChatCompletionsUrl(base), key, model, messages, "Hermes");
-}
-
-async function callLlm(env: Env, messages: { role: string; content: string }[]) {
-  if ((env.DASHSCOPE_API_KEY || "").trim()) {
-    return callQwen(env, messages);
+  assertValidHermesBaseUrl(rawBase);
+  const urls = listHermesChatCompletionsUrls(rawBase);
+  let lastErr = "Hermes chat 不可用";
+  for (const url of urls) {
+    try {
+      return await callChatCompletions(url, key, model, messages, "Hermes");
+    } catch (e) {
+      lastErr = e instanceof Error ? e.message : String(e);
+      if (/401|403|404|405/u.test(lastErr)) continue;
+      throw e;
+    }
   }
-  return callHermes(env, messages);
+  throw new Error(lastErr);
 }
 
-async function handleChat(request: Request, env: Env): Promise<Response> {
+function isHermesAuthError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("unauthorized") ||
+    m.includes("invalid api key") ||
+    m.includes("authentication") ||
+    /\b401\b/.test(m) ||
+    /\b403\b/.test(m)
+  );
+}
+
+/** Hermes 已接通但上游模型 URL/密钥未配好时，可降级千问 */
+function isHermesUpstreamMisconfigError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("invalid url") ||
+    m.includes("undefined") ||
+    m.includes("返回了网页") ||
+    m.includes("enotfound") ||
+    m.includes("fetch failed")
+  );
+}
+
+function shouldFallbackToDashscope(hermesErrorMessage: string): boolean {
+  return isHermesAuthError(hermesErrorMessage) || isHermesUpstreamMisconfigError(hermesErrorMessage);
+}
+
+async function callLlm(
+  env: Env,
+  messages: { role: string; content: string }[],
+): Promise<{ answer: string; raw: unknown; llmBackend: string }> {
+  const dashscopeReady = Boolean((env.DASHSCOPE_API_KEY || "").trim());
+
+  if (isHermesAgentConfigured(env)) {
+    try {
+      const result = await callHermes(env, messages);
+      return { ...result, llmBackend: "hermes-chat" };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (dashscopeReady && shouldFallbackToDashscope(msg)) {
+        const result = await callQwen(env, messages);
+        return { ...result, llmBackend: "dashscope-fallback" };
+      }
+      throw e;
+    }
+  }
+
+  if (dashscopeReady) {
+    const result = await callQwen(env, messages);
+    return { ...result, llmBackend: "dashscope" };
+  }
+
+  throw new Error("未配置 HERMES_BASE_URL/HERMES_API_KEY，也未配置 DASHSCOPE_API_KEY");
+}
+
+async function processHermesJobBackground(
+  env: Env,
+  jobId: string,
+  runId: string,
+  intent: SkillIntent,
+): Promise<void> {
+  try {
+    const result = await waitForHermesRun(env, runId, { maxWaitMs: 10 * 60_000 });
+    if (result.status === "completed") {
+      const finalized = finalizeHermesOutput(result.output, intent);
+      await completeAgentJob(env, jobId, finalized);
+      return;
+    }
+    await failAgentJob(env, jobId, result.error || `Hermes 任务结束：${result.status}`);
+  } catch (e) {
+    await failAgentJob(env, jobId, e instanceof Error ? e.message : String(e));
+  }
+}
+
+/** Railway 公网未开放 POST /v1/runs 时，用 Hermes chat/completions 跑深度任务（无 tool 进度） */
+async function processHermesJobViaChat(
+  env: Env,
+  jobId: string,
+  intent: SkillIntent,
+  params: {
+    message: string;
+    history: { role: string; content: string }[];
+    instructions: string;
+  },
+): Promise<void> {
+  try {
+    const messages = [
+      { role: "system", content: params.instructions },
+      ...params.history.slice(-12),
+      { role: "user", content: params.message },
+    ];
+    const { answer } = await callHermes(env, messages);
+    const finalized = finalizeHermesOutput(answer, intent);
+    await completeAgentJob(env, jobId, finalized);
+  } catch (e) {
+    await failAgentJob(env, jobId, e instanceof Error ? e.message : String(e));
+  }
+}
+
+async function handleChatViaHermes(
+  env: Env,
+  ctx: ExecutionContext,
+  params: {
+    projectId: string;
+    userId: string;
+    conversationId?: string;
+    message: string;
+    history: { role: string; content: string }[];
+    chatMode: SkillIntent;
+    citationMap: Record<string, string>;
+    projectTitleHint: string;
+  },
+): Promise<Response> {
+  const jobId = crypto.randomUUID();
+  try {
+    await createAgentJob(env, {
+      id: jobId,
+      projectId: params.projectId,
+      userId: params.userId,
+      conversationId: params.conversationId,
+      skillIntent: params.chatMode,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const missingTable = /no such table:\s*agent_jobs/i.test(msg);
+    return json(
+      {
+        error: missingTable
+          ? "agent_jobs 表未创建。请在 api-worker 目录执行：npx wrangler d1 execute jfo-meta --remote --file=./migrations/0004_agent_jobs.sql"
+          : `无法创建异步任务：${msg}`,
+        answer: missingTable
+          ? "深度分析暂不可用：数据库未迁移。请联系管理员执行 D1 迁移（agent_jobs 表）后重试。"
+          : `深度分析启动失败：${msg}`,
+        citationMap: params.citationMap,
+        projectId: params.projectId,
+        async: false,
+      },
+      missingTable ? 503 : 500,
+    );
+  }
+
+  const sessionId = `jfo-${params.projectId}-${params.conversationId || "default"}`;
+  const instructions = buildHermesAgentInstructions(
+    env,
+    params.chatMode,
+    params.projectId,
+    params.projectTitleHint,
+  );
+
+  const { runId, error } = await startHermesRun(env, {
+    userMessage: params.message,
+    sessionId,
+    instructions,
+    history: params.history,
+  });
+
+  if (error || !runId) {
+    const fallbackId = `chat-fallback-${jobId}`;
+    await markAgentJobRunning(env, jobId, fallbackId);
+    ctx.waitUntil(
+      processHermesJobViaChat(env, jobId, params.chatMode, {
+        message: params.message,
+        history: params.history,
+        instructions,
+      }),
+    );
+    return json({
+      async: true,
+      jobId,
+      status: "running",
+      answer:
+        "已提交深度分析。引擎走长对话兼容模式（Runs 未启动时自动降级），通常 3～10 分钟；下方会显示实时进度。",
+      citationMap: params.citationMap,
+      projectId: params.projectId,
+      chatMode: params.chatMode,
+      skillIntent: params.chatMode,
+      hermesRunId: fallbackId,
+      deepPath: "hermes-chat-fallback",
+    });
+  }
+
+  await markAgentJobRunning(env, jobId, runId);
+  ctx.waitUntil(processHermesJobBackground(env, jobId, runId, params.chatMode));
+
+  return json({
+    async: true,
+    jobId,
+    status: "running",
+    answer:
+      "已提交深度分析任务，正在由后台引擎处理（通常 1～5 分钟）。下方会显示实时进度，完成后自动更新。",
+    citationMap: params.citationMap,
+    projectId: params.projectId,
+    chatMode: params.chatMode,
+    skillIntent: params.chatMode,
+    hermesRunId: runId,
+    deepPath: "hermes-runs",
+  });
+}
+
+function formatJobElapsedLabel(elapsedSec: number): string {
+  if (elapsedSec < 60) return `${elapsedSec} 秒`;
+  const m = Math.floor(elapsedSec / 60);
+  const s = elapsedSec % 60;
+  return s > 0 ? `${m} 分 ${s} 秒` : `${m} 分钟`;
+}
+
+function buildAgentJobProgressLabel(
+  row: {
+    status: string;
+    hermes_run_id: string | null;
+    created_at: string;
+  },
+  hermesStatus: string | null,
+): string {
+  const elapsedSec = Math.max(
+    0,
+    Math.floor((Date.now() - Date.parse(row.created_at)) / 1000),
+  );
+  const waited = formatJobElapsedLabel(elapsedSec);
+  if (row.status === "pending") return `任务排队中（已等待 ${waited}）`;
+  const runId = row.hermes_run_id || "";
+  if (runId.startsWith("chat-fallback-")) {
+    return `长对话生成中（已等待 ${waited}，兼容模式）`;
+  }
+  const hs = (hermesStatus || "").toLowerCase();
+  if (hs === "queued") return `已排队，等待引擎启动（已等待 ${waited}）`;
+  if (hs === "running" || hs === "started") return `引擎执行中（已等待 ${waited}）`;
+  if (hs) return `后台处理中 · ${hs}（已等待 ${waited}）`;
+  return `后台处理中（已等待 ${waited}）`;
+}
+
+async function handleAgentJobPoll(
+  env: Env,
+  jobId: string,
+  userId: string,
+): Promise<Response> {
+  const row = await getAgentJob(env, jobId, userId);
+  if (!row) return json({ error: "任务不存在或无权访问" }, 404);
+
+  const runId = row.hermes_run_id || "";
+  const deepPath = runId.startsWith("chat-fallback-")
+    ? "hermes-chat-fallback"
+    : runId
+      ? "hermes-runs"
+      : null;
+  const elapsedSec = Math.max(
+    0,
+    Math.floor((Date.now() - Date.parse(row.created_at)) / 1000),
+  );
+
+  let hermesStatus: string | null = null;
+  if (
+    row.status === "running" &&
+    runId &&
+    !runId.startsWith("chat-fallback-") &&
+    isHermesAgentConfigured(env)
+  ) {
+    try {
+      const snap = await pollHermesRun(env, runId);
+      hermesStatus = snap.status;
+    } catch {
+      hermesStatus = null;
+    }
+  }
+
+  const progressLabel =
+    row.status === "completed"
+      ? "已完成"
+      : row.status === "failed"
+        ? "失败"
+        : buildAgentJobProgressLabel(row, hermesStatus);
+
+  return json({
+    jobId: row.id,
+    status: row.status,
+    answer: row.answer,
+    knowledgeNetworkHtml: row.knowledge_network_html,
+    error: row.error,
+    skillIntent: row.skill_intent,
+    projectId: row.project_id,
+    hermesRunId: row.hermes_run_id,
+    updatedAt: row.updated_at,
+    elapsedSec,
+    hermesStatus,
+    deepPath,
+    progressLabel,
+  });
+}
+
+async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const body = (await request.json()) as ChatBody;
   const projectId = body.projectId?.trim();
   const message = body.message?.trim();
@@ -383,7 +722,28 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
   const citationMap = citationMapFromSlots(slots);
   const usedSlotIds = new Set<string>();
   const chatMode: SkillIntent = detectSkillIntent(message);
-  const deepMode = usesFullPackageCorpus(chatMode);
+  const projectTitleHint =
+    projectId === "nn-fresh-port" ? "南宁东盟生鲜食品智慧港" : projectId;
+
+  const history = (body.history ?? []).filter(
+    (m) => m.role === "user" || m.role === "assistant",
+  );
+
+  if (shouldRouteToHermes(chatMode) && isHermesAgentConfigured(env)) {
+    return handleChatViaHermes(env, ctx, {
+      projectId,
+      userId,
+      conversationId: body.conversationId,
+      message,
+      history,
+      chatMode,
+      citationMap,
+      projectTitleHint,
+    });
+  }
+
+  const deepMode =
+    !isHermesAgentConfigured(env) && usesFullPackageCorpus(chatMode);
 
   let excerptBlock = "（未检索到资料摘录；请明确说明依据不足，勿编造。）";
   try {
@@ -443,9 +803,6 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
 
   const tavilyConfigured = Boolean((env.TAVILY_API_KEY || "").trim());
 
-  const projectTitleHint =
-    projectId === "nn-fresh-port" ? "南宁东盟生鲜食品智慧港" : projectId;
-
   const systemParts = [
     ...websitePlatformIdentityLines(),
     "你是联合家办平台项目助手，服务机会型投资尽调场景。回答须综合三类依据：（1）【资料摘录】中的项目内事实；（2）若有【外部检索】则纳入公开网页信息；（3）为衔接上下文的行业/流程推论——须标明「推论」或「待核实」，不得冒充已核实事实。",
@@ -454,7 +811,9 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
     "引用规范：上传资料用 [ID:n]（仅可引用摘录中实际出现且下列存在的编号）；网页用 [WEB:n] 并附 URL；勿混用。",
     ...(chatMode === "standard"
       ? [
-          "若用户需要全面分析、尽调清单、风险矩阵、回报测算、知识网络或 IC 备忘录，在本对话直接说明即可；平台会注入更完整资料摘录并输出结构化结果。",
+          isHermesAgentConfigured(env)
+            ? "轻问快答：主要依据下方【资料摘录】与对话上下文作答；若用户明确提出尽调清单、知识网络、IC 备忘录等深度交付，说明将转入后台深度分析（勿自称无法完成）。"
+            : "若用户需要全面分析、尽调清单、风险矩阵、回报测算、知识网络或 IC 备忘录，在本对话直接说明即可；平台会注入更完整资料摘录并输出结构化结果。",
         ]
       : skillIntentSystemLines(chatMode, projectTitleHint)),
     ...tavilyCapabilitySystemLines(tavilyConfigured),
@@ -475,10 +834,6 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
     );
   }
 
-  const history = (body.history ?? []).filter(
-    (m) => m.role === "user" || m.role === "assistant",
-  );
-
   const messages = [
     { role: "system", content: systemParts.join("\n") },
     ...history.map((m) => ({ role: m.role, content: m.content })),
@@ -486,7 +841,7 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
   ];
 
   try {
-    const { answer } = await callLlm(env, messages);
+    const { answer, llmBackend } = await callLlm(env, messages);
     const knowledgeNetworkHtml =
       chatMode === "knowledge_network" ? extractKnowledgeNetworkHtml(answer) : null;
     return json({
@@ -497,6 +852,7 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
       chatMode,
       skillIntent: chatMode,
       knowledgeNetworkHtml,
+      llmBackend,
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -505,7 +861,7 @@ async function handleChat(request: Request, env: Env): Promise<Response> {
 }
 
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const origin = request.headers.get("Origin");
     const cors = corsHeaders(origin, env);
 
@@ -545,7 +901,15 @@ export default {
           response = json({ error: "Method Not Allowed" }, 405);
         }
       } else if (path === "/api/chat" && request.method === "POST") {
-        response = await handleChat(request, env);
+        response = await handleChat(request, env, ctx);
+      } else if (/^\/api\/agent-jobs\/[^/]+$/u.test(path) && request.method === "GET") {
+        const jobId = path.split("/")[3];
+        const uid = normalizeUserId(url.searchParams.get("userId"));
+        if (!uid) {
+          response = json({ error: "缺少 userId 查询参数" }, 400);
+        } else {
+          response = await handleAgentJobPoll(env, jobId, uid);
+        }
       } else if (/^\/api\/users\/[^/]+\/chat-state$/u.test(path)) {
         const routeUserId = normalizeUserId(path.split("/")[3]);
         if (!routeUserId) {

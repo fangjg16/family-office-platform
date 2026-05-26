@@ -123,16 +123,18 @@ Agent 应先 curl/API 拉 manifest，再读 text，再跑 intake。
 
 ---
 
-## 网站对话也要「齐全」（已支持）
+## 网站对话（Hermes 统一入口，已支持）
 
-家办 **项目对话** 会根据关键词自动切换模式（Worker `/api/chat`）：
+已配置 `HERMES_BASE_URL` + `HERMES_API_KEY` 时，**网站只对接一个 Hermes**，Worker 自动分两条路：
 
-| 你说的话里包含 | 模式 |
-|----------------|------|
-| intake、五维、尽调覆盖度、深度分析… | **深度尽调**：注入项目资料包几乎全部正文 |
-| 知识网络、生成 HTML、更新 KB… | **知识网络**：同上 + 要求输出合域 Portable 主题 HTML |
+| 类型 | 触发 | 技术路径 | 体感 |
+|------|------|----------|------|
+| **轻问快答** | 普通问答、查条款、简短分析 | Hermes `chat/completions` + Worker **RAG 摘录**（约 8 段） | 通常数秒～十几秒 |
+| **深度交付** | 尽调清单、知识网络、IC 备忘录、五维覆盖度等 | Hermes `/v1/runs` 异步 + 真 skills | 1～5 分钟，对话内自动刷新 |
 
-示例（在 **网站** 项目页对话里发）：
+未配置 Hermes 时，才降级为 Worker 直连千问（`DASHSCOPE_API_KEY`）；深度模式仍可能同步塞入近 9.5 万字摘录。
+
+关键词仍由 Worker 识别（用户无需说 skill 名）。示例：
 
 ```text
 基于已上传尽调资料，做 project-intake 五维覆盖度检查（✅/⚠️/❌）。
@@ -144,6 +146,24 @@ Agent 应先 curl/API 拉 manifest，再读 text，再跑 intake。
 
 回复若含 HTML，会出现 **「预览知识网络 HTML」** 按钮。
 
+### 深度任务异步（解决 524）
+
+重任务（尽调清单、知识网络、IC 备忘录等，非普通轻问）在 Worker 已配置 `HERMES_BASE_URL` + `HERMES_API_KEY` 时：
+
+1. `POST /api/chat` 立即返回 `{ async: true, jobId, answer: "已提交…" }`
+2. Worker 后台 `POST Hermes /api/v1/runs` 并轮询完成
+3. 前端轮询 `GET /api/agent-jobs/:jobId?userId=...`，完成后自动更新对话
+
+**部署前必做：**
+
+```powershell
+cd api-worker
+npx.cmd wrangler d1 execute jfo-meta --remote --file=./migrations/0004_agent_jobs.sql
+npx.cmd wrangler deploy
+```
+
+`HERMES_BASE_URL` 须指向 **API 端口**（如 Railway `https://xxx.up.railway.app`，Worker 会自动拼 `/api/v1/runs`），且 Railway 开启 `API_SERVER_ENABLED=true`。
+
 部署 Worker 后生效：`cd api-worker` → `npx.cmd wrangler deploy`。
 
 ---
@@ -152,7 +172,9 @@ Agent 应先 curl/API 拉 manifest，再读 text，再跑 intake。
 
 | 现象 | 处理 |
 |------|------|
-| `Unauthorized` | Worker 与 Railway 的 `JFO_INTERNAL_KEY` 不一致，或 deploy 前没 secret |
+| `Invalid URL` / `undefined`（轻问） | ① Worker 重设 `HERMES_BASE_URL` 为 **`https://hermes-agent-production-02eb.up.railway.app`**（必须带 `https://`）；② Railway 配 `DASHSCOPE_API_KEY` 并在容器执行 `hermes config set model.base_url https://dashscope.aliyuncs.com/compatible-mode/v1` 后 Restart |
+| `Unauthorized`（网站轻问） | Worker 的 `HERMES_API_KEY` 与 Railway **`API_SERVER_KEY` 不一致**（不是 `JFO_INTERNAL_KEY`）。在 Worker 执行 `wrangler secret put HERMES_API_KEY` 粘贴与 Railway 完全相同的值后 `wrangler deploy`。若已配 `DASHSCOPE_API_KEY`，deploy 新版 Worker 后轻问会自动降级千问。 |
+| `Unauthorized`（Hermes curl 资料） | `JFO_INTERNAL_KEY` 与 Worker 不一致，或 deploy 前没 secret |
 | `hermesBridgeConfigured: false` | 没执行 `secret put JFO_INTERNAL_KEY` 或没 deploy |
 | manifest 空 | 网站该项目未上传项目资料包 |
 | PowerShell 不让跑 npx | 用 `npx.cmd` 代替 `npx` |

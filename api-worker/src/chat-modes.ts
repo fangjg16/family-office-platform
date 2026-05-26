@@ -71,6 +71,11 @@ export function shouldForceExternalSearch(intent: SkillIntent): boolean {
   return intent === "public_info_search";
 }
 
+/** 非轻问任务走 Hermes Agent（真 skills），需配置 HERMES_BASE_URL + HERMES_API_KEY */
+export function shouldRouteToHermes(intent: SkillIntent): boolean {
+  return intent !== "standard";
+}
+
 export function websitePlatformIdentityLines(): string[] {
   return [
     "【平台身份】你是「联合家办平台」项目页里的唯一 AI 助手。用户不知道、也不需要知道 Hermes、skill、插件、合域、Opportunistic 等后台实现。",

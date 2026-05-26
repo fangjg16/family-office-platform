@@ -34,7 +34,6 @@ import { getProjectRole, getUserById, WORKSPACE_USERS } from "@/workspace/worksp
 import type { WorkspaceRole } from "@/workspace/types";
 
 const NANNING_PROJECT_ID = "nn-fresh-port";
-const NANNING_PROJECT_VISIBLE_KEY = "workspace-nanning-project-visible";
 
 /** 演示快捷填充：在对应输入框按空格键写入 */
 const DEMO_CREATE_PROJECT_NAME = "南宁生鲜智慧港";
@@ -221,15 +220,10 @@ export default function ProjectOverview() {
   const [newProjectFiles, setNewProjectFiles] = useState<File[]>([]);
   const [createHint, setCreateHint] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [pendingRevealNanning, setPendingRevealNanning] = useState(false);
   const [highlightProjectId, setHighlightProjectId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const createFlowTimerRef = useRef<number | null>(null);
   const highlightTimerRef = useRef<number | null>(null);
-  const [nanningProjectVisible, setNanningProjectVisible] = useState<boolean>(() => {
-    if (typeof window === "undefined") return false;
-    return window.sessionStorage.getItem(NANNING_PROJECT_VISIBLE_KEY) === "1";
-  });
 
   useEffect(() => {
     const id = loadSessionUserId();
@@ -259,10 +253,7 @@ export default function ProjectOverview() {
   }, [newProjectOpenness]);
 
   const user = getUserById(userId);
-  const visibleProjects = ALL_PROJECTS.filter(
-    (p) => p.id !== NANNING_PROJECT_ID || nanningProjectVisible
-  ).sort((a, b) => {
-    if (!nanningProjectVisible) return 0;
+  const visibleProjects = [...ALL_PROJECTS].sort((a, b) => {
     if (a.id === NANNING_PROJECT_ID) return -1;
     if (b.id === NANNING_PROJECT_ID) return 1;
     return 0;
@@ -284,9 +275,6 @@ export default function ProjectOverview() {
       })
     : [];
 
-  const isNanningDemoName = (name: string) =>
-    /(南宁.*(智慧港|生鲜)|生鲜.*智慧港|智慧港)/.test(name.trim());
-
   const resetCreateForm = () => {
     setNewProjectName("");
     setNewProjectDetail("");
@@ -295,6 +283,26 @@ export default function ProjectOverview() {
     setParticipants([]);
     setNewProjectFiles([]);
     setCreatingProject(false);
+  };
+
+  const confirmCreateProject = () => {
+    if (creatingProject) return;
+    const name = newProjectName.trim();
+    if (!name) {
+      setCreateHint("请先填写项目名称。");
+      return;
+    }
+    setCreatingProject(true);
+    if (createFlowTimerRef.current !== null) {
+      window.clearTimeout(createFlowTimerRef.current);
+    }
+    createFlowTimerRef.current = window.setTimeout(() => {
+      setCreateHint(
+        "演示流程：项目尚未写入数据库。正式「新建项目」能力开发中；当前请从列表进入已有项目（如南宁生鲜食品智慧港）使用对话与上传。",
+      );
+      setShowCreateModal(false);
+      resetCreateForm();
+    }, 180);
   };
 
   const participantOptions = Object.values(WORKSPACE_USERS)
@@ -344,26 +352,6 @@ export default function ProjectOverview() {
 
   const removeDemoFile = (idx: number) => {
     setNewProjectFiles((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const confirmCreateProject = () => {
-    if (creatingProject) return;
-    const name = newProjectName.trim();
-    if (!name) {
-      setCreateHint("请先填写项目名称。");
-      return;
-    }
-    setCreatingProject(true);
-    if (createFlowTimerRef.current !== null) {
-      window.clearTimeout(createFlowTimerRef.current);
-    }
-    createFlowTimerRef.current = window.setTimeout(() => {
-      const shouldRevealNanning = isNanningDemoName(name);
-      setPendingRevealNanning(shouldRevealNanning);
-      setCreateHint("您为当前项目的创建人，且在管理员的白名单内，项目成功创建。");
-      setShowCreateModal(false);
-      resetCreateForm();
-    }, 180);
   };
 
   if (!userId || !user) {
@@ -731,25 +719,7 @@ export default function ProjectOverview() {
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
-                onClick={() => {
-                  setCreateHint(null);
-                  if (pendingRevealNanning) {
-                    setPendingRevealNanning(false);
-                    setNanningProjectVisible(true);
-                    if (typeof window !== "undefined") {
-                      window.sessionStorage.setItem(NANNING_PROJECT_VISIBLE_KEY, "1");
-                    }
-                    setHighlightProjectId(NANNING_PROJECT_ID);
-                    if (highlightTimerRef.current !== null) {
-                      window.clearTimeout(highlightTimerRef.current);
-                    }
-                    highlightTimerRef.current = window.setTimeout(() => {
-                      setHighlightProjectId((prev) =>
-                        prev === NANNING_PROJECT_ID ? null : prev
-                      );
-                    }, 420);
-                  }
-                }}
+                onClick={() => setCreateHint(null)}
                 className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700"
               >
                 知道了
