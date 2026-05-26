@@ -22,6 +22,7 @@ import {
   failAgentJob,
   getAgentJob,
   markAgentJobRunning,
+  type AgentJobRow,
 } from "./agent-jobs";
 import {
   buildHermesAgentInstructions,
@@ -477,7 +478,10 @@ async function processHermesJobBackground(
   intent: SkillIntent,
 ): Promise<void> {
   try {
-    const result = await waitForHermesRun(env, runId, { maxWaitMs: 10 * 60_000 });
+    const result = await waitForHermesRun(env, runId, {
+      maxWaitMs: 12 * 60_000,
+      pollIntervalMs: 3000,
+    });
     if (result.status === "completed") {
       const finalized = finalizeHermesOutput(result.output, intent);
       await completeAgentJob(env, jobId, finalized);
@@ -642,8 +646,54 @@ function buildAgentJobProgressLabel(
   const hs = (hermesStatus || "").toLowerCase();
   if (hs === "queued") return `已排队，等待引擎启动（已等待 ${waited}）`;
   if (hs === "running" || hs === "started") return `引擎执行中（已等待 ${waited}）`;
+  if (hs === "waiting_for_approval") {
+    return `已自动放行工具命令，引擎继续执行（已等待 ${waited}）`;
+  }
+  if (hs === "completed") return `引擎已完成，正在写入对话结果（已等待 ${waited}）`;
+  if (hs === "failed" || hs === "cancelled") return `引擎已结束：${hs}（已等待 ${waited}）`;
   if (hs) return `后台处理中 · ${hs}（已等待 ${waited}）`;
   return `后台处理中（已等待 ${waited}）`;
+}
+
+/** Worker waitUntil 可能先于 Hermes 结束；轮询时发现 Run 已终态则回写 D1 */
+async function syncAgentJobFromHermesRun(env: Env, row: AgentJobRow): Promise<{
+  row: AgentJobRow;
+  hermesStatus: string | null;
+}> {
+  const runId = row.hermes_run_id || "";
+  if (
+    (row.status !== "running" && row.status !== "pending") ||
+    !runId ||
+    runId.startsWith("chat-fallback-") ||
+    !isHermesAgentConfigured(env)
+  ) {
+    return { row, hermesStatus: null };
+  }
+
+  try {
+    const snap = await pollHermesRun(env, runId);
+    const hermesStatus = snap.status;
+    const terminal = new Set(["completed", "failed", "cancelled"]);
+    if (!terminal.has(snap.status)) {
+      return { row, hermesStatus };
+    }
+
+    const intent = row.skill_intent as SkillIntent;
+    if (snap.status === "completed") {
+      const finalized = finalizeHermesOutput(snap.output, intent);
+      await completeAgentJob(env, row.id, finalized);
+    } else {
+      await failAgentJob(
+        env,
+        row.id,
+        snap.error || `Hermes 任务结束：${snap.status}`,
+      );
+    }
+    const updated = await getAgentJob(env, row.id, row.user_id);
+    return { row: updated ?? row, hermesStatus };
+  } catch {
+    return { row, hermesStatus: null };
+  }
 }
 
 async function handleAgentJobPoll(
@@ -651,8 +701,12 @@ async function handleAgentJobPoll(
   jobId: string,
   userId: string,
 ): Promise<Response> {
-  const row = await getAgentJob(env, jobId, userId);
+  let row = await getAgentJob(env, jobId, userId);
   if (!row) return json({ error: "任务不存在或无权访问" }, 404);
+
+  const synced = await syncAgentJobFromHermesRun(env, row);
+  row = synced.row;
+  const hermesStatus = synced.hermesStatus;
 
   const runId = row.hermes_run_id || "";
   const deepPath = runId.startsWith("chat-fallback-")
@@ -664,21 +718,6 @@ async function handleAgentJobPoll(
     0,
     Math.floor((Date.now() - Date.parse(row.created_at)) / 1000),
   );
-
-  let hermesStatus: string | null = null;
-  if (
-    row.status === "running" &&
-    runId &&
-    !runId.startsWith("chat-fallback-") &&
-    isHermesAgentConfigured(env)
-  ) {
-    try {
-      const snap = await pollHermesRun(env, runId);
-      hermesStatus = snap.status;
-    } catch {
-      hermesStatus = null;
-    }
-  }
 
   const progressLabel =
     row.status === "completed"

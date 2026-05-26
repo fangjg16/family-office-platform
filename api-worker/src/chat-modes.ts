@@ -157,7 +157,9 @@ export function skillIntentSystemLines(
   const name = projectNameHint?.trim() || "本项目";
   const lines = [...sharedCorpusLines(), ...SKILL_PROMPTS[intent]];
   if (intent === "knowledge_network") {
-    lines.push(`逻辑文件名：[AI] ${name}_知识网络.html（开头一行说明即可）。`);
+    lines.push(
+      `逻辑文件名：[AI] ${name}_知识网络.html；须把完整 HTML 放入回复的 \\\`\\\`\\\`html 代码块，勿只写磁盘路径。`,
+    );
   }
   return lines;
 }

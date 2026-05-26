@@ -1,5 +1,6 @@
 import { extractKnowledgeNetworkHtml, type SkillIntent } from "./chat-modes";
 import {
+  listHermesRunApprovalUrls,
   listHermesRunPollUrls,
   listHermesRunsBaseUrls,
   listHermesRunsPostUrls,
@@ -225,9 +226,12 @@ export function buildHermesAgentInstructions(
   if (intent === "knowledge_network") {
     lines.push(
       "",
-      "【知识网络 HTML】",
-      "按 knowledge-base-generation 与 STYLE_GUIDE（Portable 米色主题）输出完整单文件 HTML，放在 ```html 代码块中。",
-      `逻辑文件名：[AI] ${projectTitleHint}_知识网络.html`,
+      "【知识网络 HTML — 硬性要求】",
+      "按 knowledge-base-generation 与 STYLE_GUIDE（Portable 米色主题）生成完整单文件 HTML。",
+      "必须把完整 HTML 正文放在回复末尾的 ```html ... ``` 代码块中（以 <!DOCTYPE html> 或 <html 开头）。",
+      "禁止只写「文件已保存」「文件位置：xxx.html」而不附 HTML 源码——家办网站无法访问 Hermes 服务器磁盘，预览按钮只认代码块。",
+      "可先给 3～5 行摘要，再跟 ```html 代码块。",
+      `逻辑文件名（摘要里可提）：[AI] ${projectTitleHint}_知识网络.html`,
     );
   }
 
@@ -309,7 +313,64 @@ export async function startHermesRun(
   }
 }
 
-export async function pollHermesRun(env: HermesAgentEnv, runId: string): Promise<HermesRunPoll> {
+export type HermesApprovalChoice = "once" | "session" | "always" | "deny";
+
+/** POST /v1/runs/{id}/approval — 网站无人值守时由 Worker 代批 */
+export async function submitHermesRunApproval(
+  env: HermesAgentEnv,
+  runId: string,
+  choice: HermesApprovalChoice = "once",
+): Promise<{ ok: boolean; httpStatus: number; detail: string }> {
+  const base = (env.HERMES_BASE_URL || "").trim();
+  if (!base || !runId) {
+    return { ok: false, httpStatus: 0, detail: "未配置 HERMES_BASE_URL 或 runId" };
+  }
+
+  const body = JSON.stringify({ choice });
+  const urls = listHermesRunApprovalUrls(base, runId);
+  let last = { ok: false, httpStatus: 0, detail: "" };
+
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: hermesAuthHeaders(env),
+        body,
+      });
+      const text = await res.text();
+      let detail = text.replace(/\s+/gu, " ").slice(0, 160);
+      if (!detail && res.ok) detail = `choice=${choice}`;
+      if (!res.ok) {
+        try {
+          const raw = text ? (JSON.parse(text) as Record<string, unknown>) : {};
+          const err = raw.error as { message?: string } | undefined;
+          detail = err?.message || (raw.detail as string) || detail || `HTTP ${res.status}`;
+        } catch {
+          detail = detail || `HTTP ${res.status}`;
+        }
+      }
+      last = { ok: res.ok, httpStatus: res.status, detail };
+      if (res.ok) return last;
+      if (res.status === 404 || res.status === 405) continue;
+    } catch (e) {
+      last = {
+        ok: false,
+        httpStatus: 0,
+        detail: e instanceof Error ? e.message : String(e),
+      };
+    }
+  }
+  return last;
+}
+
+function isWaitingForHermesApproval(status: string): boolean {
+  return status.trim().toLowerCase() === "waiting_for_approval";
+}
+
+async function fetchHermesRunSnapshot(
+  env: HermesAgentEnv,
+  runId: string,
+): Promise<HermesRunPoll> {
   const base = (env.HERMES_BASE_URL || "").trim();
   const urls = listHermesRunPollUrls(base, runId);
   let lastError = "Hermes 状态查询失败";
@@ -348,6 +409,22 @@ export async function pollHermesRun(env: HermesAgentEnv, runId: string): Promise
   return { runId, status: "failed", output: "", error: lastError, raw: null };
 }
 
+export async function pollHermesRun(env: HermesAgentEnv, runId: string): Promise<HermesRunPoll> {
+  const snap = await fetchHermesRunSnapshot(env, runId);
+  if (!isWaitingForHermesApproval(snap.status)) return snap;
+
+  const approval = await submitHermesRunApproval(env, runId, "once");
+  if (!approval.ok) {
+    return {
+      ...snap,
+      error: snap.error || `自动审批失败：${approval.detail}`,
+    };
+  }
+
+  await new Promise((r) => setTimeout(r, 400));
+  return fetchHermesRunSnapshot(env, runId);
+}
+
 export async function waitForHermesRun(
   env: HermesAgentEnv,
   runId: string,
@@ -377,8 +454,19 @@ export function finalizeHermesOutput(output: string, intent: SkillIntent): {
   answer: string;
   knowledgeNetworkHtml: string | null;
 } {
-  const answer = output.trim() || "（Hermes 已完成，但未返回可展示正文。）";
+  let answer = output.trim() || "（Hermes 已完成，但未返回可展示正文。）";
   const knowledgeNetworkHtml =
     intent === "knowledge_network" ? extractKnowledgeNetworkHtml(answer) : null;
+  if (
+    intent === "knowledge_network" &&
+    !knowledgeNetworkHtml &&
+    /知识网络|\.html|文件位置/u.test(answer)
+  ) {
+    answer += `
+
+---
+
+**网站预览说明**：本次回复未包含 \`\`\`html 代码块，因此无法在本页点击预览。HTML 若只写在 Hermes 容器里，家办平台读不到。请再发一句：「请把完整知识网络 HTML 放在 \\\`\\\`\\\`html 代码块里返回，不要只写文件路径。」`;
+  }
   return { answer, knowledgeNetworkHtml };
 }

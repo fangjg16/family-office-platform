@@ -60,6 +60,11 @@ export function listHermesRunPollUrls(base: string, runId: string): string[] {
   return listHermesRunsBaseUrls(base).map((b) => `${b}/v1/runs/${enc}`);
 }
 
+export function listHermesRunApprovalUrls(base: string, runId: string): string[] {
+  const enc = encodeURIComponent(runId);
+  return listHermesRunsBaseUrls(base).map((b) => `${b}/v1/runs/${enc}/approval`);
+}
+
 export function assertValidHermesBaseUrl(base: string): void {
   const normalized = normalizeHermesBaseUrl(base);
   if (!normalized) {

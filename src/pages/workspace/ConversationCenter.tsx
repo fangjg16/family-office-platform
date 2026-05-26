@@ -2119,6 +2119,14 @@ export default function ConversationCenter() {
                       ) : null}
                       {m.knowledgeNetworkHtml ? (
                         <KnowledgeNetworkPreview html={m.knowledgeNetworkHtml} />
+                      ) : /知识网络|\.html|文件位置/u.test(m.content) ? (
+                        <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
+                          本次回复未附带可预览的 HTML 代码块（可能只写了 Hermes
+                          服务器上的文件名）。请再发：
+                          <span className="font-medium">
+                            「请把完整知识网络 HTML 放在 ```html 代码块里返回，不要只写文件路径。」
+                          </span>
+                        </p>
                       ) : null}
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         ● Master Agent · AI 返回
