@@ -1680,6 +1680,8 @@ export default function ConversationCenter() {
       return;
     }
 
+    if (!userId) return;
+
     setSending(true);
     try {
       let uploadNotes = "";

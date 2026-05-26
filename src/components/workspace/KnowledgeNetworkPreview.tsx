@@ -1,12 +1,6 @@
-import { useState } from "react";
-import { ExternalLink, Eye } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ExternalLink, Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
 type KnowledgeNetworkPreviewProps = {
   html: string;
@@ -16,6 +10,15 @@ type KnowledgeNetworkPreviewProps = {
 export function KnowledgeNetworkPreview({ html, filename }: KnowledgeNetworkPreviewProps) {
   const [open, setOpen] = useState(false);
   const safeName = filename?.trim() || "[AI]_项目知识网络.html";
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
 
   const openInNewTab = () => {
     const blob = new Blob([html], { type: "text/html;charset=utf-8" });
@@ -36,19 +39,42 @@ export function KnowledgeNetworkPreview({ html, filename }: KnowledgeNetworkPrev
           新标签页打开
         </Button>
       </div>
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-h-[90vh] max-w-[min(96vw,1200px)] gap-0 p-0">
-          <DialogHeader className="border-b px-4 py-3">
-            <DialogTitle className="text-base font-semibold">{safeName}</DialogTitle>
-          </DialogHeader>
-          <iframe
-            title={safeName}
-            srcDoc={html}
-            className="h-[min(78vh,820px)] w-full border-0 bg-[#f5f0e8]"
-            sandbox="allow-scripts allow-same-origin"
-          />
-        </DialogContent>
-      </Dialog>
+      {open ? (
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="kn-preview-title"
+          onClick={() => setOpen(false)}
+        >
+          <div
+            className="flex max-h-[90vh] w-full max-w-[min(96vw,1200px)] flex-col overflow-hidden rounded-xl border border-border bg-background shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
+              <h3 id="kn-preview-title" className="text-base font-semibold">
+                {safeName}
+              </h3>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-8 w-8 shrink-0 p-0"
+                onClick={() => setOpen(false)}
+                aria-label="关闭预览"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <iframe
+              title={safeName}
+              srcDoc={html}
+              className="h-[min(78vh,820px)] w-full border-0 bg-[#f5f0e8]"
+              sandbox="allow-scripts allow-same-origin"
+            />
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }

@@ -220,10 +220,8 @@ export default function ProjectOverview() {
   const [newProjectFiles, setNewProjectFiles] = useState<File[]>([]);
   const [createHint, setCreateHint] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
-  const [highlightProjectId, setHighlightProjectId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const createFlowTimerRef = useRef<number | null>(null);
-  const highlightTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const id = loadSessionUserId();
@@ -238,9 +236,6 @@ export default function ProjectOverview() {
     return () => {
       if (createFlowTimerRef.current !== null) {
         window.clearTimeout(createFlowTimerRef.current);
-      }
-      if (highlightTimerRef.current !== null) {
-        window.clearTimeout(highlightTimerRef.current);
       }
     };
   }, []);
@@ -444,13 +439,7 @@ export default function ProjectOverview() {
 
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredProjects.map((p) => (
-            <div
-              key={p.id}
-              className={cn(
-                highlightProjectId === p.id &&
-                  "animate-in fade-in slide-in-from-top-1 duration-200",
-              )}
-            >
+            <div key={p.id}>
               <ProjectCard
                 project={p}
                 userId={userId}
