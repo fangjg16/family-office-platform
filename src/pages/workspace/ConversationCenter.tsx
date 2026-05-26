@@ -32,6 +32,7 @@ import {
   filterConversationSessionFiles,
   type ProjectFileRecord,
 } from "@/lib/project-api";
+import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
   loadChatStateForUser,
@@ -2206,6 +2207,22 @@ export default function ConversationCenter() {
           {liveError ? (
             <div className="mb-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs leading-relaxed text-rose-700">
               {liveError}
+            </div>
+          ) : null}
+
+          {isLiveAiMode ? (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {CHAT_QUICK_PROMPTS.map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  disabled={sending || playbackThinking}
+                  onClick={() => setDraftMessage(item.message)}
+                  className="rounded-full border border-border/80 bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground disabled:opacity-50"
+                >
+                  {item.label}
+                </button>
+              ))}
             </div>
           ) : null}
 

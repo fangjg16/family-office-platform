@@ -19,7 +19,7 @@ export function wantsExternalSearch(message: string): boolean {
 export function tavilyCapabilitySystemLines(configured: boolean): string[] {
   if (!configured) {
     return [
-      "联网公开信息：当前未配置（TAVILY_API_KEY）。仍可基于【资料摘录】与合理推论作答；若用户需要网页核实，说明联网能力待开通，并建议其用明确表述发起检索或走 Hermes 完整调研流程。",
+      "联网公开信息：当前未配置（TAVILY_API_KEY）。仍可基于【资料摘录】与合理推论作答；若用户需要网页核实，说明联网能力待开通，并建议其用「查外部资料：具体主题」在本对话发起（开通后即可自动检索）。",
     ];
   }
   return [
