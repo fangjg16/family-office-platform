@@ -709,14 +709,17 @@ Section 八 项目时间轴 拆成 **三个 `<h3>` 子块**，不要合并成统
 `node-monitoring` 把事件按"已发生 / 推进中 / 未来"喂进对应子块 —— 不产出自己单独的表。
 
 
-## Business-Model Visualization (Section 四) — Journey Map 或 Business Model Canvas
+## Business-Model Visualization (Section 四) — 三选一
 
-Slot `business-model` chooses **one** of two visual forms based on project type (selection rule lives in `knowledge-base-generation/SKILL.md` slot 四):
+Slot `business-model` 按优先顺序三选一（判定规则详见 `knowledge-base-generation/SKILL.md` slot 四）：
 
-- **贸易 / 多路径类**（易货、配额、转口、多通道分销）→ **Journey Map**：横向阶段轴 + 多条平行路径泳道，每条路径像分支散开，直观表现"同一笔货可走多条变现路径"。
-- **地产收购开发 / 单一标的资产类** → **Business Model Canvas**：经典 9 宫格。
+- **Journey Map** (`.journey`) — ≥2 条实质性变现/退出路径，路径互为替代或并行。横向阶段轴 + 多条平行路径泳道。
+- **流程增值图 Process Flow** (`.process-flow`) — 单条线性流程，重点是各环节利润拆解。步骤→箭头→步骤，每步显示增值/毛利。
+- **Business Model Canvas** (`.bmc`) — 单一闭环价值创造机制，价值主张/客户/成本结构相对固定。经典 9 宫格。
 
-两种组件都用米色酒红配色，class 已在 "Portable Stylesheet — 复制即用" 中定义。
+> 若三种均不适合，可考虑飞轮图（Flywheel）、收入拆解树（Revenue Tree）、生态系统图（Ecosystem Map）等替代形式，但无标准模板，需手工构建，慎用。
+
+三种组件均用米色酒红配色（`--paper` / `--burgundy` / `--ink-soft`），class 已在 "Portable Stylesheet — 复制即用" 中定义，**不引入新颜色变量**。
 
 ### Business Model Canvas template (9-grid)
 
@@ -734,38 +737,88 @@ Slot `business-model` chooses **one** of two visual forms based on project type 
 </div>
 ```
 
-### Journey Map template (多路径分支)
+### Journey Map template (多路径分支 — CSS Grid)
+
+**结构说明**：`.journey` 是一个 CSS Grid 容器，所有子元素直接平铺（不再嵌套 `.journey-stages` / `.journey-lane`）。第一行：左上角 `.journey-corner` 占位 + N 个 `.journey-stage`；每条路径：`.journey-lane-label` + N 个 `.journey-node`。N = 阶段数，需在父元素上设 `--journey-cols:N`。
 
 ```html
-<div class="journey">
-  <!-- stage axis -->
-  <div class="journey-stages">
-    <div class="journey-stage">货源采购</div>
-    <div class="journey-stage">通关 / 配额</div>
-    <div class="journey-stage">物流 / 仓储</div>
-    <div class="journey-stage">变现</div>
-  </div>
-  <!-- path 1 -->
-  <div class="journey-lane">
-    <div class="journey-lane-label">路径 A · 易货</div>
-    <div class="journey-node">国内工业品</div>
-    <div class="journey-node">口岸易货配额</div>
-    <div class="journey-node">冷链 / 集货</div>
-    <div class="journey-node">换回农产品转销</div>
-  </div>
-  <!-- path 2 -->
-  <div class="journey-lane">
-    <div class="journey-lane-label">路径 B · 现汇</div>
-    <div class="journey-node">同上货源</div>
-    <div class="journey-node empty">—</div>
-    <div class="journey-node">直发终端</div>
-    <div class="journey-node">现汇结算</div>
-  </div>
-  <!-- add more .journey-lane blocks for additional branches -->
+<!-- 4 阶段示例，设 --journey-cols:4 -->
+<div class="journey" style="--journey-cols:4">
+  <!-- 第一行：左上角占位 + 阶段标题 -->
+  <div class="journey-corner"></div>
+  <div class="journey-stage">① 货源采购</div>
+  <div class="journey-stage">② 通关 / 配额</div>
+  <div class="journey-stage">③ 物流 / 仓储</div>
+  <div class="journey-stage">④ 变现</div>
+  <!-- 路径 A -->
+  <div class="journey-lane-label">路径 A · 易货</div>
+  <div class="journey-node">国内工业品</div>
+  <div class="journey-node">口岸易货配额</div>
+  <div class="journey-node">冷链 / 集货</div>
+  <div class="journey-node">换回农产品转销</div>
+  <!-- 路径 B（某阶段不适用用 .empty，受阻用 .blocked，重点用 .priority） -->
+  <div class="journey-lane-label">路径 B · 现汇</div>
+  <div class="journey-node">同上货源</div>
+  <div class="journey-node empty">—</div>
+  <div class="journey-node">直发终端</div>
+  <div class="journey-node priority">现汇结算</div>
+  <!-- 继续添加路径行，每行 1 个 lane-label + N 个 node -->
 </div>
 ```
 
-规则：阶段数 = `.journey-stage` 个数，每条 `.journey-lane` 的 `.journey-node` 个数必须与阶段数一致（某路径跳过的阶段用 `.journey-node.empty` 占位，保持对齐）。路径多于 3 条时整体横向滚动（`.journey` 已设 `overflow-x:auto`）。
+规则：
+- `--journey-cols` 必须等于 `.journey-stage` 的个数，grid 列数才对齐
+- 阶段标题用 `① ② ③` 数字圈前缀
+- 每条路径跳过的阶段用 `.journey-node.empty` 占位
+- `.journey-node.blocked` — 该路径在此阶段受阻（灰显 + 斜体）
+- `.journey-node.priority` — 重点节点（加深边框 + 内阴影）
+- 路径超过 3 条时整体横向滚动（`.journey` 已设 `overflow-x:auto`）
+
+### 流程增值图 Process Flow template (线性流程 + 各环节利润)
+
+适用于单条线性供应链/加工流程，重点展示各环节的增值与利润率。每个环节一个 `.pf-step`，环节之间用 `.pf-arrow` 连接。
+
+```html
+<div class="value-chain">
+  <div class="vc-step">
+    <div class="vc-step-label">① 原料采购</div>
+    <div class="vc-step-body">
+      <p>哈萨克斯坦农产品<br>成本：$X/吨</p>
+    </div>
+    <div class="vc-step-margin">毛利 —</div>
+  </div>
+  <div class="vc-arrow">→</div>
+  <div class="vc-step">
+    <div class="vc-step-label">② 通关 / 清关</div>
+    <div class="vc-step-body">
+      <p>口岸报关 + 配额核销<br>费用：$X/吨</p>
+    </div>
+    <div class="vc-step-margin">增值 $X</div>
+  </div>
+  <div class="vc-arrow">→</div>
+  <div class="vc-step">
+    <div class="vc-step-label">③ 加工 / 分拣</div>
+    <div class="vc-step-body">
+      <p>国内仓储分拣<br>成本：$X/吨</p>
+    </div>
+    <div class="vc-step-margin">增值 $X</div>
+  </div>
+  <div class="vc-arrow">→</div>
+  <div class="vc-step vc-step-end">
+    <div class="vc-step-label">④ 终端销售</div>
+    <div class="vc-step-body">
+      <p>批发 / 零售终端<br>售价：$X/吨</p>
+    </div>
+    <div class="vc-step-margin vc-margin-total">综合毛利 XX%</div>
+  </div>
+</div>
+```
+
+规则：
+- 环节数量不限，超过 5 个时整体横向滚动（`.process-flow` 已设 `overflow-x:auto`）
+- 每个 `.pf-step` 底部 `.pf-step-margin` 填写该环节增值/毛利，末端环节加 `.pf-margin-total` 显示综合毛利（酒红底白字）
+- 环节标题用 `① ② ③` 数字圈前缀，与 Journey Map 保持一致
+- 配色完全沿用米色酒红系，不引入新颜色
 
 ## Timeline (Section 八) — 层级展开（年→月→日）
 
@@ -900,16 +953,25 @@ body{font-family:var(--sans);font-size:15px;line-height:1.65;color:var(--ink);ba
 .bmc-cs{grid-column:5/6;grid-row:1/3}
 .bmc-cost{grid-column:1/4;grid-row:3/4}.bmc-rev{grid-column:4/6;grid-row:3/4}
 @media(max-width:760px){.bmc{grid-template-columns:1fr}.bmc-cell{grid-column:auto!important;grid-row:auto!important}}
-/* ── Journey Map (horizontal stages + parallel path lanes) ── */
-.journey{margin:1.25rem 0;overflow-x:auto}
-.journey-stages{display:flex;gap:0;min-width:38rem}
-.journey-stage{flex:1;text-align:center;font-family:var(--sans);font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--burgundy);padding:.45rem .3rem;border-bottom:2px solid var(--burgundy)}
-.journey-lane{display:flex;gap:0;min-width:38rem;align-items:stretch;margin-top:.6rem}
-.journey-lane-label{flex:0 0 7rem;font-size:.72rem;font-weight:700;color:var(--burgundy);display:flex;align-items:center;padding-right:.5rem}
-.journey-node{flex:1;background:rgba(255,255,255,.5);border:1px solid rgba(114,47,55,.2);margin:.15rem;border-radius:5px;padding:.55rem .6rem;font-size:.74rem;color:var(--ink-soft);position:relative}
+/* ── Journey Map (CSS Grid — stage headers + parallel path lanes) ── */
+/* grid-template-columns: lane-label col + N stage cols (N must match .journey-stage count) */
+.journey{display:grid;grid-template-columns:7.5rem repeat(var(--journey-cols,4),minmax(6.5rem,1fr));column-gap:.3rem;row-gap:.45rem;min-width:52rem;margin:1.25rem 0;overflow-x:auto;align-items:stretch}
+.journey-corner{min-height:0}
+.journey-stage{text-align:center;font-family:var(--sans);font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--burgundy);padding:.45rem .3rem;border-bottom:2px solid var(--burgundy);align-self:end}
+.journey-lane-label{font-size:.72rem;font-weight:700;color:var(--burgundy);display:flex;align-items:center;padding-right:.35rem;line-height:1.35}
+.journey-node{background:rgba(255,255,255,.5);border:1px solid rgba(114,47,55,.2);border-radius:5px;padding:.55rem .6rem;font-size:.74rem;color:var(--ink-soft);position:relative}
 .journey-node.empty{background:transparent;border:1px dashed rgba(114,47,55,.15)}
-.journey-path{position:relative;padding-left:1rem;margin:.3rem 0}
-.journey-path::before{content:"";position:absolute;left:.25rem;top:.6rem;bottom:.6rem;width:2px;background:rgba(114,47,55,.2)}
+.journey-node.blocked{opacity:.55;background:rgba(114,47,55,.06);font-style:italic}
+.journey-node.priority{border-color:var(--burgundy);box-shadow:inset 0 0 0 1px rgba(114,47,55,.15)}
+/* ── Value Chain (linear process + margin per step) ── */
+.process-flow{display:flex;align-items:stretch;gap:0;margin:1.25rem 0;overflow-x:auto;min-width:36rem}
+.pf-step{flex:1;min-width:8rem;display:flex;flex-direction:column;border:1px solid rgba(114,47,55,.2);border-radius:5px;background:rgba(255,255,255,.5);overflow:hidden}
+.pf-step-end{border-color:var(--burgundy)}
+.pf-step-label{font-family:var(--sans);font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--burgundy);padding:.4rem .7rem;border-bottom:1px solid rgba(114,47,55,.15);background:rgba(114,47,55,.04)}
+.pf-step-body{flex:1;padding:.6rem .7rem;font-size:.76rem;color:var(--ink-soft);line-height:1.5}
+.pf-step-margin{font-size:.65rem;font-weight:700;color:var(--burgundy);padding:.35rem .7rem;border-top:1px solid rgba(114,47,55,.15);background:rgba(114,47,55,.04);text-align:right}
+.pf-margin-total{background:var(--burgundy);color:#fff;border-top:none}
+.pf-arrow{display:flex;align-items:center;padding:0 .3rem;color:var(--burgundy);font-size:1.1rem;flex-shrink:0;opacity:.5}
 /* ── Hierarchical (year→month→day) timeline ── */
 .tl-tree{margin:1rem 0}
 .tl-year{border:1px solid rgba(114,47,55,.16);border-radius:6px;margin:.6rem 0;background:rgba(255,255,255,.4);overflow:hidden}
@@ -1025,6 +1087,13 @@ tr.highlight-row td{background:rgba(114,47,55,.08)!important;font-weight:500}
 .footer p{font-size:.72rem;color:#999;line-height:1.6}
 sup{font-size:.65em;color:var(--burgundy)}
 .partial-line{font-size:.8rem;color:#a34b1e;font-style:italic;border-left:2px solid #c45c26;padding-left:.5rem;margin:.5rem 0}
+/* ── Tooltip-enabled citations & term refs ── */
+.cite-ref,.term-ref{position:relative}.cite-ref a,.term-marker{color:var(--burgundy);text-decoration:none;font-size:.75em;vertical-align:super}
+.tooltip{display:none;position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;width:320px;padding:.75rem 1rem;background:#fff;border:1px solid rgba(114,47,55,.2);font-size:.8rem;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.cite-ref:hover .tooltip,.term-ref:hover .tooltip{display:block}
+.tooltip-title{font-weight:700;color:var(--burgundy);display:block;margin-bottom:.25rem}
+.tooltip-source{display:block;font-size:.7rem;color:var(--ink-faint);margin-bottom:.25rem}
+.tooltip-preview{display:block;font-style:italic;color:var(--ink-soft)}
 </style>
 ```
 
@@ -1092,17 +1161,20 @@ DOM structure (the whole body lives inside `.kb-shell`):
     </ul>
   </nav>
   <main class="kb-content">
-    <!-- masthead lives at the top of the content area (always visible above panels) -->
-    <!-- kb-summary card -->
-    <!-- one .kb-panel per rendered slot; the first rendered slot gets .active -->
-    <section class="block kb-panel active" id="snapshot"> … </section>
+    <!-- overview panel: masthead + kb-summary only; default .active on load -->
+    <section class="block kb-panel active" id="overview">
+      <header class="masthead"> … </header>
+      <div class="kb-summary"> … </div>
+    </section>
+    <!-- one .kb-panel per rendered slot (no masthead inside) -->
+    <section class="block kb-panel" id="snapshot"> … </section>
     <section class="block kb-panel" id="assets"> … </section>
     <!-- … -->
   </main>
 </div>
 ```
 
-Dynamic-generation rule is unchanged: **the button list is built from the render manifest in slot order, never hard-coded.** Each `kb-nav-btn` carries `data-target="<anchor id>"` matching its panel's `id`. The numeral in `.kb-nav-num` is the manifest's `displayNumeral` (一/二/三… for slots, `A`/`B` for appendices). When a slot is hidden, both its button and its panel are omitted. The first rendered slot's button and panel both get `.active`.
+**Nav order**: (1) fixed「项目总览」button → `#overview` (always present, default `.active` on load); (2) rendered slots from the manifest in slot order; (3) appendices. Each `kb-nav-btn` carries `data-target="<anchor id>"`. Numerals in `.kb-nav-num`: `◎` for overview only; 一/二/三… for slots; `A`/`B` for appendices. When a slot is hidden, omit its button and panel. **Only `#overview`** gets `.active` on initial load — not the first content slot.
 
 Styling: selected button = burgundy solid fill, white text (`.kb-nav-btn.active`); unselected = burgundy outline on transparent, burgundy text, light hover fill. The nav is `position:sticky; top:0` full-height on desktop; under 860px it collapses to a wrapping horizontal button row at the top.
 
@@ -1131,7 +1203,7 @@ Styling: selected button = burgundy solid fill, white text (`.kb-nav-btn.active`
 ```
 
 Behavioral notes:
-- Only one panel is visible at a time; the masthead + `.kb-summary` sit above the panel switcher and stay visible across all panels.
+- Only one panel is visible at a time. Masthead + `.kb-summary` live **only** in `#overview`; switching to 一…十一 does not show them again.
 - Cross-section anchor links (`href="#returns"`) still work via the hash deep-link handler — clicking one opens the target panel instead of scrolling within a long page.
 - If JS is disabled, the CSS `.kb-panel{display:none}` would hide everything; therefore the **first panel is also given `.active` in markup** so at least the snapshot renders without JS. (Acceptable degradation for a self-contained internal doc.)
 - The 历史 top sticky-nav (`.sticky-nav` / `.sticky-nav-inner`) is **deprecated** — do not emit it. Its CSS has been removed from the portable stylesheet.
@@ -1198,7 +1270,7 @@ These components have no equivalent in the default theme and must be declared in
 - **`.adv-grid`** — 2-column pros/cons or for/against grid. `.pros` background `#f0f7f1`, `.cons` background `#fdf5f4`. Used inside `#decision-framework` and occasionally `#risks`.
 - **`.valuation-box`** — full-width white panel with 2px `--burgundy` top border for headline numbers (valuation range, MOIC headline, etc.). The big figure uses `--serif` 2.25rem.
 - **`.kb-shell` / `.kb-nav` / `.kb-nav-btn` / `.kb-content` / `.kb-panel`** — the left-sidebar panel-switcher layout (see "Left section-nav" above). `.kb-panel` is `display:none` by default; `.kb-panel.active` shows. Buttons toggle `.active`.
-- **`.kb-summary`** — the auto-generated ≤200-字 project overview card. Lives directly above section 一 (project snapshot), inside `.kb-content`, **outside** any `.kb-panel` so it stays visible across all panels. Cream fill (`#efe7da`) with a 4px `--burgundy` left border; small uppercase label + one paragraph.
+- **`.kb-summary`** — the auto-generated ≤200-字 project overview card. Lives **inside `#overview` only** (with masthead), not in content slot panels. Cream fill (`#efe7da`) with a 4px `--burgundy` left border; small uppercase label + one paragraph.
 - **`.bmc`** — Business Model Canvas, the classic 9-cell grid (Key Partners / Key Activities / Key Resources / Value Propositions / Customer Relationships / Channels / Customer Segments / Cost Structure / Revenue Streams). Used in slot `business-model` for 地产收购开发类 projects. 5-column × 3-row grid; Value Propositions spans both top rows centre; Cost/Revenue span the bottom row. Collapses to single column under 760px.
 - **`.journey`** — Journey Map: a horizontal stage axis (`.journey-stages`) with one or more parallel path lanes (`.journey-lane`), each lane representing a route/branch with nodes per stage. Used in slot `business-model` for 贸易/多路径类 projects. Horizontally scrollable; `.journey-node.empty` marks a stage a given path skips.
 - **`.topic`** — collapsible external-research topic (`<details>`). Burgundy italic summary with a rotating ▸ caret + a right-aligned count pill; body holds the topic's findings and any user-submitted questions (`.topic-q`). Replaces the old standalone Q-01/Q-02 list.
@@ -1253,3 +1325,53 @@ The portable theme inherits — without modification — the slot system, hide-a
 - Do not put marketing copy anywhere in a report.
 - Do not hard-code the section numbering or the left section-nav button list. Both are derived from the render manifest at render time.
 - Do not pad empty slots with placeholder callouts to make the document look "complete". An empty slot is hidden; a Stub renders only when a skill has actually found an informative absence.
+
+---
+
+### Tags and badges (portable)
+
+Every factual claim in the KB carries an inline certainty tag immediately after the claim text. Tags are small pill-shaped spans using the four semantic classes below.
+
+#### Four certainty levels
+
+| Tag | Class | When to use |
+|-----|-------|------------|
+| ✅ 已核实 | `tag-verified` | Cross-verified from ≥2 independent sources, or from an authoritative source (regulator, audit, title registry). Use sparingly. |
+| 🟡 当事方声明 | `tag-party` | Claimed by a party (seller / project co / advisor) but not independently confirmed. **Must name the party.** |
+| 🔵 分析师推论 | `tag-analyst` | Derived by analysis or modelling, not stated explicitly. **Must name the source: AI or human analyst.** |
+| ⚪ 待确认 | `tag-unconfirmed` | Mentioned but unverified, or partial information. No attribution required. |
+
+#### Attribution rules
+
+- ✅ and ⚪ — no attribution needed. A bare tag is acceptable.
+- 🟡 — **mandatory**: use the canonical entity name (from Entity Resolution). Never a bare 🟡 alone.
+- 🔵 — **mandatory**: name the analysis source. Use `AI推论` when generated by this system; use `内部分析师` (optionally with initials) for human analysis.
+
+#### Full markup
+
+```html
+<!-- ✅ 已核实 — no attribution needed -->
+取得 DA Preliminary Approval（文号 20220452）<span class="tag tag-verified">✅</span>
+
+<!-- 🟡 当事方声明 — must name the party via tag-src -->
+收购价格指引 AUD $23M <span class="tag tag-party">🟡 <span class="tag-src">卖方</span></span>
+
+<!-- 🟡 with extra doc reference via tag-attrib (outside the tag) -->
+Stage 1 建设成本 $8.5M <span class="tag tag-party">🟡 <span class="tag-src">卖方</span></span><span class="tag-attrib">(项目书 p.14)</span>
+
+<!-- 🔵 分析师推论 — must name AI or human -->
+基于现金流测算，内部回报率约 18% <span class="tag tag-analyst">🔵 <span class="tag-src">AI推论</span></span>
+
+<!-- 🔵 human analyst -->
+退出估值参考 cap rate 6.5% <span class="tag tag-analyst">🔵 <span class="tag-src">内部分析师</span></span>
+
+<!-- ⚪ 待确认 — no attribution needed -->
+据称已与运营商签署 MOU <span class="tag tag-unconfirmed">⚪</span>
+```
+
+#### What is NOT allowed
+
+- A bare `🟡` with no `tag-src` — always name the party
+- A bare `🔵` with no `tag-src` — always name AI or analyst
+- Using `🔵` for seller projections — those are `🟡 卖方` even if they look like analysis
+- Stacking multiple tags on one claim — pick the lowest-confidence tag that applies

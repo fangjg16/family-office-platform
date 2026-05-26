@@ -73,12 +73,30 @@ The KB is **not** one long scrolling page. It renders as a **left-sidebar sectio
 - The button list is built **at render time from the render manifest in slot order** — never hard-coded. Each button carries `data-target="<anchor>"` matching its panel `id`; its `.kb-nav-num` shows the manifest `displayNumeral` (一/二/三… for slots, `A`/`B` for appendices). Hidden slots emit neither a button nor a panel.
 - The **first rendered slot** gets `.active` on both its button and its panel (so something shows even without JS).
 - Paste the vanilla-JS panel switcher (`<script>` near `</body>`) from `STYLE_GUIDE.md` "Left section-nav (portable variant) — panel switcher". It toggles `.active`, supports `#anchor` deep-links, and needs no library.
-- The masthead and the `.kb-summary` card sit at the top of `.kb-content`, **outside** any `.kb-panel`, so they stay visible across all panels.
+- The **masthead** and **`.kb-summary`** live in a dedicated first panel `#overview` (nav label「项目总览」) — **not** outside panels. They appear **only** on that tab; content slots (一…十一、附录) show their own panel body without repeating the header.
 - The old top horizontal `.sticky-nav` is **deprecated** — do not emit it.
 
-### Auto-summary card (≤200 字, above 项目快照)
+### Overview panel (`#overview`) — masthead + summary (once only)
 
-Every KB renders a `.kb-summary` card directly above section 一 项目快照 (inside `.kb-content`, outside the panels so it is always visible). It is an **auto-generated ≤200-字 Chinese overview** that captures the project's profile + investment logic in one paragraph: what the asset is, who the counterparty is, indicative size, the core thesis, and current stage/maturity. Regenerate it on every re-render so it tracks the latest state. Keep it factual and non-advisory; certainty tags are not required inside the summary (it is a digest, not a data source). HTML/CSS: see `STYLE_GUIDE.md` `.kb-summary`.
+Every KB renders a fixed **overview** panel as the **first** nav button and the **default active** panel on load. It contains only:
+1. `.masthead` (title, meta, Factor A/B/C stat-row, language toggle if bilingual)
+2. `.kb-summary` (auto-generated ≤200-字 digest)
+
+Do **not** duplicate masthead or `.kb-summary` inside slot panels. Slot panels start directly with their `<h2 class="section-title">`.
+
+```html
+<section class="block kb-panel active" id="overview">
+  <header class="masthead">…</header>
+  <div class="kb-summary">…</div>
+</section>
+<section class="block kb-panel" id="snapshot">…</section>
+```
+
+Nav: first button `data-target="overview"`, label「项目总览」, `.kb-nav-num` may use `◎` (not a Chinese numeral — overview is outside the 11-slot manifest).
+
+### Auto-summary card (≤200 字, inside `#overview` only)
+
+The `.kb-summary` card sits **inside `#overview` only** (not above 项目快照 in every tab). It is an **auto-generated ≤200-字 Chinese overview** that captures the project's profile + investment logic in one paragraph: what the asset is, who the counterparty is, indicative size, the core thesis, and current stage/maturity. Regenerate it on every re-render so it tracks the latest state. Keep it factual and non-advisory; certainty tags are not required inside the summary (it is a digest, not a data source). HTML/CSS: see `STYLE_GUIDE.md` `.kb-summary`.
 
 ```html
 <div class="kb-summary">
@@ -170,7 +188,7 @@ Each section has a required sub-structure. If a sub-block has no data, render it
 - 团队与 know-how（关键人依赖、可替代性）
 - 每条资源标注：自有 / 绑定关键人 / 第三方依赖，以及"投资后是否随交易转移"
 
-> **边界**：宏观背景类信息（口岸概况、区域贸易政策、行业大势等）**不是**本节的"资产/资源"——它们属于外部环境，移到 section 四 外部调研对应 topic 下，不要塞进本节充数。本节只放**标的自身**掌握/可调用的能力与资源。
+> **边界**：宏观背景类信息（口岸概况、区域贸易政策、行业大势等）**不是**本节的"资产/资源"，也不归入 section 四。处理规则：① 若某条宏观数据是用于支撑某个资产/资源条目的，作为该行表格的来源注释内联呈现（`来源`列或行内 `<sup>` 引用）；② 若属于投资论点层面的宏观支撑，归入 section 十一 决策框架的论据。**Section 2 本身不设"宏观背景"子块**，不论实物资产形态还是平台能力形态均适用。本节只放**标的自身**掌握/可调用的能力与资源。
 
 #### 三、法律结构与关键关系网
 - 持股架构图（项目公司 → 中间层 → 实控人）
@@ -182,14 +200,19 @@ Each section has a required sub-structure. If a sub-block has no data, render it
 #### 四、业务模式与收入假设（含外部调研）
 > Target-company analysis only. Investor returns belong in 七.
 
-**业务模式可视化（二选一）** —— 根据项目特点选 Journey Map 或 Business Model Canvas：
+**业务模式可视化（三选一，优先顺序判断）** —— 按以下顺序逐条判断，第一个命中的即为选用形式：
 
-| 项目特点 | 选用 | 理由 |
-|----------|------|------|
-| 贸易类 / 多变现路径（易货、配额、转口、多通道分销） | **Journey Map** | 多条平行路径像分支散开，直观表现"同一笔货可走多条变现路径" |
-| 地产收购开发 / 单一标的资产运营 | **Business Model Canvas** | 经典 9 宫格，适合刻画单一标的的价值主张/成本/收入结构 |
+| 优先级 | 判定条件 | 选用 | HTML 类 |
+|--------|---------|------|---------|
+| 1 | 存在 **≥2 条实质性变现/退出路径**，路径之间互为替代或并行（如：多通道贸易、多退出策略的地产、多产品线分销） | **Journey Map** | `.journey` |
+| 2 | **单条线性流程**，重点是各环节的利润拆解与增值分析（如：农业/制造/加工贸易，原料→加工→分销→终端） | **流程增值图 Process Flow** | `.process-flow` |
+| 3 | **单一闭环价值创造机制**，价值主张/客户/成本结构相对固定（如：稳定运营的单一标的资产） | **Business Model Canvas** | `.bmc` |
 
-判定：业务的本质是**沿多条可选路径流动的交易**（路径之间互为替代/并行）→ Journey Map；业务的本质是**围绕单一标的的价值创造闭环**（伙伴/活动/资源/客户相对固定）→ Canvas。两者 HTML+CSS 模板见 `STYLE_GUIDE.md` "Business-Model Visualization (Section 四)"。Journey Map 每条路径用一条 `.journey-lane`；Canvas 用 `.bmc` 九格。
+> **注意**：行业类型不是判定依据——地产项目可能是 Journey Map（多退出策略），贸易项目也可能是价值链图（单条固定供应链）。判断的核心是**路径是否分叉**和**流程是否线性**。
+
+> 若上述三种均不适合（如平台网络效应型、多方生态系统型），可考虑飞轮图（Flywheel）、收入拆解树（Revenue Tree）、生态系统图（Ecosystem Map）等替代形式，但这些没有标准模板，需手工构建，慎用。
+
+三种形式的 HTML+CSS 模板见 `STYLE_GUIDE.md` "Business-Model Visualization (Section 四)"。
 
 **收入与运营假设**（不论选哪种图，下列数据都要在图下以文字/表格给出）：
 - 收入来源拆分（按产品 / 客户 / 地理 / 阶段）
@@ -201,16 +224,31 @@ Each section has a required sub-structure. If a sub-block has no data, render it
 **外部调研 Topic（融入本节，不再用 Q-01/Q-02 编号）**：
 - 先针对该业务模式定义一组要调研的 **topic**（如 贸易类：口岸政策与配额、对手国货源稳定性、汇兑/结算合规、物流冷链可达性；地产类：区域规划、可比成交、审批进度、需求侧）。
 - 用户在后续对话中补充的问题**不再孤立编号**，而是**归类到对应 topic 下**，作为该 topic 的待答/已答条目。
-- 为控制全文长度，每个 topic 用**可点击展开**的 `<details class="topic">`（默认折叠，summary 显示标题 + 未答数量）。模板见 `STYLE_GUIDE.md` `.topic`。
-- 宏观背景信息（口岸概况、区域贸易政策等）放在本节对应 topic 下，而非 section 二。
+- 为控制全文长度，每个 topic 用**可点击展开**的 `<details class="topic">`（默认折叠，summary 显示标题 + 语义状态）。模板见 `STYLE_GUIDE.md` `.topic`。
+
+**topic-count 用语义状态，不用数字计数**：
+
+| 状态 | 写法示例 |
+|------|---------|
+| 尚未开始调研 | `待调研` |
+| 有部分发现但有缺口 | `部分解答 · 高` / `部分解答 · Blocker` |
+| 已有明确研究结论 | `研究结论 · 暂缓` / `研究结论 · 可行` |
+| 完全解答 | `已解答` |
+
+**`.topic-q` 追问来源标注规则**（有出处就标，无则省略）：
+- 有录音/会议记录，知道发言人 → `<strong>会议追问（Jimmy，录音 00:01:30）：</strong>`
+- 有明确提问人但无时间戳 → `<strong>追问（Jessica）：</strong>`
+- 对话中用户补充，无具体归因 → `<strong>用户追问：</strong>`
+- 调研中自己发现的缺口，非追问 → `<strong>残余缺口：</strong>` 或 `<strong>待验证：</strong>`
 
 ```html
 <details class="topic">
-  <summary>口岸政策与配额可持续性 <span class="topic-count">2 待答 · 1 已答</span></summary>
+  <summary>口岸政策与配额可持续性 <span class="topic-count">部分解答 · Blocker</span></summary>
   <div class="topic-body">
     <p>[topic 现有发现，带 certainty tag + 来源]</p>
-    <p class="topic-q">用户追问：配额政策若调整，平台是否有替代通道？<span class="topic-q-status badge badge-amber">待答</span></p>
-    <p class="topic-q">用户追问：易货资质有效期？<span class="topic-q-status badge badge-green">已答：2027 到期 <span class="tag tag-party">🟡 项目方</span></span></p>
+    <p class="topic-q"><strong>会议追问（Jimmy，录音 00:01:30）：</strong>配额政策若调整，平台是否有替代通道？<span class="topic-q-status">待项目方</span></p>
+    <p class="topic-q"><strong>用户追问：</strong>易货资质有效期？<span class="topic-q-status">已答：2027 到期 <span class="tag tag-party">🟡 项目方</span></span></p>
+    <p class="topic-q"><strong>残余缺口：</strong>年度总配额规模未公开，需政府关系或现场咨询。<span class="topic-q-status">待验证</span></p>
   </div>
 </details>
 ```
@@ -225,14 +263,37 @@ Each section has a required sub-structure. If a sub-block has no data, render it
 - 债务条款（贷款方、利率、抵押安排、covenant、还款期）
 
 #### 六、市场对标与可比交易
-> 本节是**对标案例 / 可比交易**，不是泛调研。纯背景调研信息归 section 四 外部调研，不放这里。
+> 本节只放**与标的直接可比的主体或交易**——能用来支撑估值或定价的 peers 数据。不是泛调研，不是背景信息。
 
-- 已识别可比交易表（日期、规模、对价、估值倍数）
-- 行业基准（cap rate / EV/EBITDA / 单价 / 单位经济）
-- 项目相对 peers 的差异化定位
-- 估值参照区间
-- **贸易类项目**：本节放"**已在做以物换物 / 易货贸易模式的企业案例**"（谁在做、规模、模式、成败），作为对标；它们的经营数据是 peers，不是调研背景。
-- **缺乏对标时**：保留"缺乏资料"Stub 即可（说明缺什么、补什么能激活），**不要**用泛调研信息强行填充本节。
+**判断一条数据是否属于本节的唯一标准**：它能否用来支撑对标的估值或定价？能 → 放这里；不能 → 不放。
+
+**永远不进本节**（无论什么项目类型）：
+- 宏观市场规模数据（行业大盘、贸易总量、区域 GDP、进出口统计等）
+- 调研背景信息（政策环境、行业趋势、口岸概况）
+- 与标的业务模式不同的案例（用来"凑数"的泛案例）
+
+上述信息若有用，归入 section 四 外部调研对应 topic，或作为行内来源引用，不在本节出现。
+
+**有对标时**，内容包括：
+- 已识别可比主体/交易表（名称、日期、规模、对价、估值倍数、业务模式相似点）
+- 行业基准（cap rate / EV/EBITDA / 单价 / 单位经济，视行业而定）
+- 项目相对 peers 的差异化定位与估值参照区间
+
+**无对标时**（找不到直接可比的主体或交易）：
+- 保留 `callout.missing` Stub，**不要用宏观数据填充**
+- Stub 内列出"补充哪些信息可以激活本节"（如：同类企业名单、可访谈渠道、付费数据库来源）
+- `callout-hint` 最后一句明确写：`在此之前不强行填充宏观统计或背景调研数据。`
+
+```html
+<aside class="callout missing">
+  <p class="callout-title">⚠ 缺乏资料 — [对标类型] 案例</p>
+  <p>尚未识别可公开核实的直接可比主体或交易。待补充项：</p>
+  <ul>
+    <li>[具体缺什么：如同类企业名单、历史交易数据、行业报告来源]</li>
+  </ul>
+  <p class="callout-hint">有线索后可触发 comp-analysis；在此之前不强行填充宏观统计或背景调研数据。</p>
+</aside>
+```
 
 #### 七、投资回报与敏感性分析
 > The investor's deal economics. Built primarily from `returns-analysis` + `sensitivity-analysis`. Every assumption MUST trace back to a source in another section (typically 四 / 五 / 六).
@@ -269,12 +330,51 @@ Multi-asset projects：在每个子块内按 asset 分组（`.tl-item` 前缀资
 - 红线风险（一旦触发须停止推进）
 - 来自 七 敏感性分析的极度敏感变量同步登记为风险
 
-#### 十、待确认问题清单
-> **范围收窄（v0.5）**：用户日常追问**不再**进这里编号——它们归入 section 四 外部调研对应 topic（见 四）。本节只保留**跨 topic 的、阻塞决策的关键未决项（blocker）**，且不用 Q-01/Q-02 编号，而是按主题列出。
+#### 十、待项目方补充的信息
+> 本节收录**仍须项目方/对方团队提供的信息缺口**，按所属 section 分组列出。用户日常追问的已解答/研究中部分已归入 section 四 外部调研对应 topic；本节只放"现在还缺、需要对方来补"的项目。
 
-- Blocker 清单（问题 / 关联 topic 或 section / 紧迫度 / 解决方 / 状态），按紧迫度排序
-- 每条标明它阻塞的是哪一步决策
-- 若所有未决项都已归入某 topic 且无独立 blocker，本节降为 Stub 或隐藏（按 hide-and-renumber 规则）
+**section-lead 固定写法**：
+> 会议与公开研究中的已解答部分已写入 [四 · 外部调研主题]（按路径折叠）。本节仅列仍须 [项目方名称] / 团队提供的缺口，按板块归集。
+
+**结构**：按所属 section 分组，每组一张表，列为：
+
+| 待补充项 | 紧迫度 | 负责方 | 详见 |
+|---------|-------|-------|-----|
+
+- **紧迫度** 用 badge：`badge-red Blocker`（阻塞决策）/ `badge-amber 高` / `badge-blue 中`
+- **详见** 列用锚链接指回对应 section（如 `<a href="#business-model">四 · 平台共性</a>`）
+- 按紧迫度排序，Blocker 置顶
+- 若所有缺口已解决，本节降为 Stub 或隐藏（按 hide-and-renumber 规则）
+
+```html
+<p class="section-lead">会议与公开研究中的<strong>已解答部分</strong>已写入 <a href="#business-model">四 · 外部调研主题</a>（按路径折叠）。本节仅列仍须 [项目方] / 团队提供的缺口，按板块归集。</p>
+
+<h3>[板块名，如：业务模式 · 配额与路径]</h3>
+<table>
+  <thead><tr><th>待补充项</th><th>紧迫度</th><th>负责方</th><th>详见</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>[具体缺什么]</td>
+      <td><span class="badge badge-red">Blocker</span></td>
+      <td>[负责人 / 渠道]</td>
+      <td><a href="#[anchor]">[section编号 · topic名]</a></td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>[板块名，如：主体、合作方与融资]</h3>
+<table>
+  <thead><tr><th>待补充项</th><th>紧迫度</th><th>负责方</th><th>详见</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>[具体缺什么]</td>
+      <td><span class="badge badge-amber">高</span></td>
+      <td>[负责人]</td>
+      <td><a href="#[anchor]">[section编号]</a></td>
+    </tr>
+  </tbody>
+</table>
+```
 
 #### 十一、决策框架
 > Synthesis layer. Inputs from every section above.
@@ -384,7 +484,7 @@ For multi-asset projects, Factor A is computed per-asset per-slot first, average
 
 ### Step 10: KB Header & Shell Construction
 
-The whole body is wrapped in the `.kb-shell` panel-switcher layout (see "Left section-nav (panel switcher)" above): `<div class="kb-shell"><nav class="kb-nav">…buttons…</nav><main class="kb-content">…masthead + summary + panels…</main></div>`. The **masthead** and the **`.kb-summary`** card sit at the top of `.kb-content`, outside the panels, so they persist across panel switches. Each slot renders as `<section class="block kb-panel" id="…">`; the first rendered slot's section AND its nav button both get `.active`. Paste the panel-switcher `<script>` before `</body>`.
+The whole body is wrapped in the `.kb-shell` panel-switcher layout (see "Left section-nav (panel switcher)" above): `<div class="kb-shell"><nav class="kb-nav">…buttons…</nav><main class="kb-content">…panels only…</main></div>`. Emit **`#overview` first** (masthead + `.kb-summary`, default `.active`), then one `.kb-panel` per rendered slot/appendix. Each content slot renders as `<section class="block kb-panel" id="…">` with **no** masthead inside. Only `#overview`'s nav button and panel get `.active` on initial load. Paste the panel-switcher `<script>` before `</body>`.
 
 The header itself is the `.masthead` two-column block defined in `STYLE_GUIDE.md` "### Masthead": left = title block, right = `.masthead-meta` data column, below = 3-colour `.stat-row`. Copy that structure; fill the project's values.
 
@@ -435,7 +535,7 @@ Rules:
 - **Location**: Saved to the project folder root (same folder the user opened in Cowork)
 - **CSS — copy, do NOT rewrite (this is the #1 cause of "KB came out with no colours/background")**: When **creating** a KB, copy the entire `<style>` block AND the three font `<link>` tags from `STYLE_GUIDE.md` section "Portable Stylesheet — 复制即用" *verbatim* into `<head>`. Do not paraphrase the token list into your own CSS, do not omit the block, do not invent class names. The HTML body you generate uses exactly the classes defined in that block (`.kb-shell`/`.kb-nav`/`.kb-nav-btn`/`.kb-content`/`.kb-panel`, `.kb-summary`, `.masthead`, `.section-title`, `.section-num`, `.tag-*`/`.tag-src`/`.tag-attrib`, `.badge-*`, `.callout.*`, `.scenario-cards`, `.org-chart`, `.timeline`/`.tl-item`, `.tl-tree`/`.tl-year`/`.tl-month`, `.bmc`, `.journey`, `.topic`, `.glossary-grid`, `.adv-grid`, `.valuation-box`, `.footer`, `.changelog`). When **updating** an existing KB, never strip or shrink the existing `<style>` block — edit only the content between sections.
 - **Panel-switcher JS — also copy verbatim**: paste the vanilla-JS `<script>` from `STYLE_GUIDE.md` "Left section-nav" just before `</body>`. Without it the left buttons won't switch panels and (since `.kb-panel{display:none}`) only the first panel would ever show.
-- **Self-check before saving**: confirm the saved file contains (1) `body{...background:var(--paper)...}` and at least one `--burgundy` rule, (2) a `.kb-shell` wrapper with `.kb-nav` buttons + `.kb-panel` sections, (3) exactly one `.kb-panel.active` + one `.kb-nav-btn.active` in markup, (4) the panel-switcher `<script>`, (5) the `.kb-summary` card above section 一. If any is missing, fix before returning.
+- **Self-check before saving**: confirm the saved file contains (1) `body{...background:var(--paper)...}` and at least one `--burgundy` rule, (2) a `.kb-shell` wrapper with `.kb-nav` buttons + `.kb-panel` sections, (3) exactly one `.kb-panel.active` on `#overview` + matching `.kb-nav-btn.active` on load, (4) the panel-switcher `<script>`, (5) masthead + `.kb-summary` **only** inside `#overview` (not repeated in slot panels). If any is missing, fix before returning.
 - All other visual rules in `STYLE_GUIDE.md`
 
 ## Important Notes
