@@ -46,7 +46,7 @@ import {
   getProjectResourceDemo,
   type ProjectChatSnippet,
 } from "@/workspace/project-resource-demos";
-import { getProjectById } from "@/workspace/project-registry";
+import { getMergedProjects, getProjectById } from "@/workspace/project-registry";
 import {
   loadSessionUserId,
   saveLastChatProjectId,
@@ -90,20 +90,85 @@ function pruneEmptyLiveConversations(
   return convs.filter((c) => conversationHasMessages(c, messagesByConversation));
 }
 
+function inferProjectIdFromConversationId(
+  conversationId: string,
+  known: SessionConversation[],
+): string | null {
+  const hit = known.find((c) => c.id === conversationId);
+  if (hit) return hit.projectId;
+  const mainMatch = /^(.+)-main$/u.exec(conversationId);
+  if (mainMatch?.[1] && getProjectById(mainMatch[1])) return mainMatch[1];
+  const blankMatch = /^(.+)-blank-/u.exec(conversationId);
+  if (blankMatch?.[1] && getProjectById(blankMatch[1])) return blankMatch[1];
+  for (const project of getMergedProjects()) {
+    if (conversationId === project.id || conversationId.startsWith(`${project.id}-`)) {
+      return project.id;
+    }
+  }
+  return null;
+}
+
+function previewFromMessages(msgs: LiveChatMessage[]): string {
+  const last = [...msgs].reverse().find((m) => m.content.trim());
+  if (!last) return "对话记录";
+  const text = last.content.trim().replace(/\s+/gu, " ");
+  return text.length > 48 ? `${text.slice(0, 48)}…` : text;
+}
+
+/** 云端有消息但会话元数据缺失时，从 message 键恢复侧栏项（避免同步时被误删） */
+function reconcileConversationsWithMessages(
+  convs: SessionConversation[],
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+): SessionConversation[] {
+  const byId = new Map(convs.map((c) => [c.id, c]));
+  for (const [conversationId, msgs] of Object.entries(messagesByConversation)) {
+    if (!Array.isArray(msgs) || msgs.length === 0) continue;
+    if (byId.has(conversationId)) continue;
+    const projectId = inferProjectIdFromConversationId(conversationId, convs);
+    if (!projectId) continue;
+    const built = buildConversationFromProject(projectId);
+    if (!built) continue;
+    byId.set(conversationId, {
+      ...built,
+      id: conversationId,
+      preview: previewFromMessages(msgs),
+      updatedAt: getCurrentDateTimeLabel(),
+      variant: "blank",
+    });
+  }
+  return Array.from(byId.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+/** 去掉历史预填侧栏项；有真实消息的预填项一律保留 */
+function stripLegacySidebarPrefill(
+  convs: SessionConversation[],
+  currentProjectId: string,
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+): SessionConversation[] {
+  return convs.filter((c) => {
+    if (!LEGACY_SIDEBAR_PREFILL_PROJECT_IDS.has(c.projectId)) return true;
+    if (c.id !== `${c.projectId}-main`) return true;
+    if (conversationHasMessages(c, messagesByConversation)) return true;
+    return c.projectId === currentProjectId;
+  });
+}
+
 function mergeConversationsForBootstrap(
   base: SessionConversation[],
   projectId: string,
   messagesByConversation: Record<string, LiveChatMessage[]>,
   isLiveAiMode: boolean,
 ): SessionConversation[] {
+  const cleaned = stripLegacySidebarPrefill(base, projectId, messagesByConversation);
+  const reconciled = reconcileConversationsWithMessages(cleaned, messagesByConversation);
   if (isLiveAiMode) {
-    return pruneEmptyLiveConversations(base, messagesByConversation);
+    return reconciled;
   }
   const currentConversation = buildConversationFromProject(projectId);
-  if (!currentConversation) return base;
-  const hasCurrent = base.some((item) => item.projectId === projectId);
-  if (hasCurrent) return base;
-  return [withCurrentPreviewTime(currentConversation), ...base];
+  if (!currentConversation) return reconciled;
+  const hasCurrent = reconciled.some((item) => item.projectId === projectId);
+  if (hasCurrent) return reconciled;
+  return [withCurrentPreviewTime(currentConversation), ...reconciled];
 }
 
 const EMPTY_LIVE_CHAT_MESSAGES: LiveChatMessage[] = [];
@@ -483,7 +548,8 @@ function formatRagflowRequestError(message: string, endpoint: string): string {
  * - 刷新页面后自动清空
  */
 const SESSION_CONVERSATION_CACHE: Record<string, SessionConversationState> = {};
-const DEFAULT_PROJECT_IDS = ["europe-hotel-ma", "shrimp"] as const;
+/** 部署前为撑开侧栏预填的两个种子项目；产品期不再默认展示 */
+const LEGACY_SIDEBAR_PREFILL_PROJECT_IDS = new Set(["europe-hotel-ma", "shrimp"]);
 const NANNING_CITATION_MAP: Record<string, string> = {
   "1": "《南宁生鲜食品智慧港项目介绍.pdf》",
   "2": "《尽调报告二 南宁东盟生鲜食品智慧港.pdf》",
@@ -687,12 +753,6 @@ function conversationPath(c: SessionConversation): string {
     return `/app/chat/${c.projectId}`;
   }
   return `/app/chat/${c.projectId}/${c.id}`;
-}
-
-function getDefaultConversations(): SessionConversation[] {
-  return DEFAULT_PROJECT_IDS.map((projectId) => buildConversationFromProject(projectId)).filter(
-    (item): item is SessionConversation => Boolean(item)
-  );
 }
 
 function UserBubble({ children, time }: { children: ReactNode; time?: string }) {
@@ -1319,7 +1379,10 @@ export default function ConversationCenter() {
       setLiveMessagesByConversation(messagesByConversation);
 
       const persistedConvs = remote?.conversations ?? [];
-      if (persistedConvs.length > 0) {
+      const hasPersistedData =
+        persistedConvs.length > 0 || Object.keys(messagesByConversation).length > 0;
+
+      if (hasPersistedData) {
         const next = mergeConversationsForBootstrap(
           persistedConvs,
           projectId,
@@ -1334,21 +1397,14 @@ export default function ConversationCenter() {
 
       const cached = SESSION_CONVERSATION_CACHE[cacheKey];
       if (!cached || cached.conversations.length === 0) {
-        const defaults = getDefaultConversations();
         const next = mergeConversationsForBootstrap(
-          defaults,
+          [],
           projectId,
           messagesByConversation,
           isLiveAiMode,
         );
         setConversations(next);
         SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
-        if (isLiveAiMode) {
-          await persistChatStateForUser(userId, {
-            conversations: pruneEmptyLiveConversations(next, messagesByConversation),
-            messagesByConversation,
-          });
-        }
         setChatSyncReady(true);
         return;
       }
@@ -1371,11 +1427,19 @@ export default function ConversationCenter() {
   }, [projectId, userId, isLiveAiMode]);
 
   useEffect(() => {
-    if (!userId || !chatSyncReady || conversations.length === 0) return;
+    if (!userId || !chatSyncReady) return;
+    const messageCount = Object.values(liveMessagesByConversation).reduce(
+      (n, arr) => n + (arr?.length ?? 0),
+      0,
+    );
+    if (conversations.length === 0 && messageCount === 0) return;
     SESSION_CONVERSATION_CACHE[userId] = { conversations };
     const timer = window.setTimeout(() => {
       const convsToSave = isLiveAiMode
-        ? pruneEmptyLiveConversations(conversations, liveMessagesByConversation)
+        ? reconcileConversationsWithMessages(
+            conversations,
+            liveMessagesByConversation,
+          )
         : conversations;
       void persistChatStateForUser(userId, {
         conversations: convsToSave,
@@ -1383,7 +1447,7 @@ export default function ConversationCenter() {
       });
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [userId, chatSyncReady, conversations, liveMessagesByConversation]);
+  }, [userId, chatSyncReady, conversations, liveMessagesByConversation, isLiveAiMode]);
 
   /** 一次性展开原版预设剧本（不经空格步进） */
   const instantStaticDemoPreferred =
