@@ -8,11 +8,8 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import {
-  clearSession,
-  loadLastChatProjectId,
-  loadSessionUserId,
-} from "@/workspace/session";
+import { resolveChatEntryPath } from "@/workspace/chat-entry";
+import { clearSession, loadSessionUserId } from "@/workspace/session";
 import {
   GUEST_USER_ID,
   getUserById,
@@ -48,11 +45,10 @@ function initialsFromDisplayName(name: string | null | undefined): string {
 export function WorkspaceTopNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const lastChatId = loadLastChatProjectId();
-  const chatPath = lastChatId ? `/app/chat/${lastChatId}` : "/app/chat";
+  const userId = loadSessionUserId();
+  const chatPath = resolveChatEntryPath(userId);
   const chatActive = pathname.startsWith("/app/chat");
 
-  const userId = loadSessionUserId();
   const user = getUserById(userId);
   const isGuest = user?.id === GUEST_USER_ID;
   const isAdmin = user?.id === "candice-guo";

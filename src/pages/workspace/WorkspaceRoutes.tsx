@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { WorkspaceErrorBoundary } from "@/components/workspace/WorkspaceErrorBoundary";
-import { loadLastChatProjectId } from "@/workspace/session";
+import { resolveChatEntryPath } from "@/workspace/chat-entry";
+import { loadSessionUserId } from "@/workspace/session";
 import AdminPortal from "@/pages/workspace/AdminPortal";
 import ConversationCenter from "@/pages/workspace/ConversationCenter";
 import Login from "@/pages/workspace/Login";
@@ -8,11 +9,8 @@ import ProjectOverview from "@/pages/workspace/ProjectOverview";
 import RequireAuth from "@/pages/workspace/RequireAuth";
 
 function WorkspaceChatRedirect() {
-  const last = loadLastChatProjectId();
-  if (last) {
-    return <Navigate to={`/app/chat/${last}`} replace />;
-  }
-  return <Navigate to="/app/projects" replace />;
+  const userId = loadSessionUserId();
+  return <Navigate to={resolveChatEntryPath(userId)} replace />;
 }
 
 export default function WorkspaceRoutes() {
