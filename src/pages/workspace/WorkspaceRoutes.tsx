@@ -1,6 +1,6 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { WorkspaceErrorBoundary } from "@/components/workspace/WorkspaceErrorBoundary";
-import { loadLastProjectId } from "@/workspace/session";
+import { loadLastChatProjectId } from "@/workspace/session";
 import AdminPortal from "@/pages/workspace/AdminPortal";
 import ConversationCenter from "@/pages/workspace/ConversationCenter";
 import Login from "@/pages/workspace/Login";
@@ -8,9 +8,11 @@ import ProjectOverview from "@/pages/workspace/ProjectOverview";
 import RequireAuth from "@/pages/workspace/RequireAuth";
 
 function WorkspaceChatRedirect() {
-  return (
-    <Navigate to={`/app/chat/${loadLastProjectId() ?? "shrimp"}`} replace />
-  );
+  const last = loadLastChatProjectId();
+  if (last) {
+    return <Navigate to={`/app/chat/${last}`} replace />;
+  }
+  return <Navigate to="/app/projects" replace />;
 }
 
 export default function WorkspaceRoutes() {

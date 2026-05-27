@@ -47,7 +47,10 @@ import {
   type ProjectChatSnippet,
 } from "@/workspace/project-resource-demos";
 import { getProjectById } from "@/workspace/project-registry";
-import { loadSessionUserId, saveLastProjectId } from "@/workspace/session";
+import {
+  loadSessionUserId,
+  saveLastChatProjectId,
+} from "@/workspace/session";
 import type { WorkspaceRole } from "@/workspace/types";
 import {
   getProjectRole,
@@ -71,6 +74,37 @@ type SessionConversation = {
 type SessionConversationState = {
   conversations: SessionConversation[];
 };
+
+function conversationHasMessages(
+  c: SessionConversation,
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+): boolean {
+  const msgs = messagesByConversation[c.id];
+  return Array.isArray(msgs) && msgs.length > 0;
+}
+
+function pruneEmptyLiveConversations(
+  convs: SessionConversation[],
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+): SessionConversation[] {
+  return convs.filter((c) => conversationHasMessages(c, messagesByConversation));
+}
+
+function mergeConversationsForBootstrap(
+  base: SessionConversation[],
+  projectId: string,
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+  isLiveAiMode: boolean,
+): SessionConversation[] {
+  if (isLiveAiMode) {
+    return pruneEmptyLiveConversations(base, messagesByConversation);
+  }
+  const currentConversation = buildConversationFromProject(projectId);
+  if (!currentConversation) return base;
+  const hasCurrent = base.some((item) => item.projectId === projectId);
+  if (hasCurrent) return base;
+  return [withCurrentPreviewTime(currentConversation), ...base];
+}
 
 const EMPTY_LIVE_CHAT_MESSAGES: LiveChatMessage[] = [];
 
@@ -1224,7 +1258,6 @@ export default function ConversationCenter() {
       navigate("/app/projects", { replace: true });
       return;
     }
-    saveLastProjectId(projectId);
   }, [userId, projectId, projectRole, projectLookupDone, navigate]);
 
   const resourceDemo = useMemo(
@@ -1245,15 +1278,30 @@ export default function ConversationCenter() {
   const effectiveConversationId =
     projectId && conversationId ? conversationId : projectId ? `${projectId}-main` : "";
 
+  const isLiveAiMode =
+    ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
+
   const activeConversation = useMemo(() => {
-    if (!effectiveConversationId) return null;
-    return conversations.find((item) => item.id === effectiveConversationId) ?? null;
-  }, [conversations, effectiveConversationId]);
+    if (!effectiveConversationId || !projectId) return null;
+    const found = conversations.find((item) => item.id === effectiveConversationId);
+    if (found) return found;
+    if (!isLiveAiMode) return null;
+    const built = buildConversationFromProject(projectId);
+    if (!built) return null;
+    return {
+      ...built,
+      id: effectiveConversationId,
+      preview: "尚未发送消息",
+      variant: "blank" as const,
+    };
+  }, [conversations, effectiveConversationId, projectId, isLiveAiMode]);
 
   const isBlankThread = activeConversation?.variant === "blank";
 
-  const isLiveAiMode =
-    ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
+  const sidebarConversations = useMemo(() => {
+    if (!isLiveAiMode) return conversations;
+    return pruneEmptyLiveConversations(conversations, liveMessagesByConversation);
+  }, [conversations, liveMessagesByConversation, isLiveAiMode]);
 
   useEffect(() => {
     if (!projectId || !userId) return;
@@ -1262,20 +1310,22 @@ export default function ConversationCenter() {
 
     const bootstrap = async () => {
       const cacheKey = userId;
-      const currentConversation = buildConversationFromProject(projectId);
-      if (!currentConversation) return;
+      if (!buildConversationFromProject(projectId)) return;
 
       const remote = await loadChatStateForUser(userId);
       if (cancelled) return;
 
-      setLiveMessagesByConversation(remote?.messagesByConversation ?? {});
+      const messagesByConversation = remote?.messagesByConversation ?? {};
+      setLiveMessagesByConversation(messagesByConversation);
 
       const persistedConvs = remote?.conversations ?? [];
       if (persistedConvs.length > 0) {
-        const hasCurrent = persistedConvs.some((item) => item.projectId === projectId);
-        const next = hasCurrent
-          ? persistedConvs
-          : [withCurrentPreviewTime(currentConversation), ...persistedConvs];
+        const next = mergeConversationsForBootstrap(
+          persistedConvs,
+          projectId,
+          messagesByConversation,
+          isLiveAiMode,
+        );
         setConversations(next);
         SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
         setChatSyncReady(true);
@@ -1285,26 +1335,30 @@ export default function ConversationCenter() {
       const cached = SESSION_CONVERSATION_CACHE[cacheKey];
       if (!cached || cached.conversations.length === 0) {
         const defaults = getDefaultConversations();
-        const hasCurrent = defaults.some((item) => item.projectId === projectId);
-        const next = hasCurrent
-          ? defaults
-          : [withCurrentPreviewTime(currentConversation), ...defaults];
+        const next = mergeConversationsForBootstrap(
+          defaults,
+          projectId,
+          messagesByConversation,
+          isLiveAiMode,
+        );
         setConversations(next);
         SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
         if (isLiveAiMode) {
           await persistChatStateForUser(userId, {
-            conversations: next,
-            messagesByConversation: remote?.messagesByConversation ?? {},
+            conversations: pruneEmptyLiveConversations(next, messagesByConversation),
+            messagesByConversation,
           });
         }
         setChatSyncReady(true);
         return;
       }
 
-      const hasCurrent = cached.conversations.some((item) => item.projectId === projectId);
-      const next = hasCurrent
-        ? cached.conversations
-        : [withCurrentPreviewTime(currentConversation), ...cached.conversations];
+      const next = mergeConversationsForBootstrap(
+        cached.conversations,
+        projectId,
+        messagesByConversation,
+        isLiveAiMode,
+      );
       setConversations(next);
       SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
       setChatSyncReady(true);
@@ -1320,8 +1374,11 @@ export default function ConversationCenter() {
     if (!userId || !chatSyncReady || conversations.length === 0) return;
     SESSION_CONVERSATION_CACHE[userId] = { conversations };
     const timer = window.setTimeout(() => {
+      const convsToSave = isLiveAiMode
+        ? pruneEmptyLiveConversations(conversations, liveMessagesByConversation)
+        : conversations;
       void persistChatStateForUser(userId, {
-        conversations,
+        conversations: convsToSave,
         messagesByConversation: liveMessagesByConversation,
       });
     }, 900);
@@ -1571,6 +1628,25 @@ export default function ConversationCenter() {
     liveCitationMap,
   ]);
 
+  const registerLiveChatActivity = () => {
+    if (!projectId || !effectiveConversationId || !isLiveAiMode) return;
+    saveLastChatProjectId(projectId);
+    setConversations((prev) => {
+      if (prev.some((c) => c.id === effectiveConversationId)) return prev;
+      const built = buildConversationFromProject(projectId);
+      if (!built) return prev;
+      return [
+        withCurrentPreviewTime({
+          ...built,
+          id: effectiveConversationId,
+          preview: "对话进行中",
+          variant: "blank",
+        }),
+        ...prev,
+      ];
+    });
+  };
+
   const updateConversationPreview = (preview: string, fileNames: string[] = []) => {
     setConversations((prev) =>
       prev.map((t) =>
@@ -1670,6 +1746,8 @@ export default function ConversationCenter() {
     }
 
     if (!effectiveConversationId || (!trimmed && fileNames.length === 0) || sending) return;
+
+    registerLiveChatActivity();
 
     setLiveError(null);
     const filesToUpload = [...selectedFiles];
@@ -1934,20 +2012,6 @@ export default function ConversationCenter() {
             onClick={() => {
               if (!projectId || !project) return;
               const newId = `${projectId}-blank-${userId}-${Date.now()}`;
-              const newConv: SessionConversation = {
-                id: newId,
-                projectId,
-                title: `${project.name} · 新对话`,
-                preview: "尚未发送消息",
-                updatedAt: getCurrentDateTimeLabel(),
-                files: [],
-                variant: "blank",
-              };
-              setConversations((prev) => {
-                const next = [newConv, ...prev];
-                if (userId) SESSION_CONVERSATION_CACHE[userId] = { conversations: next };
-                return next;
-              });
               setNewlyAddedConversationId(newId);
               if (newConversationTimerRef.current !== null) {
                 window.clearTimeout(newConversationTimerRef.current);
@@ -1962,7 +2026,7 @@ export default function ConversationCenter() {
             <Plus className="h-4 w-4" strokeWidth={2} />
             新增对话
           </button>
-          {conversations.map((conversation) => {
+          {sidebarConversations.map((conversation) => {
             const active = conversation.id === effectiveConversationId;
             return (
               <div

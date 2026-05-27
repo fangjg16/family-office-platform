@@ -10,7 +10,7 @@ import {
 import { cn } from "@/lib/utils";
 import {
   clearSession,
-  loadLastProjectId,
+  loadLastChatProjectId,
   loadSessionUserId,
 } from "@/workspace/session";
 import {
@@ -48,8 +48,8 @@ function initialsFromDisplayName(name: string | null | undefined): string {
 export function WorkspaceTopNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const lastChatId = loadLastProjectId() ?? "shrimp";
-  const chatPath = `/app/chat/${lastChatId}`;
+  const lastChatId = loadLastChatProjectId();
+  const chatPath = lastChatId ? `/app/chat/${lastChatId}` : "/app/chat";
   const chatActive = pathname.startsWith("/app/chat");
 
   const userId = loadSessionUserId();

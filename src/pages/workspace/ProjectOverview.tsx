@@ -33,10 +33,9 @@ import {
   fetchProjectsFromApi,
   uploadProjectPackageFile,
 } from "@/lib/project-api";
-import { formatProjectCreatedAt } from "@/workspace/project-manage";
+import { clearLastChatProjectId, loadLastChatProjectId } from "@/workspace/session";
 import {
   getMergedProjects,
-  isCloudProject,
   removeApiProject,
   setApiProjects,
   sortProjectsForOverview,
@@ -160,9 +159,6 @@ function ProjectCard({
   const role = getProjectRole(userId, project.id);
   const roleLabel = roleFootnote(role);
   const previewText = role === "guest" ? project.guestSummary : project.summary;
-  const createdLabel = isCloudProject(project)
-    ? formatProjectCreatedAt(project.createdAt)
-    : null;
 
   return (
     <article
@@ -197,14 +193,9 @@ function ProjectCard({
       <h2 className="line-clamp-2 text-lg font-semibold leading-snug text-slate-900">
         {project.name}
       </h2>
-      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">
-          {project.category}
-        </p>
-        {createdLabel ? (
-          <p className="text-[10px] font-medium text-slate-400">创建 {createdLabel}</p>
-        ) : null}
-      </div>
+      <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">
+        {project.category}
+      </p>
       <p
         title={previewText}
         className="mt-5 line-clamp-4 flex-1 text-sm leading-relaxed text-slate-600"
@@ -800,6 +791,7 @@ export default function ProjectOverview() {
           onProjectDeleted={(id) => {
             removeApiProject(id);
             setDetailProject(null);
+            if (loadLastChatProjectId() === id) clearLastChatProjectId();
             setCreateHint("项目已删除。");
           }}
         />
