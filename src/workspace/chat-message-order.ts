@@ -20,6 +20,7 @@ function parseTimeLabel(label: string | undefined): number {
 }
 
 function timestampFromMessageId(id: string): number {
+  if (/^assistant-job-/u.test(id)) return Number.MAX_SAFE_INTEGER;
   const m = /^user-(\d+)$/u.exec(id) ?? /^assistant-(\d+)$/u.exec(id);
   if (!m) return 0;
   const n = Number(m[1]);

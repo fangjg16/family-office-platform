@@ -1307,6 +1307,8 @@ export default function ConversationCenter() {
   const playbackSeqRef = useRef(0);
   const resumedAgentJobIdsRef = useRef<Set<string>>(new Set());
   const chatPersistTimerRef = useRef<number | null>(null);
+  /** 云端 hydrate 后跳过首次自动 PUT，避免用未稳定 state 覆盖 D1 */
+  const skipNextAutoPersistRef = useRef(false);
   const persistSnapshotRef = useRef({
     conversations: [] as SessionConversation[],
     liveMessagesByConversation: {} as Record<string, LiveChatMessage[]>,
@@ -1498,6 +1500,10 @@ export default function ConversationCenter() {
 
   const scheduleChatPersist = useCallback(() => {
     if (!userId || !chatSyncReady) return;
+    if (skipNextAutoPersistRef.current) {
+      skipNextAutoPersistRef.current = false;
+      return;
+    }
     if (chatPersistTimerRef.current) {
       window.clearTimeout(chatPersistTimerRef.current);
     }
@@ -1550,6 +1556,8 @@ export default function ConversationCenter() {
 
     const bootstrap = async () => {
       const cacheKey = userId;
+
+      skipNextAutoPersistRef.current = true;
 
       const remote = await loadChatStateForUser(userId);
       if (cancelled) return;

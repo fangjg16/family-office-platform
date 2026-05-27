@@ -20,6 +20,7 @@ export type SyncChatMessage = {
   time: string;
   sortIndex?: number;
   knowledgeNetworkHtml?: string | null;
+  pendingJobId?: string | null;
 };
 
 export type DeletedMessageRef = {
@@ -103,9 +104,13 @@ async function replaceConversationMessages(
       typeof m.sortIndex === "number" && Number.isFinite(m.sortIndex) ? m.sortIndex : idx;
     const knHtml =
       typeof m.knowledgeNetworkHtml === "string" ? m.knowledgeNetworkHtml : null;
+    const pendingJobId =
+      typeof m.pendingJobId === "string" && m.pendingJobId.trim()
+        ? m.pendingJobId.trim()
+        : null;
     await env.DB.prepare(
-      `INSERT INTO user_chat_messages (id, user_id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO user_chat_messages (id, user_id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html, pending_job_id, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
         m.id,
@@ -117,6 +122,7 @@ async function replaceConversationMessages(
         m.time ?? now,
         sortIndex,
         knHtml,
+        pendingJobId,
         now,
       )
       .run();
@@ -138,9 +144,11 @@ async function upsertChatMessage(
     typeof m.sortIndex === "number" && Number.isFinite(m.sortIndex) ? m.sortIndex : 0;
   const knHtml =
     typeof m.knowledgeNetworkHtml === "string" ? m.knowledgeNetworkHtml : null;
+  const pendingJobId =
+    typeof m.pendingJobId === "string" && m.pendingJobId.trim() ? m.pendingJobId.trim() : null;
   await env.DB.prepare(
-    `INSERT INTO user_chat_messages (id, user_id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html, updated_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `INSERT INTO user_chat_messages (id, user_id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html, pending_job_id, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(user_id, id) DO UPDATE SET
        conversation_id = excluded.conversation_id,
        role = excluded.role,
@@ -149,6 +157,7 @@ async function upsertChatMessage(
        time_label = excluded.time_label,
        sort_index = excluded.sort_index,
        knowledge_network_html = excluded.knowledge_network_html,
+       pending_job_id = excluded.pending_job_id,
        updated_at = excluded.updated_at`,
   )
     .bind(
@@ -161,6 +170,7 @@ async function upsertChatMessage(
       m.time ?? now,
       sortIndex,
       knHtml,
+      pendingJobId,
       now,
     )
     .run();
@@ -298,9 +308,53 @@ export async function syncCompletedAgentJobToChat(
       time: now,
       sortIndex,
       knowledgeNetworkHtml: result.knowledgeNetworkHtml,
+      pendingJobId: null,
     },
     now,
   );
+}
+
+export type ActiveAgentJobSummary = {
+  jobId: string;
+  conversationId: string | null;
+  projectId: string;
+  status: string;
+  assistantMessageId: string;
+};
+
+export async function listActiveAgentJobsForUser(
+  env: ChatSyncEnv,
+  userId: string,
+): Promise<ActiveAgentJobSummary[]> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, project_id, conversation_id, status
+     FROM agent_jobs
+     WHERE user_id = ? AND status IN ('pending', 'running')
+     ORDER BY created_at DESC`,
+  )
+    .bind(userId)
+    .all<{
+      id: string;
+      project_id: string;
+      conversation_id: string | null;
+      status: string;
+    }>();
+
+  return (results ?? []).map((r) => ({
+    jobId: r.id,
+    projectId: r.project_id,
+    conversationId: r.conversation_id,
+    status: r.status,
+    assistantMessageId: assistantMessageIdForJob(r.id),
+  }));
+}
+
+export async function handleGetActiveAgentJobs(
+  env: ChatSyncEnv,
+  userId: string,
+): Promise<Response> {
+  const jobs = await listActiveAgentJobsForUser(env, userId);
+  return json({ ok: true, userId, jobs });
 }
 
 export async function handleGetChatState(
@@ -345,7 +399,7 @@ export async function handleGetChatState(
   });
 
   const { results: msgRows } = await env.DB.prepare(
-    `SELECT id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html
+    `SELECT id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html, pending_job_id
      FROM user_chat_messages WHERE user_id = ? ORDER BY conversation_id, sort_index`,
   )
     .bind(userId)
@@ -358,6 +412,7 @@ export async function handleGetChatState(
       time_label: string;
       sort_index: number;
       knowledge_network_html: string | null;
+      pending_job_id: string | null;
     }>();
 
   const messagesByConversation: Record<string, SyncChatMessage[]> = {};
@@ -372,6 +427,10 @@ export async function handleGetChatState(
         /* ignore */
       }
     }
+    const pendingJobId =
+      typeof r.pending_job_id === "string" && r.pending_job_id.trim()
+        ? r.pending_job_id.trim()
+        : undefined;
     list.push({
       id: r.id,
       role: r.role === "assistant" ? "assistant" : "user",
@@ -380,6 +439,7 @@ export async function handleGetChatState(
       time: r.time_label,
       sortIndex: r.sort_index,
       knowledgeNetworkHtml: r.knowledge_network_html,
+      ...(pendingJobId ? { pendingJobId } : {}),
     });
     messagesByConversation[r.conversation_id] = list;
   }

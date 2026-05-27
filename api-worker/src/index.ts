@@ -4,7 +4,11 @@ import {
   getCitationSlots,
   matchCitationSlot,
 } from "./citations";
-import { handleGetChatState, handlePutChatState } from "./chat-sync";
+import {
+  handleGetActiveAgentJobs,
+  handleGetChatState,
+  handlePutChatState,
+} from "./chat-sync";
 import { extractPdfPlainText } from "./pdf-text";
 import {
   detectSkillIntent,
@@ -1017,6 +1021,16 @@ export default {
           response = json({ error: "缺少 userId 查询参数" }, 400);
         } else {
           response = await handleAgentJobPoll(env, jobId, uid);
+        }
+      } else if (
+        /^\/api\/users\/[^/]+\/active-agent-jobs$/u.test(path) &&
+        request.method === "GET"
+      ) {
+        const routeUserId = normalizeUserId(path.split("/")[3]);
+        if (!routeUserId) {
+          response = json({ error: "无效 userId" }, 400);
+        } else {
+          response = await handleGetActiveAgentJobs(env, routeUserId);
         }
       } else if (/^\/api\/users\/[^/]+\/chat-state$/u.test(path)) {
         const routeUserId = normalizeUserId(path.split("/")[3]);

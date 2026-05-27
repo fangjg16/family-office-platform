@@ -1,5 +1,6 @@
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
+  attachActiveAgentJobsToMessages,
   fetchRemoteChatState,
   saveRemoteChatState,
   type ChatStatePatch,
@@ -38,11 +39,14 @@ export async function loadChatStateForUser(
     const remote = await fetchRemoteChatState(userId);
     if (!remote) return null;
 
+    const withJobs = await attachActiveAgentJobsToMessages(
+      userId,
+      remote.messagesByConversation,
+    );
+
     return {
       conversations: remote.conversations,
-      messagesByConversation: sortMessagesByConversation(
-        remote.messagesByConversation,
-      ),
+      messagesByConversation: sortMessagesByConversation(withJobs),
       syncedAt: remote.syncedAt,
     };
   } catch {
