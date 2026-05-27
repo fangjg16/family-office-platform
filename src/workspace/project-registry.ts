@@ -1,19 +1,32 @@
 import { ALL_PROJECTS, type WorkspaceProject } from "./projects";
 
 let apiProjects: WorkspaceProject[] = [];
+const apiProjectListeners = new Set<() => void>();
+
+function notifyApiProjectListeners(): void {
+  apiProjectListeners.forEach((fn) => fn());
+}
+
+export function subscribeApiProjects(listener: () => void): () => void {
+  apiProjectListeners.add(listener);
+  return () => apiProjectListeners.delete(listener);
+}
 
 export function setApiProjects(projects: WorkspaceProject[]): void {
   apiProjects = projects;
+  notifyApiProjectListeners();
 }
 
 export function upsertApiProject(project: WorkspaceProject): void {
   const idx = apiProjects.findIndex((p) => p.id === project.id);
   if (idx >= 0) apiProjects[idx] = project;
   else apiProjects.push(project);
+  notifyApiProjectListeners();
 }
 
 export function removeApiProject(projectId: string): void {
   apiProjects = apiProjects.filter((p) => p.id !== projectId);
+  notifyApiProjectListeners();
 }
 
 /** 静态种子 + API 项目（同 id 时 API 覆盖） */

@@ -46,7 +46,12 @@ import {
   getProjectResourceDemo,
   type ProjectChatSnippet,
 } from "@/workspace/project-resource-demos";
-import { getMergedProjects, getProjectById } from "@/workspace/project-registry";
+import {
+  getMergedProjects,
+  getProjectById,
+  subscribeApiProjects,
+} from "@/workspace/project-registry";
+import { sortMessagesByConversation } from "@/workspace/chat-message-order";
 import {
   loadSessionUserId,
   saveLastChatProjectId,
@@ -1269,6 +1274,9 @@ export default function ConversationCenter() {
   }, []);
 
   const [projectLookupDone, setProjectLookupDone] = useState(false);
+  const [apiProjectsTick, setApiProjectsTick] = useState(0);
+
+  useEffect(() => subscribeApiProjects(() => setApiProjectsTick((n) => n + 1)), []);
 
   useEffect(() => {
     if (!projectId) {
@@ -1295,7 +1303,7 @@ export default function ConversationCenter() {
     return () => {
       cancelled = true;
     };
-  }, [projectId]);
+  }, [projectId, apiProjectsTick]);
 
   const project = projectId ? getProjectById(projectId) : undefined;
 
@@ -1309,16 +1317,15 @@ export default function ConversationCenter() {
     : null;
 
   useEffect(() => {
-    if (!userId || !projectId || !projectRole || !projectLookupDone) return;
-    if (projectRole === "guest") {
+    if (!userId || !projectId || !projectLookupDone) return;
+    if (getProjectRole(userId, projectId) === "guest") {
       navigate("/app/projects", { replace: true });
       return;
     }
     if (!getProjectById(projectId)) {
       navigate("/app/projects", { replace: true });
-      return;
     }
-  }, [userId, projectId, projectRole, projectLookupDone, navigate]);
+  }, [userId, projectId, projectLookupDone, navigate, apiProjectsTick]);
 
   const resourceDemo = useMemo(
     () => getProjectResourceDemo(projectId ?? ""),
@@ -1370,12 +1377,14 @@ export default function ConversationCenter() {
 
     const bootstrap = async () => {
       const cacheKey = userId;
-      if (!buildConversationFromProject(projectId)) return;
+      if (!getProjectById(projectId)) return;
 
       const remote = await loadChatStateForUser(userId);
       if (cancelled) return;
 
-      const messagesByConversation = remote?.messagesByConversation ?? {};
+      const messagesByConversation = sortMessagesByConversation(
+        remote?.messagesByConversation ?? {},
+      );
       setLiveMessagesByConversation(messagesByConversation);
 
       const persistedConvs = remote?.conversations ?? [];
@@ -1424,7 +1433,7 @@ export default function ConversationCenter() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, userId, isLiveAiMode]);
+  }, [projectId, userId, isLiveAiMode, project?.id]);
 
   useEffect(() => {
     if (!userId || !chatSyncReady) return;
@@ -1642,10 +1651,10 @@ export default function ConversationCenter() {
   };
 
   const appendLiveMessage = (conversationKey: string, message: LiveChatMessage) => {
-    setLiveMessagesByConversation((prev) => ({
-      ...prev,
-      [conversationKey]: [...(prev[conversationKey] ?? []), message],
-    }));
+    setLiveMessagesByConversation((prev) => {
+      const next = [...(prev[conversationKey] ?? []), message];
+      return { ...prev, [conversationKey]: next };
+    });
   };
 
   const updateLiveMessage = (
@@ -2013,10 +2022,18 @@ export default function ConversationCenter() {
     );
   }
 
-  if (!projectId || !project || projectRole === "guest") {
+  if (!projectId || projectRole === "guest") {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
         正在跳转项目总览…
+      </div>
+    );
+  }
+
+  if (!project) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background text-muted-foreground">
+        {projectLookupDone ? "正在跳转项目总览…" : "正在加载项目…"}
       </div>
     );
   }

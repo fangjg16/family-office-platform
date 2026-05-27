@@ -1,6 +1,9 @@
-import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { WorkspaceErrorBoundary } from "@/components/workspace/WorkspaceErrorBoundary";
+import { fetchProjectsFromApi, ENABLE_LIVE_CHAT } from "@/lib/project-api";
 import { resolveChatEntryPath } from "@/workspace/chat-entry";
+import { setApiProjects } from "@/workspace/project-registry";
 import { loadSessionUserId } from "@/workspace/session";
 import AdminPortal from "@/pages/workspace/AdminPortal";
 import ConversationCenter from "@/pages/workspace/ConversationCenter";
@@ -9,8 +12,39 @@ import ProjectOverview from "@/pages/workspace/ProjectOverview";
 import RequireAuth from "@/pages/workspace/RequireAuth";
 
 function WorkspaceChatRedirect() {
+  const navigate = useNavigate();
   const userId = loadSessionUserId();
-  return <Navigate to={resolveChatEntryPath(userId)} replace />;
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    const run = async () => {
+      if (ENABLE_LIVE_CHAT) {
+        try {
+          const rows = await fetchProjectsFromApi();
+          if (!cancelled) setApiProjects(rows);
+        } catch {
+          /* 仍用种子项目 fallback */
+        }
+      }
+      if (!cancelled) setReady(true);
+    };
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    navigate(resolveChatEntryPath(userId), { replace: true });
+  }, [ready, userId, navigate]);
+
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center text-sm text-muted-foreground">
+      正在进入对话中心…
+    </div>
+  );
 }
 
 export default function WorkspaceRoutes() {

@@ -5,6 +5,7 @@ import {
   type RemoteChatState,
 } from "@/lib/chat-sync-api";
 import { ENABLE_LIVE_CHAT, AI_CHAT_ENDPOINT } from "@/lib/project-api";
+import { sortMessagesByConversation } from "@/workspace/chat-message-order";
 
 export type PersistedConversation = {
   id: string;
@@ -85,7 +86,10 @@ export async function loadChatStateForUser(
     ) {
       savePersistedConversations(userId, remote.conversations);
       savePersistedLiveMessages(userId, remote.messagesByConversation);
-      return remote;
+      return {
+        ...remote,
+        messagesByConversation: sortMessagesByConversation(remote.messagesByConversation),
+      };
     }
   }
 
@@ -94,20 +98,70 @@ export async function loadChatStateForUser(
   if (localConvs || localMsgs) {
     return {
       conversations: localConvs ?? [],
-      messagesByConversation: localMsgs ?? {},
+      messagesByConversation: sortMessagesByConversation(localMsgs ?? {}),
     };
   }
   return null;
 }
 
-/** 云端 + 本机双写（换电脑同步） */
+function mergeConversations(
+  remote: PersistedConversation[],
+  local: PersistedConversation[],
+): PersistedConversation[] {
+  const byId = new Map<string, PersistedConversation>();
+  for (const c of remote) byId.set(c.id, c);
+  for (const c of local) {
+    const prev = byId.get(c.id);
+    if (!prev || c.updatedAt.localeCompare(prev.updatedAt) >= 0) {
+      byId.set(c.id, c);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+function mergeMessagesByConversation(
+  remote: Record<string, LiveChatMessage[]>,
+  local: Record<string, LiveChatMessage[]>,
+): Record<string, LiveChatMessage[]> {
+  const keys = new Set([...Object.keys(remote), ...Object.keys(local)]);
+  const merged: Record<string, LiveChatMessage[]> = {};
+  for (const key of keys) {
+    const byId = new Map<string, LiveChatMessage>();
+    for (const m of remote[key] ?? []) byId.set(m.id, m);
+    for (const m of local[key] ?? []) byId.set(m.id, m);
+    const list = Array.from(byId.values());
+    if (list.length > 0) merged[key] = list;
+  }
+  return sortMessagesByConversation(merged);
+}
+
+/** 云端 + 本机双写；保存前与远端合并，避免局部状态覆盖删光历史 */
 export async function persistChatStateForUser(
   userId: string,
   state: RemoteChatState,
 ): Promise<void> {
-  savePersistedConversations(userId, state.conversations);
-  savePersistedLiveMessages(userId, state.messagesByConversation);
+  const localSorted = {
+    conversations: state.conversations,
+    messagesByConversation: sortMessagesByConversation(state.messagesByConversation),
+  };
+
+  let toSave = localSorted;
   if (ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT) {
-    await saveRemoteChatState(userId, state);
+    const remote = await fetchRemoteChatState(userId);
+    if (remote) {
+      toSave = {
+        conversations: mergeConversations(remote.conversations, localSorted.conversations),
+        messagesByConversation: mergeMessagesByConversation(
+          remote.messagesByConversation,
+          localSorted.messagesByConversation,
+        ),
+      };
+    }
+  }
+
+  savePersistedConversations(userId, toSave.conversations);
+  savePersistedLiveMessages(userId, toSave.messagesByConversation);
+  if (ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT) {
+    await saveRemoteChatState(userId, toSave);
   }
 }
