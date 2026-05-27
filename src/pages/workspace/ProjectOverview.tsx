@@ -44,8 +44,6 @@ import { loadSessionUserId } from "@/workspace/session";
 import { getProjectRole, getUserById, WORKSPACE_USERS } from "@/workspace/workspace-users";
 import type { WorkspaceRole } from "@/workspace/types";
 
-const NANNING_PROJECT_ID = "nn-fresh-port";
-
 const CREATE_PERMISSION_OPTIONS = ["core", "mid", "low"] as const;
 type CreatePermission = (typeof CREATE_PERMISSION_OPTIONS)[number];
 type CreateParticipant = { userId: string; name: string; permission: CreatePermission };
@@ -276,11 +274,9 @@ export default function ProjectOverview() {
   }, [newProjectOpenness]);
 
   const user = getUserById(userId);
-  const visibleProjects = [...getMergedProjects()].sort((a, b) => {
-    if (a.id === NANNING_PROJECT_ID) return -1;
-    if (b.id === NANNING_PROJECT_ID) return 1;
-    return b.name.localeCompare(a.name, "zh-CN");
-  });
+  const visibleProjects = [...getMergedProjects()].sort((a, b) =>
+    a.name.localeCompare(b.name, "zh-CN"),
+  );
   const phaseOptions = Array.from(new Set(visibleProjects.map((p) => p.phase)));
   const roleOptions = userId
     ? Array.from(
