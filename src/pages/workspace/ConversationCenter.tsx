@@ -42,6 +42,7 @@ import {
 import { upsertApiProject } from "@/workspace/project-registry";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import { consumeChatSse } from "@/lib/chat-stream-client";
+import { isDeepSkillMessage, streamingAssistantDisplayText } from "@/lib/chat-intent";
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
   loadChatStateForUser,
@@ -2209,10 +2210,12 @@ export default function ConversationCenter() {
                 stream: true,
               };
 
-      const useWorkerStream =
+      const deepSkill = isDeepSkillMessage(apiMessage);
+      const useWorkerJson =
         RAGFLOW_MODE !== "native" &&
         RAGFLOW_MODE !== "openai" &&
-        Boolean(requestBody && typeof requestBody === "object" && "stream" in requestBody);
+        Boolean(requestBody && typeof requestBody === "object" && "projectId" in requestBody);
+      const useWorkerStream = useWorkerJson && !deepSkill;
 
       if (useWorkerStream) {
         streamAssistantId = `assistant-${Date.now()}`;
@@ -2223,6 +2226,17 @@ export default function ConversationCenter() {
           content: "",
           time: getCurrentDateTimeLabel(),
           isStreaming: true,
+        });
+      } else if (deepSkill && useWorkerJson) {
+        streamAssistantId = `assistant-${Date.now()}`;
+        setLiveError(null);
+        appendLiveMessage(effectiveConversationId, {
+          id: streamAssistantId,
+          role: "assistant",
+          content: "",
+          time: getCurrentDateTimeLabel(),
+          isStreaming: true,
+          streamStatusLabel: "正在提交深度分析任务…",
         });
       }
 
@@ -2338,14 +2352,6 @@ export default function ConversationCenter() {
         return;
       }
 
-      if (useWorkerStream && streamAssistantId) {
-        updateLiveMessage(effectiveConversationId, streamAssistantId, {
-          isStreaming: false,
-          streamStatusLabel: undefined,
-          content: "流式响应异常，请重试。",
-        });
-      }
-
       const payload: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
         const bodyAnswer =
@@ -2390,14 +2396,25 @@ export default function ConversationCenter() {
           mergedCitationMap,
         );
         setLiveError(null);
-        appendLiveMessage(effectiveConversationId, {
-          id: assistantId,
-          role: "assistant",
-          content: placeholderAnswer,
-          time: getCurrentDateTimeLabel(),
-          pendingJobId: jobId,
-          jobProgressLabel: "任务已提交，正在连接引擎…",
-        });
+        if (streamAssistantId) {
+          updateLiveMessage(effectiveConversationId, streamAssistantId, {
+            id: assistantId,
+            content: placeholderAnswer,
+            pendingJobId: jobId,
+            jobProgressLabel: "任务已提交，正在连接引擎…",
+            isStreaming: false,
+            streamStatusLabel: undefined,
+          });
+        } else {
+          appendLiveMessage(effectiveConversationId, {
+            id: assistantId,
+            role: "assistant",
+            content: placeholderAnswer,
+            time: getCurrentDateTimeLabel(),
+            pendingJobId: jobId,
+            jobProgressLabel: "任务已提交，正在连接引擎…",
+          });
+        }
         resumedAgentJobIdsRef.current.add(jobId);
         void pollAgentJobUntilDone({
           apiBase: apiBaseFromChatEndpoint(AI_CHAT_ENDPOINT),
@@ -2425,13 +2442,22 @@ export default function ConversationCenter() {
           : null;
       const prepared = prepareKnowledgeNetworkMessageDisplay(answer, knFromApi);
       setLiveError(null);
-      appendLiveMessage(effectiveConversationId, {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: prepared.displayContent,
-        time: getCurrentDateTimeLabel(),
-        knowledgeNetworkHtml: prepared.html || undefined,
-      });
+      if (streamAssistantId) {
+        updateLiveMessage(effectiveConversationId, streamAssistantId, {
+          content: prepared.displayContent,
+          knowledgeNetworkHtml: prepared.html || undefined,
+          isStreaming: false,
+          streamStatusLabel: undefined,
+        });
+      } else {
+        appendLiveMessage(effectiveConversationId, {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: prepared.displayContent,
+          time: getCurrentDateTimeLabel(),
+          knowledgeNetworkHtml: prepared.html || undefined,
+        });
+      }
       flushChatPersist();
     } catch (error) {
       const raw =
@@ -2746,11 +2772,16 @@ export default function ConversationCenter() {
                 </AiShell>
               ) : (
                 liveMessages.map((m) => {
+                  const streaming = Boolean(m.isStreaming);
+                  const rawAssistantText =
+                    m.role === "assistant"
+                      ? streamingAssistantDisplayText(m.content, streaming)
+                      : m.content;
                   const knPrepared =
                     m.role === "assistant"
                       ? prepareKnowledgeNetworkMessageDisplay(
-                          m.content,
-                          m.knowledgeNetworkHtml,
+                          rawAssistantText,
+                          streaming ? null : m.knowledgeNetworkHtml,
                         )
                       : null;
                   return m.role === "user" ? (
@@ -2775,9 +2806,14 @@ export default function ConversationCenter() {
                         </div>
                       ) : null}
                       {m.content.trim() ? (
-                        <div className="text-sm">
+                        <div
+                          className={cn(
+                            "text-sm",
+                            m.isStreaming && "max-h-80 overflow-y-auto pr-1",
+                          )}
+                        >
                           <ChatMarkdown
-                            text={knPrepared?.displayContent ?? m.content}
+                            text={knPrepared?.displayContent ?? rawAssistantText}
                             variant="assistant"
                           />
                         </div>
