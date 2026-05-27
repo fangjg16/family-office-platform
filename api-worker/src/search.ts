@@ -1,3 +1,6 @@
+import type { EmbedEnv } from "./embeddings";
+import { embedTexts, scoreChunksByEmbedding } from "./embeddings";
+
 export type ChunkRow = {
   id: string;
   document_id: string;
@@ -5,6 +8,7 @@ export type ChunkRow = {
   text: string;
   filename?: string;
   scope?: string;
+  embedding?: number[] | null;
 };
 
 const PACKAGE_SCOPE = "package";
@@ -115,6 +119,43 @@ export function isGenericProjectQuestion(message: string): boolean {
   return /这是什么项目|项目是什么|什么项目|介绍.{0,6}项目|项目.{0,6}介绍|项目背景|项目概况|项目情况|有哪些资料|资料里|上传了|说了什么|讲的是什么|项目是做什么|项目做什么/u.test(
     m,
   );
+}
+
+/** 优先向量检索（chunk 已 embedding），否则关键词；轻问仍走 Hermes，仅减少摘录体积 */
+export async function selectChunksForChatWithVectors(
+  env: EmbedEnv,
+  chunks: ChunkRow[],
+  query: string,
+  options: { deep: boolean; maxChars: number; topK?: number },
+): Promise<ChunkRow[]> {
+  const topK = options.topK ?? 8;
+  const embedded = chunks.filter((c) => c.embedding && c.embedding.length > 0);
+  if (!options.deep && embedded.length >= 3 && (env.DASHSCOPE_API_KEY || "").trim()) {
+    try {
+      const vectors = await embedTexts(env, [query]);
+      const qVec = vectors[0];
+      if (qVec?.length) {
+        const ranked = scoreChunksByEmbedding(
+          chunks.map((c) => ({ row: c, embedding: c.embedding ?? null })),
+          qVec,
+          topK,
+        );
+        if (ranked.length > 0) {
+          let total = 0;
+          const selected: ChunkRow[] = [];
+          for (const c of ranked) {
+            if (total > 0 && total + c.text.length > options.maxChars) break;
+            selected.push(c);
+            total += c.text.length;
+          }
+          if (selected.length > 0) return selected;
+        }
+      }
+    } catch {
+      /* 向量失败则关键词 */
+    }
+  }
+  return selectChunksForChat(chunks, query, options);
 }
 
 export function chunkPlainText(text: string, size = 900): string[] {

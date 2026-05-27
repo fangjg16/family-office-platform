@@ -40,10 +40,23 @@ import {
   waitForHermesRun,
 } from "./hermes-agent";
 import {
+  buildLlmMessages,
+  getConversationMemorySummary,
+  refreshConversationMemorySummary,
+  splitHistoryForMemory,
+} from "./chat-memory";
+import {
+  fetchChatCompletionsStream,
+  jfoSseError,
+  transformOpenAiStreamToJfo,
+} from "./chat-stream";
+import { getCachedChunks, invalidateChunkCache, putCachedChunks } from "./chunk-cache";
+import { embedDocumentChunks, parseEmbeddingJson } from "./embeddings";
+import {
   chunkPlainText,
   isGenericProjectQuestion,
   isPlaceholderChunkText,
-  selectChunksForChat,
+  selectChunksForChatWithVectors,
   type ChunkRow,
 } from "./search";
 import { getProjectById as getDbProjectById } from "./projects-db";
@@ -103,6 +116,8 @@ type ChatBody = {
   /** 本轮附带的文件名，用于检索 */
   files?: string[];
   history?: { role: string; content: string }[];
+  /** 默认 true：轻问同步路径使用 SSE 流式 */
+  stream?: boolean;
 };
 
 const FILE_ONLY_USER_PROMPT =
@@ -147,10 +162,26 @@ async function loadChunks(
   userId: string,
   conversationId?: string,
 ): Promise<ChunkRow[]> {
+  const convKey = conversationId ?? "";
+  const cached = await getCachedChunks(projectId, userId, convKey);
+  if (cached) return cached;
+
   const { results } = await env.DB.prepare(LOAD_CHUNKS_SQL)
-    .bind(projectId, userId, conversationId ?? "")
-    .all<ChunkRow>();
-  return results ?? [];
+    .bind(projectId, userId, convKey)
+    .all<ChunkRow & { embedding_json?: string | null }>();
+
+  const rows: ChunkRow[] = (results ?? []).map((r) => ({
+    id: r.id,
+    document_id: r.document_id,
+    chunk_index: r.chunk_index,
+    text: r.text,
+    filename: r.filename,
+    scope: r.scope,
+    embedding: parseEmbeddingJson(r.embedding_json),
+  }));
+
+  await putCachedChunks(projectId, userId, convKey, rows);
+  return rows;
 }
 
 async function handleHealth(env: Env): Promise<Response> {
@@ -253,6 +284,7 @@ async function handleListFiles(
 async function handleUpload(
   request: Request,
   env: Env,
+  ctx: ExecutionContext,
   projectId: string,
 ): Promise<Response> {
   const form = await request.formData();
@@ -335,6 +367,16 @@ async function handleUpload(
     )
       .bind(`${docId}-${i}`, docId, i, parts[i])
       .run();
+  }
+
+  await invalidateChunkCache(
+    projectId,
+    uploadedBy,
+    scope === "session" ? conversationId ?? undefined : undefined,
+  );
+
+  if (parsed && parts.length > 0) {
+    ctx.waitUntil(embedDocumentChunks(env, docId));
   }
 
   return json({
@@ -485,6 +527,71 @@ async function callLlm(
   }
 
   throw new Error("未配置 HERMES_BASE_URL/HERMES_API_KEY，也未配置 DASHSCOPE_API_KEY");
+}
+
+async function streamLlm(
+  env: Env,
+  messages: { role: string; content: string }[],
+  meta: Record<string, unknown>,
+  onDone?: (fullAnswer: string) => void,
+): Promise<ReadableStream<Uint8Array>> {
+  const dashscopeReady = Boolean((env.DASHSCOPE_API_KEY || "").trim());
+  const model = (env.HERMES_MODEL || "qwen-plus").trim();
+
+  if (isHermesAgentConfigured(env)) {
+    const rawBase = (env.HERMES_BASE_URL || "").trim();
+    const key = normalizeHermesApiKey(env.HERMES_API_KEY);
+    if (rawBase && key) {
+      assertValidHermesBaseUrl(rawBase);
+      const urls = listHermesChatCompletionsUrls(rawBase);
+      let lastErr = "Hermes 流式不可用";
+      for (const url of urls) {
+        try {
+          const upstream = await fetchChatCompletionsStream(
+            url,
+            key,
+            model,
+            messages,
+            "Hermes",
+          );
+          return transformOpenAiStreamToJfo(
+            upstream,
+            { ...meta, llmBackend: "hermes-chat-stream" },
+            onDone,
+          );
+        } catch (e) {
+          lastErr = e instanceof Error ? e.message : String(e);
+          if (dashscopeReady && shouldFallbackToDashscope(lastErr)) break;
+          if (/401|403|404|405/u.test(lastErr)) continue;
+          throw e;
+        }
+      }
+      if (!dashscopeReady) throw new Error(lastErr);
+    }
+  }
+
+  if (dashscopeReady) {
+    const key = (env.DASHSCOPE_API_KEY || "").trim();
+    const base = (
+      env.DASHSCOPE_BASE_URL || "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    )
+      .trim()
+      .replace(/\/$/, "");
+    const upstream = await fetchChatCompletionsStream(
+      `${base}/chat/completions`,
+      key,
+      model,
+      messages,
+      "千问",
+    );
+    return transformOpenAiStreamToJfo(
+      upstream,
+      { ...meta, llmBackend: "dashscope-stream" },
+      onDone,
+    );
+  }
+
+  throw new Error("未配置流式 LLM");
 }
 
 async function processHermesJobBackground(
@@ -821,24 +928,24 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     hadPackageChunks = allChunks.length > 0;
     const fileHint = (body.files ?? []).join(" ");
     const searchQuery = fileHint ? `${message} ${fileHint}` : message;
-    let hits = selectChunksForChat(allChunks, searchQuery, {
+    let hits = await selectChunksForChatWithVectors(env, allChunks, searchQuery, {
       deep: injectPackageCorpus,
       maxChars: injectPackageCorpus
         ? overviewQuestion && !deepMode
           ? OVERVIEW_EXCERPT_MAX_CHARS
           : DEEP_EXCERPT_MAX_CHARS
-        : 12_000,
-      topK: overviewQuestion ? 32 : 8,
+        : 8_000,
+      topK: overviewQuestion ? 24 : 5,
     });
     if (
       hits.length === 0 &&
       allChunks.length > 0 &&
       (FILE_ONLY_USER_PROMPT.test(message) || overviewQuestion)
     ) {
-      hits = selectChunksForChat(allChunks, searchQuery, {
+      hits = await selectChunksForChatWithVectors(env, allChunks, searchQuery, {
         deep: true,
         maxChars: OVERVIEW_EXCERPT_MAX_CHARS,
-        topK: 32,
+        topK: 24,
       });
     }
     if (hits.length > 0) {
@@ -927,16 +1034,60 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     );
   }
 
-  const messages = [
-    { role: "system", content: systemParts.join("\n") },
-    ...history.map((m) => ({ role: m.role, content: m.content })),
-    { role: "user", content: message },
-  ];
+  const conversationKey = (body.conversationId ?? "").trim();
+  const memorySummary = await getConversationMemorySummary(env, userId, conversationKey);
+  const { recent } = splitHistoryForMemory(history);
+  const messages = buildLlmMessages({
+    systemParts,
+    memorySummary,
+    recentHistory: recent,
+    userMessage: message,
+  });
+
+  const wantStream = body.stream !== false;
+  const streamMeta = {
+    citationMap,
+    projectId,
+    externalSearch: usedExternalSearch,
+    chatMode,
+    skillIntent: chatMode,
+  };
+
+  const scheduleMemoryRefresh = (assistantAnswer: string) => {
+    const fullHistory = [
+      ...history,
+      { role: "user", content: message },
+      { role: "assistant", content: assistantAnswer },
+    ];
+    ctx.waitUntil(
+      refreshConversationMemorySummary(env, userId, conversationKey, fullHistory, async (prompt) => {
+        const { answer } = await callQwen(env, [
+          { role: "system", content: "你是简洁的对话摘要助手。" },
+          { role: "user", content: prompt },
+        ]);
+        return answer;
+      }),
+    );
+  };
 
   try {
+    if (wantStream) {
+      const stream = await streamLlm(env, messages, streamMeta, (answer) =>
+        scheduleMemoryRefresh(answer),
+      );
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache",
+          Connection: "keep-alive",
+        },
+      });
+    }
+
     const { answer, llmBackend } = await callLlm(env, messages);
     const knowledgeNetworkHtml =
       chatMode === "knowledge_network" ? extractKnowledgeNetworkHtml(answer) : null;
+    scheduleMemoryRefresh(answer);
     return json({
       answer,
       citationMap,
@@ -949,6 +1100,12 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    if (wantStream) {
+      return new Response(jfoSseError(`AI 服务暂不可用：${msg}`), {
+        status: 502,
+        headers: { "Content-Type": "text/event-stream; charset=utf-8" },
+      });
+    }
     return json({ answer: `AI 服务暂不可用：${msg}`, citationMap, projectId }, 502);
   }
 }
@@ -1008,7 +1165,7 @@ export default {
             response = await handleListFiles(env, projectId, uid);
           }
         } else if (request.method === "POST") {
-          response = await handleUpload(request, env, projectId);
+          response = await handleUpload(request, env, ctx, projectId);
         } else {
           response = json({ error: "Method Not Allowed" }, 405);
         }

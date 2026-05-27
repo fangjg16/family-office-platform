@@ -41,6 +41,7 @@ import {
 } from "@/lib/project-api";
 import { upsertApiProject } from "@/workspace/project-registry";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
+import { consumeChatSse } from "@/lib/chat-stream-client";
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
   loadChatStateForUser,
@@ -2170,7 +2171,14 @@ export default function ConversationCenter() {
                 message: apiMessage,
                 files: fileNames,
                 history,
+                stream: true,
               };
+
+      const useWorkerStream =
+        RAGFLOW_MODE !== "native" &&
+        RAGFLOW_MODE !== "openai" &&
+        Boolean(requestBody && typeof requestBody === "object" && "stream" in requestBody);
+
       const res = await fetch(AI_CHAT_ENDPOINT, {
         method: "POST",
         headers: {
@@ -2179,6 +2187,106 @@ export default function ConversationCenter() {
         },
         body: JSON.stringify(requestBody),
       });
+
+      let mergedCitationMap = {
+        ...NANNING_CITATION_MAP,
+        ...liveCitationMap,
+      };
+
+      if (useWorkerStream && (res.headers.get("Content-Type") ?? "").includes("text/event-stream")) {
+        const assistantId = `assistant-${Date.now()}`;
+        setLiveError(null);
+        appendLiveMessage(effectiveConversationId, {
+          id: assistantId,
+          role: "assistant",
+          content: "",
+          time: getCurrentDateTimeLabel(),
+        });
+        setSendingConversationId((cur) =>
+          cur === sendConversationId ? null : cur,
+        );
+
+        let streamPayload: { async?: boolean; jobId?: string; assistantMessageId?: string; answer?: string } | null =
+          null;
+
+        await consumeChatSse(res, {
+          onMeta: (meta) => {
+            if (meta.citationMap && Object.keys(meta.citationMap).length > 0) {
+              mergedCitationMap = { ...mergedCitationMap, ...meta.citationMap };
+              setLiveCitationMap((prev) => ({ ...prev, ...meta.citationMap! }));
+            }
+          },
+          onDelta: (text) => {
+            setLiveMessagesByConversation((prev) => ({
+              ...prev,
+              [effectiveConversationId]: (prev[effectiveConversationId] ?? []).map((m) =>
+                m.id === assistantId ? { ...m, content: `${m.content}${text}` } : m,
+              ),
+            }));
+          },
+          onDone: (done) => {
+            streamPayload = {
+              answer: done.answer,
+              ...(done.knowledgeNetworkHtml ? { knowledgeNetworkHtml: done.knowledgeNetworkHtml } : {}),
+            };
+          },
+          onError: (msg) => {
+            throw new Error(msg);
+          },
+        });
+
+        const payload = streamPayload as Record<string, unknown> | null;
+        if (
+          payload &&
+          payload.async === true &&
+          typeof payload.jobId === "string"
+        ) {
+          const jobId = payload.jobId as string;
+          const assistantIdJob =
+            typeof payload.assistantMessageId === "string"
+              ? payload.assistantMessageId
+              : `assistant-job-${jobId}`;
+          updateLiveMessage(effectiveConversationId, assistantId, {
+            id: assistantIdJob,
+            content: formatCitationMarkers(
+              String(payload.answer ?? "正在深度分析…"),
+              mergedCitationMap,
+            ),
+            pendingJobId: jobId,
+            jobProgressLabel: "任务已提交，正在连接引擎…",
+          });
+          resumedAgentJobIdsRef.current.add(jobId);
+          void pollAgentJobUntilDone({
+            apiBase: apiBaseFromChatEndpoint(AI_CHAT_ENDPOINT),
+            userId,
+            jobId,
+            conversationKey: effectiveConversationId,
+            assistantMsgId: assistantIdJob,
+            citationMap: mergedCitationMap,
+            onUpdate: updateLiveMessage,
+            onError: setLiveError,
+            onPersist: () => flushChatPersist(),
+          });
+          flushChatPersist();
+          return;
+        }
+
+        const rawAnswer =
+          (payload && typeof payload.answer === "string" ? payload.answer : "") ||
+          "已收到消息，但未返回可展示答案。";
+        const answer = formatCitationMarkers(rawAnswer + uploadNotes, mergedCitationMap);
+        const knFromApi =
+          payload && typeof payload.knowledgeNetworkHtml === "string"
+            ? payload.knowledgeNetworkHtml
+            : null;
+        const prepared = prepareKnowledgeNetworkMessageDisplay(answer, knFromApi);
+        updateLiveMessage(effectiveConversationId, assistantId, {
+          content: prepared.displayContent,
+          knowledgeNetworkHtml: prepared.html || undefined,
+        });
+        flushChatPersist();
+        return;
+      }
 
       const payload: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -2198,9 +2306,8 @@ export default function ConversationCenter() {
         payload && typeof payload === "object" && "citationMap" in payload
           ? (payload as { citationMap?: Record<string, string> }).citationMap
           : undefined;
-      const mergedCitationMap = {
-        ...NANNING_CITATION_MAP,
-        ...liveCitationMap,
+      mergedCitationMap = {
+        ...mergedCitationMap,
         ...citationFromApi,
       };
       if (citationFromApi && Object.keys(citationFromApi).length > 0) {
