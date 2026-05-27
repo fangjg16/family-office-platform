@@ -37,10 +37,12 @@ import {
 } from "./hermes-agent";
 import {
   chunkPlainText,
+  isGenericProjectQuestion,
   isPlaceholderChunkText,
   selectChunksForChat,
   type ChunkRow,
 } from "./search";
+import { getProjectById as getDbProjectById } from "./projects-db";
 import {
   LIST_FILES_SQL,
   LOAD_CHUNKS_SQL,
@@ -103,6 +105,8 @@ const FILE_ONLY_USER_PROMPT =
 
 /** 深度 / 知识网络模式注入资料摘录的上限（字符） */
 const DEEP_EXCERPT_MAX_CHARS = 95_000;
+/** 轻问但属「项目概览」类：注入资料包前段的上限 */
+const OVERVIEW_EXCERPT_MAX_CHARS = 36_000;
 
 const GITHUB_PAGES_ORIGIN = "https://fangjg16.github.io";
 
@@ -768,8 +772,18 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
   const citationMap = citationMapFromSlots(slots);
   const usedSlotIds = new Set<string>();
   const chatMode: SkillIntent = detectSkillIntent(message);
-  const projectTitleHint =
+  let projectTitleHint =
     projectId === "nn-fresh-port" ? "南宁东盟生鲜食品智慧港" : projectId;
+  let dbProjectSummary = "";
+  try {
+    const dbProject = await getDbProjectById(env, projectId);
+    if (dbProject?.name) projectTitleHint = dbProject.name;
+    if (dbProject?.summary) {
+      dbProjectSummary = `【项目登记信息】\n项目名称：${dbProject.name}\n阶段：${dbProject.phase}\n简介：${dbProject.summary}\n\n`;
+    }
+  } catch {
+    /* D1 未就绪时忽略 */
+  }
 
   const history = (body.history ?? []).filter(
     (m) => m.role === "user" || m.role === "assistant",
@@ -790,20 +804,35 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
 
   const deepMode =
     !isHermesAgentConfigured(env) && usesFullPackageCorpus(chatMode);
+  const overviewQuestion = isGenericProjectQuestion(message);
+  const injectPackageCorpus = deepMode || overviewQuestion;
 
   let excerptBlock = "（未检索到资料摘录；请明确说明依据不足，勿编造。）";
+  let hadPackageChunks = false;
   try {
     const allChunks = await loadChunks(env, projectId, userId, body.conversationId);
+    hadPackageChunks = allChunks.length > 0;
     const fileHint = (body.files ?? []).join(" ");
     const searchQuery = fileHint ? `${message} ${fileHint}` : message;
     let hits = selectChunksForChat(allChunks, searchQuery, {
-      deep: deepMode,
-      maxChars: DEEP_EXCERPT_MAX_CHARS,
-      topK: 8,
+      deep: injectPackageCorpus,
+      maxChars: injectPackageCorpus
+        ? overviewQuestion && !deepMode
+          ? OVERVIEW_EXCERPT_MAX_CHARS
+          : DEEP_EXCERPT_MAX_CHARS
+        : 12_000,
+      topK: overviewQuestion ? 32 : 8,
     });
-    if (hits.length === 0 && allChunks.length > 0 && FILE_ONLY_USER_PROMPT.test(message)) {
-      hits = allChunks.filter((c) => !isPlaceholderChunkText(c.text)).slice(-8);
-      if (hits.length === 0) hits = allChunks.slice(-8);
+    if (
+      hits.length === 0 &&
+      allChunks.length > 0 &&
+      (FILE_ONLY_USER_PROMPT.test(message) || overviewQuestion)
+    ) {
+      hits = selectChunksForChat(allChunks, searchQuery, {
+        deep: true,
+        maxChars: OVERVIEW_EXCERPT_MAX_CHARS,
+        topK: 32,
+      });
     }
     if (hits.length > 0) {
       const onlyPlaceholders = hits.every((h) => isPlaceholderChunkText(h.text));
@@ -820,9 +849,15 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
           })
           .join("\n\n---\n\n");
       }
+    } else if (dbProjectSummary) {
+      excerptBlock = `${dbProjectSummary}（资料包暂无可用正文摘录；请结合上方项目登记信息作答，并说明需用户补充材料处。）`;
+    }
+    if (dbProjectSummary && hits.length > 0 && !excerptBlock.startsWith("【项目登记")) {
+      excerptBlock = `${dbProjectSummary}${excerptBlock}`;
     }
   } catch {
     /* D1 未初始化时仍可调 Hermes */
+    if (dbProjectSummary) excerptBlock = dbProjectSummary;
   }
 
   let externalBlock = "";
@@ -854,6 +889,11 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     "你是联合家办平台项目助手，服务机会型投资尽调场景。回答须综合三类依据：（1）【资料摘录】中的项目内事实；（2）若有【外部检索】则纳入公开网页信息；（3）为衔接上下文的行业/流程推论——须标明「推论」或「待核实」，不得冒充已核实事实。",
     "你不是「只能读上传 PDF」的机器人：项目内问题以摘录为主；公开信息、政策、市场动态在触发联网或摘录不足时，应结合外部检索或明确说明缺口与下一步（如建议用户说「查外部资料：…」）。",
     "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；与摘录中「南宁东盟生鲜食品智慧港」等明显同一项目时，应正常作答，勿因简称不同而拒绝。",
+    ...(overviewQuestion || hadPackageChunks
+      ? [
+          "若【资料摘录】或【项目登记信息】中已有本项目资料包内容，必须基于其介绍项目背景与要点；禁止声称「没有看到任何项目资料」。",
+        ]
+      : []),
     "引用规范：上传资料用 [ID:n]（仅可引用摘录中实际出现且下列存在的编号）；网页用 [WEB:n] 并附 URL；勿混用。",
     ...(chatMode === "standard"
       ? [

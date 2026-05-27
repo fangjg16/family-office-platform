@@ -105,7 +105,16 @@ export function scoreChunks(chunks: ChunkRow[], query: string, topK = 6): ChunkR
     .map((x) => x.c);
 
   if (ranked.length > 0) return ranked;
-  return pool.slice(-topK);
+  return [...pool].sort(sortChunksInDocOrder).slice(0, topK);
+}
+
+/** 泛项目问题（无明确关键词）应优先读资料包前文，而非仅取末尾 chunk */
+export function isGenericProjectQuestion(message: string): boolean {
+  const m = message.trim();
+  if (!m) return false;
+  return /这是什么项目|项目是什么|什么项目|介绍.{0,6}项目|项目.{0,6}介绍|项目背景|项目概况|项目情况|有哪些资料|资料里|上传了|说了什么|讲的是什么|项目是做什么|项目做什么/u.test(
+    m,
+  );
 }
 
 export function chunkPlainText(text: string, size = 900): string[] {

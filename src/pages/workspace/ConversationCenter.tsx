@@ -636,14 +636,15 @@ function buildConversationFromProject(projectId: string): SessionConversation | 
       step.attachments.forEach((f) => names.push(f.name));
     }
   });
+  const isUserCreated = projectId.startsWith("proj-");
   return {
     id: `${projectId}-main`,
     projectId,
     title: `${project.name} · 全局分析`,
-    preview: demo.chat.sidebarPreview,
+    preview: isUserCreated ? "基于项目资料包与对话进行分析" : demo.chat.sidebarPreview,
     updatedAt: getLastDialogueDateTime(projectId),
-    files: Array.from(new Set(names)),
-    variant: "demo",
+    files: isUserCreated ? [] : Array.from(new Set(names)),
+    variant: isUserCreated ? "blank" : "demo",
   };
 }
 
