@@ -13,7 +13,7 @@ This is the **central output skill** of the plugin. The plugin maintains exactly
 |------|---------|--------|
 | **Single-asset / Multi-asset** | `project-intake` Step 2.4 | Multi-asset partitions sections 二/三/四/五/七/八/九 per asset (`<h3>` subsections like 二.1, 二.2). See `STYLE_GUIDE.md` "Multi-Asset Project Rendering". |
 | **Chinese-only / Bilingual** | `project-intake` Step 2.2 jurisdiction | Bilingual renders zh + en parallel content + adds language toggle button in header. See `STYLE_GUIDE.md` "Bilingual Knowledge Base". |
-| **Visual theme (Portable = DEFAULT)** | Default unless user explicitly asks for the plain grey theme | **Every KB renders in the Portable theme (米色背景 / 酒红 / Playfair) by default.** The look is produced by copying the complete stylesheet from `STYLE_GUIDE.md` "Portable Stylesheet — 复制即用" verbatim. Only drop to the default grey theme if the user explicitly requests it. |
+| **Visual theme (Portable = DEFAULT)** | Default unless user explicitly asks for the plain grey theme | **Every KB renders in the Portable theme (米色背景 / 酒红 / Playfair) by default.** The look comes from `kb-template.html` in this skill directory — use that file as the starting point, fill in the `{{PLACEHOLDER}}` tokens. Only drop to the default grey theme if the user explicitly requests it. |
 
 These modes interact: a bilingual multi-asset project renders both per-asset subsections AND per-language content blocks. The modes are decided once at intake and applied to every subsequent skill output.
 
@@ -72,7 +72,7 @@ The KB is **not** one long scrolling page. It renders as a **left-sidebar sectio
 
 - The button list is built **at render time from the render manifest in slot order** — never hard-coded. Each button carries `data-target="<anchor>"` matching its panel `id`; its `.kb-nav-num` shows the manifest `displayNumeral` (一/二/三… for slots, `A`/`B` for appendices). Hidden slots emit neither a button nor a panel.
 - The **first rendered slot** gets `.active` on both its button and its panel (so something shows even without JS).
-- Paste the vanilla-JS panel switcher (`<script>` near `</body>`) from `STYLE_GUIDE.md` "Left section-nav (portable variant) — panel switcher". It toggles `.active`, supports `#anchor` deep-links, and needs no library.
+- The vanilla-JS panel switcher is already included in `kb-template.html` — do not modify or re-generate it. It toggles `.active`, supports `#anchor` deep-links, and needs no library.
 - The **masthead** and **`.kb-summary`** live in a dedicated first panel `#overview` (nav label「项目总览」) — **not** outside panels. They appear **only** on that tab; content slots (一…十一、附录) show their own panel body without repeating the header.
 - The old top horizontal `.sticky-nav` is **deprecated** — do not emit it.
 
@@ -200,19 +200,25 @@ Each section has a required sub-structure. If a sub-block has no data, render it
 #### 四、业务模式与收入假设（含外部调研）
 > Target-company analysis only. Investor returns belong in 七.
 
-**业务模式可视化（三选一，优先顺序判断）** —— 按以下顺序逐条判断，第一个命中的即为选用形式：
+**业务模式可视化 — 按核心问题选图**
 
-| 优先级 | 判定条件 | 选用 | HTML 类 |
-|--------|---------|------|---------|
-| 1 | 存在 **≥2 条实质性变现/退出路径**，路径之间互为替代或并行（如：多通道贸易、多退出策略的地产、多产品线分销） | **Journey Map** | `.journey` |
-| 2 | **单条线性流程**，重点是各环节的利润拆解与增值分析（如：农业/制造/加工贸易，原料→加工→分销→终端） | **流程增值图 Process Flow** | `.process-flow` |
-| 3 | **单一闭环价值创造机制**，价值主张/客户/成本结构相对固定（如：稳定运营的单一标的资产） | **Business Model Canvas** | `.bmc` |
+先问"Section 四要回答什么核心问题"，再选图形式。按下表逐行匹配，第一个命中的即为选用形式：
 
-> **注意**：行业类型不是判定依据——地产项目可能是 Journey Map（多退出策略），贸易项目也可能是价值链图（单条固定供应链）。判断的核心是**路径是否分叉**和**流程是否线性**。
+| 核心问题 | 判定条件 | 选用 | HTML 类 |
+|---------|---------|------|---------|
+| 钱从哪几条路来？ | ≥2 条实质性变现/退出路径，互为替代或并行（如：多通道贸易、多退出策略地产、多产品线分销） | **Journey Map** | `.journey` |
+| 一条链，每步赚多少？ | 单条线性流程，重点是各环节利润拆解与增值（如：农业/制造/加工贸易，原料→加工→分销→终端） | **Process Flow** | `.process-flow` |
+| 收入结构多复杂？ | 多产品线/地区/客群，收入需多层级拆分才看得清"钱从哪里来"（如：集团型多业务线标的） | **Revenue Tree** | 手工构建 |
+| 哪个环节有护城河？ | 单条价值链，重点是竞争优势定位而非利润数字（如：制造业收购、品牌消费品） | **Value Chain** | 手工构建 |
+| 增长靠什么飞轮？ | 自我强化的网络效应循环（用户↑→供给↑→体验↑→用户↑）（如：电商平台、共享经济） | **Flywheel** | 手工构建 |
+| 多方之间怎么交换价值？ | 多边市场，价值在各方之间双向流动（如：医疗健康平台、政府特许经营、农业产业链整合） | **Ecosystem Map** | 手工构建 |
+| 以上均不命中 | 稳定单一业务，说清楚客户/价值主张/成本结构即可（如：持有型资产、持牌特许经营） | **BMC** | `.bmc` |
 
-> 若上述三种均不适合（如平台网络效应型、多方生态系统型），可考虑飞轮图（Flywheel）、收入拆解树（Revenue Tree）、生态系统图（Ecosystem Map）等替代形式，但这些没有标准模板，需手工构建，慎用。
+> **注意**：行业类型不是判定依据。判断的核心是"这个 section 四要回答什么问题"。判断不明确时，优先选 Journey Map，并在 section 开头一句话注明判断依据。
+>
+> Journey Map / Process Flow / BMC 有标准 HTML 模板，见 `assets/components.html`。Revenue Tree / Value Chain / Flywheel / Ecosystem Map 无标准模板，手工构建（components.html 后续补充）。
 
-三种形式的 HTML+CSS 模板见 `STYLE_GUIDE.md` "Business-Model Visualization (Section 四)"。
+三种标准形式的 HTML 示例见 `assets/components.html`。
 
 **收入与运营假设**（不论选哪种图，下列数据都要在图下以文字/表格给出）：
 - 收入来源拆分（按产品 / 客户 / 地理 / 阶段）
@@ -317,7 +323,7 @@ Each section has a required sub-structure. If a sub-block has no data, render it
 - **8.2 当前正在推进的事项** — 同样 `.timeline`，`.tl-item.pending`（橙点），每条带「重要性」badge。
 - **8.3 未来关键节点** — 用表格，列为 `节点 | 预计时间 | 影响程度 | 结果触发行动`。影响程度用 badge：`badge-red 极高` / `badge-amber 中高 / 中` / `badge-blue 里程碑`。"结果触发行动"列写明该节点正/负结果分别触发什么动作（对照 STYLE_GUIDE 模板）。
 
-子块顶部各放一行小字说明该 badge 表示「重要性」还是「影响程度」。完整 HTML 模板见 `STYLE_GUIDE.md` "Timeline（Section 八）— 竖排三子块"。
+子块顶部各放一行小字说明该 badge 表示「重要性」还是「影响程度」。完整 HTML 模板见 `assets/components.html` Section D（D1 完整三子块 + D2 扁平版）。
 
 Multi-asset projects：在每个子块内按 asset 分组（`.tl-item` 前缀资产名）或在 8.3 表加 `asset` 列。
 
@@ -533,10 +539,9 @@ Rules:
 - **Chat**: Brief markdown — what changed in this update, which sections moved, new maturity scores, suggested next action
 - **HTML file**: `[AI] <项目名>_知识网络.html` (note `[AI]` prefix is mandatory) — full re-render of the 11 sections + 2 appendices + header + changelog
 - **Location**: Saved to the project folder root (same folder the user opened in Cowork)
-- **CSS — copy, do NOT rewrite (this is the #1 cause of "KB came out with no colours/background")**: When **creating** a KB, copy the entire `<style>` block AND the three font `<link>` tags from `STYLE_GUIDE.md` section "Portable Stylesheet — 复制即用" *verbatim* into `<head>`. Do not paraphrase the token list into your own CSS, do not omit the block, do not invent class names. The HTML body you generate uses exactly the classes defined in that block (`.kb-shell`/`.kb-nav`/`.kb-nav-btn`/`.kb-content`/`.kb-panel`, `.kb-summary`, `.masthead`, `.section-title`, `.section-num`, `.tag-*`/`.tag-src`/`.tag-attrib`, `.badge-*`, `.callout.*`, `.scenario-cards`, `.org-chart`, `.timeline`/`.tl-item`, `.tl-tree`/`.tl-year`/`.tl-month`, `.bmc`, `.journey`, `.topic`, `.glossary-grid`, `.adv-grid`, `.valuation-box`, `.footer`, `.changelog`). When **updating** an existing KB, never strip or shrink the existing `<style>` block — edit only the content between sections.
-- **Panel-switcher JS — also copy verbatim**: paste the vanilla-JS `<script>` from `STYLE_GUIDE.md` "Left section-nav" just before `</body>`. Without it the left buttons won't switch panels and (since `.kb-panel{display:none}`) only the first panel would ever show.
-- **Self-check before saving**: confirm the saved file contains (1) `body{...background:var(--paper)...}` and at least one `--burgundy` rule, (2) a `.kb-shell` wrapper with `.kb-nav` buttons + `.kb-panel` sections, (3) exactly one `.kb-panel.active` on `#overview` + matching `.kb-nav-btn.active` on load, (4) the panel-switcher `<script>`, (5) masthead + `.kb-summary` **only** inside `#overview` (not repeated in slot panels). If any is missing, fix before returning.
-- All other visual rules in `STYLE_GUIDE.md`
+- **Creating a KB**: Read `kb-template.html` from this skill directory. It contains the complete CSS, font links, HTML shell, and panel-switcher JS — all pre-baked. Fill in the `{{PLACEHOLDER}}` tokens with project data, then save as `[AI] <项目名>_知识网络.html`. Do NOT rewrite the CSS or JS — they are already correct.
+- **Updating an existing KB**: Edit only the content inside the relevant `<section>` panels. Never strip or modify the `<style>` block or the `<script>` at the bottom.
+- **Self-check before saving**: confirm (1) exactly one `.kb-panel.active` on `#overview` + matching `.kb-nav-btn.active`, (2) masthead + `.kb-summary` only inside `#overview` (not repeated in slot panels), (3) every active slot has a matching nav button, (4) the `<script>` block is present before `</body>`.
 
 ## Important Notes
 

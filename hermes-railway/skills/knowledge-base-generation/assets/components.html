@@ -1,0 +1,918 @@
+<!--
+  components.html — Project Knowledge Base · Component Library
+  ============================================================
+  This file is a REFERENCE DOCUMENT for knowledge-base-generation and related skills.
+  It contains copy-ready HTML examples for every KB component.
+
+  HOW TO USE
+  ----------
+  When building or updating a section in [AI] <项目名>_知识网络.html:
+  1. Find the component you need in the table of contents below
+  2. Copy the HTML template
+  3. Replace placeholder text (CAPS) with real project data
+  4. All CSS classes are pre-baked in kb-template.html — do NOT add new classes
+
+  TABLE OF CONTENTS
+  -----------------
+  A. Section 四 Visualizations (business-model)
+     A1. Journey Map         (.journey)           — ≥2 parallel paths / exit routes
+     A2. Process Flow        (.process-flow)      — single linear chain + margin per step
+     A3. BMC 9-Grid          (.bmc)               — single closed-loop value mechanism
+     A4. Revenue Tree        (手工构建 / manual)  — multi-level revenue breakdown
+     A5. Value Chain         (手工构建 / manual)  — competitive advantage per step
+     A6. Flywheel            (手工构建 / manual)  — self-reinforcing network effect
+     A7. Ecosystem Map       (手工构建 / manual)  — multi-sided market value exchange
+
+  B. Section 三 Visualization
+     B1. Org Chart           (.org-chart)         — legal entity / shareholder tree
+
+  C. Section 七 Visualization
+     C1. Scenario Cards      (.scenario-cards)    — 3-column base/upside/downside
+
+  D. Section 八 Templates
+     D1. Timeline 三子块 (8.1 层级展开 + 8.2 推进中 + 8.3 未来节点)
+     D2. 8.1 Flat (≤4 events, no tree needed)
+
+  E. Inline Components (used across sections)
+     E1. Callout variants    (.callout.info / .missing / .warning / .success)
+     E2. Collapsible Topic   (.topic)             — Section 四 external research
+     E3. Advantage Grid      (.adv-grid)          — pros/cons, for/against
+     E4. Valuation Box       (.valuation-box)     — headline figures
+
+  ============================================================
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     A. SECTION 四 VISUALIZATIONS
+     ═══════════════════════════════════════════════════════ -->
+
+
+<!-- ─────────────────────────────────────────────────────
+     A1. JOURNEY MAP  (.journey)
+     Use when: ≥2 substantial monetization / exit paths that are
+     parallel or alternative (e.g. multi-channel trade, multi-exit
+     real estate, multi-product distribution).
+     Selection rule: "钱从哪几条路来？" — 第一个命中即选用
+     ───────────────────────────────────────────────────── -->
+<!--
+  SETUP: Count your stages → set --journey-cols to that number.
+  First row: 1x .journey-corner + N x .journey-stage
+  Each path: 1x .journey-lane-label + N x .journey-node
+  Node modifiers: .empty (N/A for this path-stage), .blocked (blocked here), .priority (key node)
+-->
+<!-- EXAMPLE: 4 stages, 2 paths (中亚易货 style) -->
+<div class="journey" style="--journey-cols:4">
+  <!-- Stage headers (first row) -->
+  <div class="journey-corner"></div>
+  <div class="journey-stage">① 货源采购</div>
+  <div class="journey-stage">② 通关 / 配额</div>
+  <div class="journey-stage">③ 物流 / 仓储</div>
+  <div class="journey-stage">④ 变现</div>
+
+  <!-- Path A -->
+  <div class="journey-lane-label">路径 A · 易货</div>
+  <div class="journey-node">国内工业品<br><small style="color:#888">成本 $X/吨</small></div>
+  <div class="journey-node">口岸易货配额<br><small style="color:#888">🟡 项目方</small></div>
+  <div class="journey-node">冷链 / 集货<br><small style="color:#888">自营仓储</small></div>
+  <div class="journey-node priority">换回农产品转销<br><small style="color:#888">毛利 ~15%</small></div>
+
+  <!-- Path B -->
+  <div class="journey-lane-label">路径 B · 现汇</div>
+  <div class="journey-node">同上货源</div>
+  <div class="journey-node empty">—</div>
+  <div class="journey-node">直发终端</div>
+  <div class="journey-node priority">现汇结算<br><small style="color:#888">毛利 ~22%</small></div>
+
+  <!-- Add more paths by repeating: 1x .journey-lane-label + N x .journey-node -->
+</div>
+<!-- Journey Map rules:
+  - --journey-cols MUST equal the number of .journey-stage elements
+  - Stage titles: use ① ② ③ number-circle prefix
+  - Skip a stage: use .journey-node.empty as placeholder
+  - .journey-node.blocked — greyed + italic, path stalled here
+  - .journey-node.priority — dark border + inner shadow, key node
+  - >3 paths: container scrolls horizontally (overflow-x:auto already set)
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     A2. PROCESS FLOW  (.process-flow)
+     Use when: single linear chain, focus is profit/margin per step
+     (e.g. agri/manufacturing/processing trade: raw→process→distribute→sell)
+     Selection rule: "一条链，每步赚多少？"
+     ───────────────────────────────────────────────────── -->
+<!-- EXAMPLE: 4-step supply chain -->
+<div class="process-flow">
+  <div class="pf-step">
+    <div class="pf-step-label">① 原料采购</div>
+    <div class="pf-step-body">
+      <p>哈萨克斯坦农产品<br>成本：$X/吨</p>
+    </div>
+    <div class="pf-step-margin">毛利 —</div>
+  </div>
+  <div class="pf-arrow">→</div>
+
+  <div class="pf-step">
+    <div class="pf-step-label">② 通关 / 清关</div>
+    <div class="pf-step-body">
+      <p>口岸报关 + 配额核销<br>费用：$X/吨</p>
+    </div>
+    <div class="pf-step-margin">增值 $X</div>
+  </div>
+  <div class="pf-arrow">→</div>
+
+  <div class="pf-step">
+    <div class="pf-step-label">③ 加工 / 分拣</div>
+    <div class="pf-step-body">
+      <p>国内仓储分拣<br>成本：$X/吨</p>
+    </div>
+    <div class="pf-step-margin">增值 $X</div>
+  </div>
+  <div class="pf-arrow">→</div>
+
+  <div class="pf-step pf-step-end">
+    <div class="pf-step-label">④ 终端销售</div>
+    <div class="pf-step-body">
+      <p>批发 / 零售终端<br>售价：$X/吨</p>
+    </div>
+    <div class="pf-step-margin pf-margin-total">综合毛利 XX%</div>
+  </div>
+</div>
+<!-- Process Flow rules:
+  - Steps: unlimited; container scrolls horizontally >5 steps
+  - .pf-step-margin: fill with 增值/毛利 for each step
+  - Last step (.pf-step-end): add .pf-margin-total to the margin div (burgundy bg + white text)
+  - Step titles: use ① ② ③ number-circle prefix
+  - Do NOT use this for competitive-advantage analysis → use Value Chain (A5) instead
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     A3. BMC 9-GRID  (.bmc)
+     Use when: stable single-business with fixed value proposition,
+     customers, cost structure. Fallback when nothing else fits.
+     Selection rule: "以上均不命中" — last resort
+     ───────────────────────────────────────────────────── -->
+<!-- EXAMPLE: Island tourism project (石头岛 style) -->
+<div class="bmc">
+  <div class="bmc-cell bmc-kp">
+    <h5>Key Partners 关键伙伴</h5>
+    <ul>
+      <li>地方政府 / 规划局</li>
+      <li>总包施工方</li>
+      <li>运营管理方</li>
+    </ul>
+  </div>
+  <div class="bmc-cell bmc-ka">
+    <h5>Key Activities 关键活动</h5>
+    <ul>
+      <li>报批报建</li>
+      <li>开发建设</li>
+      <li>旅游运营</li>
+    </ul>
+  </div>
+  <div class="bmc-cell bmc-kr">
+    <h5>Key Resources 关键资源</h5>
+    <ul>
+      <li>土地 / DA 批文</li>
+      <li>开发资金</li>
+      <li>海岛自然资源</li>
+    </ul>
+  </div>
+  <div class="bmc-cell bmc-vp">
+    <h5>Value Propositions 价值主张</h5>
+    <ul>
+      <li>稀缺近岸岛屿旅游资产</li>
+      <li>已获 DA 的开发权</li>
+      <li>高端私密体验</li>
+    </ul>
+  </div>
+  <div class="bmc-cell bmc-cr">
+    <h5>Customer Relationships 客户关系</h5>
+    <ul>
+      <li>长租 / 会员制</li>
+      <li>在线直销</li>
+    </ul>
+  </div>
+  <div class="bmc-cell bmc-ch">
+    <h5>Channels 渠道</h5>
+    <ul>
+      <li>OTA / 直销官网</li>
+      <li>奢旅代理</li>
+    </ul>
+  </div>
+  <div class="bmc-cell bmc-cs">
+    <h5>Customer Segments 客户细分</h5>
+    <ul>
+      <li>高端度假客</li>
+      <li>活动 / 婚庆</li>
+      <li>企业团建</li>
+    </ul>
+  </div>
+  <div class="bmc-cell bmc-cost">
+    <h5>Cost Structure 成本结构</h5>
+    <ul>
+      <li>土地 + 建设 capex</li>
+      <li>运营 opex（人工/水电）</li>
+      <li>营销成本</li>
+    </ul>
+  </div>
+  <div class="bmc-cell bmc-rev">
+    <h5>Revenue Streams 收入来源</h5>
+    <ul>
+      <li>客房 / 餐饮</li>
+      <li>活动场地租赁</li>
+      <li>地块溢价退出</li>
+    </ul>
+  </div>
+</div>
+<!-- BMC rules:
+  - 5-col × 3-row grid; CSS handles placement via .bmc-kp/.bmc-ka/etc. class names
+  - .bmc-vp spans rows 1–2 (center column) — do NOT change its grid placement
+  - .bmc-cost/.bmc-rev span bottom row (3 cols and 2 cols respectively)
+  - Collapses to 1-column on mobile (<760px)
+  - Keep bullets concise (≤3 words each where possible)
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     A4. REVENUE TREE  (手工构建 / manual build)
+     Use when: multi-product line / geography / segment, revenues
+     need multi-level breakdown to see where money comes from
+     (e.g. conglomerate with multiple business lines)
+     Selection rule: "收入结构多复杂？"
+     No standard CSS template yet — build with tables or nested lists.
+     ───────────────────────────────────────────────────── -->
+<!-- EXAMPLE: Manually constructed revenue tree using nested structure -->
+<p style="font-size:.75rem;color:#888;margin-bottom:.75rem">
+  收入拆解树 · 手工构建（无标准模板，按项目自适应）
+</p>
+<table>
+  <thead>
+    <tr>
+      <th>业务线</th>
+      <th>细分</th>
+      <th>收入规模</th>
+      <th>占比</th>
+      <th>备注</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="2"><strong>A · 业务线一</strong></td>
+      <td>子业务 A1</td>
+      <td>$X</td>
+      <td>XX%</td>
+      <td><span class="tag tag-party">🟡 <span class="tag-src">卖方</span></span></td>
+    </tr>
+    <tr>
+      <td>子业务 A2</td>
+      <td>$X</td>
+      <td>XX%</td>
+      <td><span class="tag tag-unconfirmed">⚪</span></td>
+    </tr>
+    <tr>
+      <td rowspan="2"><strong>B · 业务线二</strong></td>
+      <td>子业务 B1</td>
+      <td>$X</td>
+      <td>XX%</td>
+      <td><span class="tag tag-party">🟡 <span class="tag-src">卖方</span></span></td>
+    </tr>
+    <tr>
+      <td>子业务 B2</td>
+      <td>$X</td>
+      <td>XX%</td>
+      <td><span class="tag tag-unconfirmed">⚪</span></td>
+    </tr>
+    <tr style="font-weight:600;background:rgba(114,47,55,.05)">
+      <td colspan="2">合计</td>
+      <td>$X</td>
+      <td>100%</td>
+      <td></td>
+    </tr>
+  </tbody>
+</table>
+<!-- Revenue Tree notes:
+  - No dedicated CSS class; use table with rowspan for grouping
+  - Alternatively use a nested <ul> with indent for tree structure
+  - Always include a totals row
+  - Certainty tags on every figure
+  - This template will be enhanced with dedicated CSS in a future update
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     A5. VALUE CHAIN  (手工构建 / manual build)
+     Use when: single value chain, focus is WHERE competitive
+     advantage sits per step — NOT profit margin per step
+     (contrast with Process Flow A2 which is about margins)
+     Typical use: manufacturing acquisition, branded consumer goods
+     Selection rule: "哪个环节有护城河？"
+     ───────────────────────────────────────────────────── -->
+<!-- EXAMPLE: Value Chain with competitive advantage annotations -->
+<p style="font-size:.75rem;color:#888;margin-bottom:.75rem">
+  价值链图 · 手工构建（重点：各环节竞争优势，非利润拆解）
+</p>
+<div style="overflow-x:auto;margin:1.25rem 0">
+  <table style="min-width:36rem">
+    <thead>
+      <tr>
+        <th>环节</th>
+        <th>标的当前能力</th>
+        <th>行业基准</th>
+        <th>护城河评估</th>
+        <th>来源</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>① 研发 / 设计</strong></td>
+        <td>自有 IP X 项</td>
+        <td>多数外包</td>
+        <td><span class="badge badge-green">强</span> 专利保护</td>
+        <td><span class="tag tag-verified">✅</span></td>
+      </tr>
+      <tr>
+        <td><strong>② 采购</strong></td>
+        <td>长期独家供应协议</td>
+        <td>现货采购</td>
+        <td><span class="badge badge-amber">中</span> 供应商依赖</td>
+        <td><span class="tag tag-party">🟡 <span class="tag-src">卖方</span></span></td>
+      </tr>
+      <tr>
+        <td><strong>③ 生产</strong></td>
+        <td>自有产能 X 万件/年</td>
+        <td>代工为主</td>
+        <td><span class="badge badge-green">强</span> 规模效应</td>
+        <td><span class="tag tag-analyst">🔵 <span class="tag-src">AI推论</span></span></td>
+      </tr>
+      <tr>
+        <td><strong>④ 分销</strong></td>
+        <td>X 个核心经销商</td>
+        <td>行业标准</td>
+        <td><span class="badge badge-blue">弱</span> 可替代</td>
+        <td><span class="tag tag-unconfirmed">⚪</span></td>
+      </tr>
+      <tr>
+        <td><strong>⑤ 售后 / 品牌</strong></td>
+        <td>XX 年品牌积累</td>
+        <td>分散</td>
+        <td><span class="badge badge-green">强</span> 品牌溢价</td>
+        <td><span class="tag tag-party">🟡 <span class="tag-src">卖方</span></span></td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+<!-- Value Chain notes:
+  - Use table structure with 护城河评估 column
+  - badge-green = strong moat / badge-amber = moderate / badge-blue = weak
+  - Focus on WHERE the advantage is, not how much margin each step earns
+  - Contrast with Process Flow: if you're writing "$X margin" per step → use Process Flow
+  - This template will be enhanced with dedicated CSS in a future update
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     A6. FLYWHEEL  (手工构建 / manual build)
+     Use when: self-reinforcing network effect loop
+     (user↑→supply↑→experience↑→user↑)
+     Typical use: e-commerce platforms, sharing economy, SaaS with viral growth
+     Selection rule: "增长靠什么飞轮？"
+     ───────────────────────────────────────────────────── -->
+<!-- EXAMPLE: Flywheel as circular prose with numbered loop stages -->
+<p style="font-size:.75rem;color:#888;margin-bottom:.75rem">
+  飞轮图 · 手工构建（自我强化增长循环）
+</p>
+<div style="border:1px solid rgba(114,47,55,.2);border-radius:6px;padding:1.5rem;margin:1.25rem 0;background:rgba(255,255,255,.4)">
+  <p style="text-align:center;font-family:var(--serif);font-style:italic;color:var(--burgundy);margin-bottom:1.25rem">
+    增长飞轮 · [项目名]
+  </p>
+  <!-- Flywheel as a numbered circular chain; adapt node count to the project -->
+  <div style="display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem 1.5rem;text-align:center">
+    <div style="flex:0 0 calc(33% - 1.5rem);min-width:8rem;border:1px solid rgba(114,47,55,.25);border-radius:4px;padding:.75rem;background:var(--paper)">
+      <div style="font-size:.62rem;font-weight:700;color:var(--burgundy);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem">① 起点</div>
+      <div style="font-size:.82rem;color:#4a4540">[用户 / 供给端增加]</div>
+    </div>
+    <div style="display:flex;align-items:center;color:var(--burgundy);font-size:1.2rem">→</div>
+    <div style="flex:0 0 calc(33% - 1.5rem);min-width:8rem;border:1px solid rgba(114,47,55,.25);border-radius:4px;padding:.75rem;background:var(--paper)">
+      <div style="font-size:.62rem;font-weight:700;color:var(--burgundy);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem">② 强化</div>
+      <div style="font-size:.82rem;color:#4a4540">[体验/效率/网络效应提升]</div>
+    </div>
+    <div style="display:flex;align-items:center;color:var(--burgundy);font-size:1.2rem">→</div>
+    <div style="flex:0 0 calc(33% - 1.5rem);min-width:8rem;border:1px solid rgba(114,47,55,.25);border-radius:4px;padding:.75rem;background:rgba(114,47,55,.06)">
+      <div style="font-size:.62rem;font-weight:700;color:var(--burgundy);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem">③ 变现</div>
+      <div style="font-size:.82rem;color:#4a4540">[收入 / 定价权增强]</div>
+    </div>
+    <div style="flex-basis:100%;text-align:center;color:var(--burgundy);font-size:.75rem;font-style:italic">↑ 循环回①，飞轮加速</div>
+  </div>
+  <p style="margin-top:1rem;font-size:.8rem;color:#4a4540">
+    <strong>飞轮核心假设</strong>：[写出该飞轮成立的1-2个前提条件，及其风险]
+    <span class="tag tag-analyst">🔵 <span class="tag-src">AI推论</span></span>
+  </p>
+</div>
+<!-- Flywheel notes:
+  - Adapt node count (3–5 nodes typical); add more → flex wrap handles layout
+  - Always document the critical assumption that makes the flywheel work
+  - If the loop breaks at one node, flag it as a risk in section 九
+  - This template will be enhanced with dedicated CSS in a future update
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     A7. ECOSYSTEM MAP  (手工构建 / manual build)
+     Use when: multi-sided market, value flows bidirectionally
+     between multiple actor types
+     Typical use: healthcare platforms, government concessions, agri-chain integrators
+     Selection rule: "多方之间怎么交换价值？"
+     ───────────────────────────────────────────────────── -->
+<!-- EXAMPLE: Ecosystem map as actor-exchange table -->
+<p style="font-size:.75rem;color:#888;margin-bottom:.75rem">
+  生态系统图 · 手工构建（多边市场价值交换）
+</p>
+<div style="border:1px solid rgba(114,47,55,.2);border-radius:6px;padding:1.5rem;margin:1.25rem 0;background:rgba(255,255,255,.4)">
+  <!-- Center actor -->
+  <div style="text-align:center;margin-bottom:1.25rem">
+    <div style="display:inline-block;border:2px solid var(--burgundy);padding:.7rem 1.5rem;background:rgba(114,47,55,.08);font-family:var(--serif);font-size:.95rem;color:var(--burgundy)">
+      🏢 [平台 / 标的主体]
+    </div>
+  </div>
+  <!-- Exchange table: actor | value given | value received -->
+  <table>
+    <thead>
+      <tr>
+        <th>参与方</th>
+        <th>给平台的价值</th>
+        <th>从平台获取的价值</th>
+        <th>关系强度</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>🏛 政府 / 监管方</strong></td>
+        <td>配额 / 特许资质</td>
+        <td>税收 / 就业 / 政策目标</td>
+        <td><span class="badge badge-green">强</span></td>
+      </tr>
+      <tr>
+        <td><strong>🌾 供给方 (B)</strong></td>
+        <td>货源 / 产能</td>
+        <td>稳定销路 / 溢价</td>
+        <td><span class="badge badge-amber">中</span></td>
+      </tr>
+      <tr>
+        <td><strong>🛒 需求方 (C)</strong></td>
+        <td>采购付款</td>
+        <td>货源稳定 / 价格</td>
+        <td><span class="badge badge-amber">中</span></td>
+      </tr>
+      <tr>
+        <td><strong>🚚 物流合作方</strong></td>
+        <td>履约能力</td>
+        <td>稳定订单</td>
+        <td><span class="badge badge-blue">弱</span></td>
+      </tr>
+    </tbody>
+  </table>
+  <p style="font-size:.75rem;color:#888;margin-top:.5rem">
+    关系强度：<span class="badge badge-green">强</span>=核心依赖 /
+    <span class="badge badge-amber">中</span>=重要但可替换 /
+    <span class="badge badge-blue">弱</span>=配套支持
+  </p>
+</div>
+<!-- Ecosystem Map notes:
+  - The center actor is the investment target
+  - Document every actor type that transacts value with the platform
+  - 关系强度 = how hard it would be to replace this actor type
+  - Add a note on who captures most value (investment thesis depends on this)
+  - This template will be enhanced with dedicated CSS in a future update
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     B. SECTION 三 VISUALIZATION
+     ═══════════════════════════════════════════════════════ -->
+
+
+<!-- ─────────────────────────────────────────────────────
+     B1. ORG CHART  (.org-chart)
+     Use in: 三、法律结构与关键关系网
+     Shows: holding entity → intermediate layer → ultimate controller
+     ───────────────────────────────────────────────────── -->
+<!-- EXAMPLE: 2-level structure with two subsidiaries -->
+<div class="org-chart">
+  <!-- Top level (ultimate controller / beneficial owner) -->
+  <div class="org-node">
+    <small>实控人 / UBO</small>
+    <strong>张三 (John ZHANG)</strong>
+  </div>
+  <div class="org-line"></div>
+
+  <!-- Middle level (holdco) -->
+  <div class="org-node">
+    <small>持股主体 / BVI Holdco</small>
+    <strong>ABC Holdings Ltd</strong>
+  </div>
+  <div class="org-line"></div>
+
+  <!-- Branch level (multiple entities) -->
+  <div class="org-branch">
+    <div>
+      <div class="org-node">
+        <small>项目公司 · 澳洲</small>
+        <strong>XYZ Pty Ltd<br><span style="font-weight:400;font-size:.75em">100%</span></strong>
+      </div>
+    </div>
+    <div>
+      <div class="org-node">
+        <small>运营公司 · 澳洲</small>
+        <strong>XYZ Ops Pty Ltd<br><span style="font-weight:400;font-size:.75em">100%</span></strong>
+      </div>
+    </div>
+  </div>
+</div>
+<!-- Org Chart notes:
+  - .org-node: 2px burgundy border, white bg, serif bold
+  - .org-line: 2px burgundy vertical connector (inline between nodes)
+  - .org-branch: horizontal flex container for sibling nodes
+  - Use <small> for the role label, <strong> for the entity name
+  - Dashed border (style="border-style:dashed") for "indicative" / unconfirmed links
+  - If ownership % is unknown, note (未知 / 持股比例待确认) inside the node
+  - Certainty: add a tag below the chart if structure is 🟡 卖方 or ⚪ 待确认
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     C. SECTION 七 VISUALIZATION
+     ═══════════════════════════════════════════════════════ -->
+
+
+<!-- ─────────────────────────────────────────────────────
+     C1. SCENARIO CARDS  (.scenario-cards)
+     Use in: 七、投资回报与敏感性分析
+     Shows: Downside / Base / Upside — 3-column IRR summary
+     ───────────────────────────────────────────────────── -->
+<div class="scenario-cards">
+  <div class="scenario-card down">
+    <div class="sc-label">Downside 悲观</div>
+    <div class="sc-irr">XX%</div>
+    <div class="sc-detail">
+      假设：[关键悲观假设1, 假设2]<br>
+      MOIC: X.Xx · 退出时点: 20XX
+    </div>
+  </div>
+  <div class="scenario-card base">
+    <div class="sc-label">Base 基准</div>
+    <div class="sc-irr">XX%</div>
+    <div class="sc-detail">
+      假设：[基准假设1, 假设2]<br>
+      MOIC: X.Xx · 退出时点: 20XX
+    </div>
+  </div>
+  <div class="scenario-card up">
+    <div class="sc-label">Upside 乐观</div>
+    <div class="sc-irr">XX%</div>
+    <div class="sc-detail">
+      假设：[关键乐观假设1, 假设2]<br>
+      MOIC: X.Xx · 退出时点: 20XX
+    </div>
+  </div>
+</div>
+<!-- Scenario Cards rules:
+  - Always 3 cards: .down (left/gray), .base (center/burgundy highlight), .up (right/green)
+  - Base card: burgundy top inset border + slightly darker bg
+  - .sc-irr: serif 2rem — the headline number
+  - Collapses to 1-column on mobile (<700px)
+  - Follow with a detailed assumptions table below the cards
+-->
+
+
+<!-- ═══════════════════════════════════════════════════════
+     D. SECTION 八 TEMPLATES
+     ═══════════════════════════════════════════════════════ -->
+
+
+<!-- ─────────────────────────────────────────────────────
+     D1. TIMELINE 三子块 — FULL VERSION
+     (8.1 层级展开 + 8.2 推进中 + 8.3 未来关键节点)
+     Use when: 8.1 has >4 past events (use tree)
+     ───────────────────────────────────────────────────── -->
+<section class="block" id="timeline">
+  <h2 class="section-title"><span class="section-num">八</span>项目时间轴 / Timeline</h2>
+  <p class="section-sub">已发生事件 · 当前推进 · 未来关键节点</p>
+
+  <!-- 8.1 Past events: hierarchical year→month→day tree -->
+  <h3>8.1 已发生关键事件</h3>
+  <p style="font-size:.75rem;color:#888;margin-bottom:.5rem">右侧 badge 表示<strong>重要性</strong>（对本次投资判断的权重）。默认折叠到年，展开看月。</p>
+  <div class="tl-tree">
+
+    <!-- Most recent year: open by default -->
+    <details class="tl-year" open>
+      <summary>2024 <span class="tl-year-sum">取得 DA 批文、完成抵押登记，进入挂牌期</span></summary>
+      <div class="tl-year-body">
+
+        <details class="tl-month">
+          <summary>08 月 <span class="tl-year-sum">DA 预批</span></summary>
+          <div class="tl-month-body">
+            <div class="timeline">
+              <div class="tl-item">
+                <span class="tl-date">2024-08-23</span>
+                <span class="tl-text">取得 DA Preliminary Approval（文号 20220452）
+                  <span class="badge badge-red">关键</span>
+                  <span class="tag tag-verified">✅</span>
+                  <sup>[S-DA]</sup>
+                </span>
+              </div>
+            </div>
+          </div>
+        </details>
+
+        <details class="tl-month">
+          <summary>07 月</summary>
+          <div class="tl-month-body">
+            <div class="timeline">
+              <div class="tl-item">
+                <span class="tl-date">2024-07-09</span>
+                <span class="tl-text">Lot 124 上设立抵押（对应存量债）
+                  <span class="badge badge-amber">重要</span>
+                  <span class="tag tag-verified">✅</span>
+                  <sup>[S-TIT]</sup>
+                </span>
+              </div>
+            </div>
+          </div>
+        </details>
+
+      </div>
+    </details>
+
+    <!-- Earlier year: collapsed by default -->
+    <details class="tl-year">
+      <summary>2023 <span class="tl-year-sum">前期接洽与尽调启动</span></summary>
+      <div class="tl-year-body">
+        <details class="tl-month">
+          <summary>11 月</summary>
+          <div class="tl-month-body">
+            <div class="timeline">
+              <div class="tl-item">
+                <span class="tl-date">2023-11</span>
+                <span class="tl-text">首次接触卖方
+                  <span class="badge badge-blue">一般</span>
+                  <span class="tag tag-party">🟡 <span class="tag-src">经纪</span></span>
+                </span>
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+    </details>
+
+  </div><!-- end .tl-tree -->
+
+  <!-- 8.2 Ongoing items: flat .timeline with .pending dot -->
+  <h3>8.2 当前正在推进的事项</h3>
+  <p style="font-size:.75rem;color:#888;margin-bottom:.5rem">右侧 badge 表示<strong>重要性</strong></p>
+  <div class="timeline">
+    <div class="tl-item pending">
+      <span class="tl-date">进行中</span>
+      <span class="tl-text">EOI 销售活动 + 投资人接触
+        <span class="badge badge-red">关键</span>
+        <span class="tag tag-party">🟡 <span class="tag-src">卖方</span></span>
+        <sup>[U-EM]</sup>
+      </span>
+    </div>
+    <!-- Add more .tl-item.pending rows as needed -->
+  </div>
+
+  <!-- 8.3 Future milestones: table with action triggers -->
+  <h3>8.3 未来关键节点</h3>
+  <p style="font-size:.75rem;color:#888;margin-bottom:.5rem">badge 表示该节点对项目的<strong>影响程度</strong>；末列为结果触发的行动</p>
+  <table>
+    <thead>
+      <tr>
+        <th>节点</th>
+        <th>预计时间</th>
+        <th>影响程度</th>
+        <th>结果触发行动</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr class="highlight-row">
+        <td><strong>入场结构与抵押优先级理清</strong></td>
+        <td>尽调早期</td>
+        <td><span class="badge badge-red">极高</span></td>
+        <td>正面→可推进；未清→暂停决策</td>
+      </tr>
+      <tr>
+        <td>Stage 1 完成投产</td>
+        <td>18–30 个月</td>
+        <td><span class="badge badge-amber">中高</span></td>
+        <td>现金流启动，支撑再融资</td>
+      </tr>
+      <tr>
+        <td>重要外部窗口（如政策截止 / 大型活动锚点）</td>
+        <td>—</td>
+        <td><span class="badge badge-blue">里程碑</span></td>
+        <td>退出 / 再融资时间锚点</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="partial-line">—— 待补充：本节缺失的具体节点时点（LOI / TS / 审批截止等）</div>
+</section>
+
+<!-- Timeline 三子块 rules:
+  8.1 TREE (>4 events):
+  - Use .tl-tree > .tl-year > .tl-month > .tl-item nesting (nested <details>, no JS)
+  - Most recent year: open attribute (visible by default); older years: collapsed
+  - Year summary (.tl-year-sum): required at year level, optional at month level
+  - Each .tl-item: badge (importance) + certainty tag + source <sup>
+  - badge hierarchy: badge-red 关键 / badge-amber 重要 / badge-blue 一般
+
+  8.2 ONGOING:
+  - .tl-item.pending uses orange dot (not burgundy)
+  - No date known → use "进行中" as .tl-date
+  - Same badge + tag + source structure as 8.1
+
+  8.3 FUTURE:
+  - 4-column table: 节点 | 预计时间 | 影响程度 | 结果触发行动
+  - "结果触发行动" MUST name both positive AND negative outcome triggers
+  - Blocking milestones (阻塞级): use tr.highlight-row
+  - badge hierarchy: badge-red 极高 / badge-amber 中高/中 / badge-blue 里程碑
+
+  GENERAL:
+  - Sub-block header small-text clarifies badge meaning (重要性 vs 影响程度)
+  - Multi-asset: group by asset within each sub-block, or add "asset" column in 8.3
+  - .partial-line at end signals known gaps
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     D2. TIMELINE 8.1 FLAT VERSION
+     Use when: 8.1 has ≤4 past events (tree not worth it)
+     8.2 and 8.3 are identical to D1 above
+     ───────────────────────────────────────────────────── -->
+<h3>8.1 已发生关键事件</h3>
+<p style="font-size:.75rem;color:#888;margin-bottom:.5rem">右侧 badge 表示<strong>重要性</strong></p>
+<div class="timeline">
+  <div class="tl-item">
+    <span class="tl-date">2024-08-23</span>
+    <span class="tl-text">取得 DA Preliminary Approval（文号 20220452）
+      <span class="badge badge-red">关键</span>
+      <span class="tag tag-verified">✅</span>
+      <sup>[S-DA]</sup>
+    </span>
+  </div>
+  <div class="tl-item">
+    <span class="tl-date">2024-07-09</span>
+    <span class="tl-text">Lot 124 上设立抵押（对应存量债）
+      <span class="badge badge-amber">重要</span>
+      <span class="tag tag-verified">✅</span>
+      <sup>[S-TIT]</sup>
+    </span>
+  </div>
+  <!-- Flat version: ≤4 tl-items only; if >4, switch to D1 tree version -->
+</div>
+
+
+<!-- ═══════════════════════════════════════════════════════
+     E. INLINE COMPONENTS (used across sections)
+     ═══════════════════════════════════════════════════════ -->
+
+
+<!-- ─────────────────────────────────────────────────────
+     E1. CALLOUT VARIANTS  (.callout.xxx)
+     ───────────────────────────────────────────────────── -->
+
+<!-- info: general informational highlight -->
+<aside class="callout info">
+  <p class="callout-title">关键发现</p>
+  <p>[关键发现内容。带 certainty tag + 来源。]
+    <span class="tag tag-verified">✅</span>
+    <sup>[S-X]</sup>
+  </p>
+</aside>
+
+<!-- missing: slot has been examined, specific data is absent -->
+<aside class="callout missing">
+  <p class="callout-title">⚠ 缺乏资料</p>
+  <p>当前材料未提供 <strong>[具体缺失的子项]</strong>。需补充以下任一资料以激活本节：</p>
+  <ul>
+    <li>[最优先：来源类型 + 具体文件名建议]</li>
+    <li>[次优先：来源类型 + 具体文件名建议]</li>
+    <li>[备选：可通过公开渠道获取的资料]</li>
+  </ul>
+  <p class="callout-hint">在 chat 中直接补充信息或上传文件，本节将自动更新。</p>
+</aside>
+
+<!-- warning: risk or flag requiring attention -->
+<aside class="callout warning">
+  <p class="callout-title">⚠ 注意</p>
+  <p>[警示内容。通常用于红线风险、法律瑕疵、数据矛盾等。]</p>
+</aside>
+
+<!-- success: confirmed positive finding -->
+<aside class="callout success">
+  <p class="callout-title">✅ 已确认</p>
+  <p>[已核实的正面发现。与 verified tag 配合使用。]</p>
+</aside>
+
+<!-- Callout rules:
+  - .info: blue-left-border + light blue bg — general findings
+  - .missing: orange-left-border + light orange bg — data gaps (Stub callout)
+  - .warning: burgundy-left-border + light pink bg — risks / flags
+  - .success: green-left-border + light green bg — confirmed positives
+  - .callout-hint: small italic footer inside callout (usage tip / next step)
+  - Missing callout MUST be specific: name the file type and what it would unlock
+  - A generic "需要更多资料" disqualifies the slot from Stub → demote to Empty (hidden)
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     E2. COLLAPSIBLE TOPIC  (.topic)
+     Use in: Section 四 外部调研 (external research topics)
+     ───────────────────────────────────────────────────── -->
+<details class="topic">
+  <summary>
+    [调研主题标题，如：口岸政策与配额可持续性]
+    <span class="topic-count">部分解答 · Blocker</span>
+  </summary>
+  <div class="topic-body">
+    <p>[Topic 现有发现，带 certainty tag + 来源引用。]
+      <span class="tag tag-party">🟡 <span class="tag-src">项目方</span></span>
+      <sup>[U-3]</sup>
+    </p>
+    <!-- User/meeting follow-up questions — source attribution rules: -->
+    <!-- Known speaker + recording: -->
+    <p class="topic-q"><strong>会议追问（Jimmy，录音 00:01:30）：</strong>配额政策若调整，平台是否有替代通道？<span class="topic-q-status">待项目方</span></p>
+    <!-- Known person, no timestamp: -->
+    <p class="topic-q"><strong>追问（Jessica）：</strong>易货资质有效期？<span class="topic-q-status">已答：2027 到期 <span class="tag tag-party">🟡 <span class="tag-src">项目方</span></span></span></p>
+    <!-- From conversation, no attribution: -->
+    <p class="topic-q"><strong>用户追问：</strong>年度总配额规模是否公开？<span class="topic-q-status">待验证</span></p>
+    <!-- Gap discovered during research, not a follow-up question: -->
+    <p class="topic-q"><strong>残余缺口：</strong>年度总配额规模未公开，需政府关系或现场咨询。<span class="topic-q-status">待验证</span></p>
+  </div>
+</details>
+
+<!-- Topic status values (use as .topic-count text):
+  待调研         — not yet started
+  部分解答 · 高   — partial findings, high-priority gap
+  部分解答 · Blocker — partial findings, decision-blocking gap
+  研究结论 · 暂缓  — research complete, conclusion: pause
+  研究结论 · 可行  — research complete, conclusion: viable
+  已解答         — fully answered
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     E3. ADVANTAGE GRID  (.adv-grid)
+     Use in: Section 十一 决策框架 (pros/cons), Section 九 风险
+     ───────────────────────────────────────────────────── -->
+<div class="adv-grid">
+  <div class="pros">
+    <h4>优势 / 支持投资的理由</h4>
+    <ul>
+      <li>[优势1，带来源 tag]</li>
+      <li>[优势2]</li>
+      <li>[优势3]</li>
+    </ul>
+  </div>
+  <div class="cons">
+    <h4>劣势 / 关键风险</h4>
+    <ul>
+      <li>[风险1]</li>
+      <li>[风险2]</li>
+      <li>[风险3]</li>
+    </ul>
+  </div>
+</div>
+<!-- Advantage Grid rules:
+  - .pros: light green bg (#f0f7f1) — advantages, supporting evidence
+  - .cons: light pink bg (#fdf5f4) — risks, counterarguments
+  - Collapses to 1-column on mobile (<600px)
+  - Each item should be 1–2 lines; link to source sections where possible
+-->
+
+
+<!-- ─────────────────────────────────────────────────────
+     E4. VALUATION BOX  (.valuation-box)
+     Use in: Section 七, Section 十一
+     For: headline valuation range or key financial figure
+     ───────────────────────────────────────────────────── -->
+<div class="valuation-box">
+  <p style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:.35rem">
+    [标签，如：估值参照区间 / 基准 IRR / MOIC 目标]
+  </p>
+  <div class="big">$XX–$XXM</div>
+  <p style="font-size:.8rem;color:#4a4540;margin-top:.5rem">
+    [一句话方法论说明，如：基于 cap rate X%–X%，参考 N 个可比交易]
+    <span class="tag tag-analyst">🔵 <span class="tag-src">AI推论</span></span>
+  </p>
+</div>
+<!-- Valuation Box rules:
+  - .big: serif 2.25rem — the headline figure
+  - 2px burgundy top border (pre-defined in CSS)
+  - Brief methodology note below the number (required)
+  - Certainty tag on the figure
+  - Do NOT use without a supporting assumptions table nearby
+-->
