@@ -23,11 +23,22 @@ import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { cn } from "@/lib/utils";
 import { ProjectDetailDrawer } from "@/components/workspace/ProjectDetailDrawer";
 import {
-  ALL_PROJECTS,
   getProjectById,
   type ProjectPhase,
   type WorkspaceProject,
 } from "@/workspace/projects";
+import {
+  createProjectViaApi,
+  ENABLE_LIVE_CHAT,
+  fetchProjectsFromApi,
+  uploadProjectPackageFile,
+} from "@/lib/project-api";
+import {
+  getMergedProjects,
+  removeApiProject,
+  setApiProjects,
+  upsertApiProject,
+} from "@/workspace/project-registry";
 import { workspaceRoleToDetailTier } from "@/workspace/project-details";
 import { loadSessionUserId } from "@/workspace/session";
 import { getProjectRole, getUserById, WORKSPACE_USERS } from "@/workspace/workspace-users";
@@ -216,8 +227,9 @@ export default function ProjectOverview() {
   const [newProjectFiles, setNewProjectFiles] = useState<File[]>([]);
   const [createHint, setCreateHint] = useState<string | null>(null);
   const [creatingProject, setCreatingProject] = useState(false);
+  const [projectsLoading, setProjectsLoading] = useState(false);
+  const [projectsLoadError, setProjectsLoadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const createFlowTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const id = loadSessionUserId();
@@ -229,12 +241,28 @@ export default function ProjectOverview() {
   }, [navigate]);
 
   useEffect(() => {
+    if (!userId || !ENABLE_LIVE_CHAT) return;
+    let cancelled = false;
+    setProjectsLoading(true);
+    setProjectsLoadError(null);
+    void fetchProjectsFromApi()
+      .then((rows) => {
+        if (!cancelled) setApiProjects(rows);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setProjectsLoadError(
+            e instanceof Error ? e.message : "项目列表同步失败，仍显示本地种子项目",
+          );
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setProjectsLoading(false);
+      });
     return () => {
-      if (createFlowTimerRef.current !== null) {
-        window.clearTimeout(createFlowTimerRef.current);
-      }
+      cancelled = true;
     };
-  }, []);
+  }, [userId]);
 
   /** 全开放项目对所有用户可见，不再需要单独配置参与人员与分级 */
   useEffect(() => {
@@ -244,10 +272,10 @@ export default function ProjectOverview() {
   }, [newProjectOpenness]);
 
   const user = getUserById(userId);
-  const visibleProjects = [...ALL_PROJECTS].sort((a, b) => {
+  const visibleProjects = [...getMergedProjects()].sort((a, b) => {
     if (a.id === NANNING_PROJECT_ID) return -1;
     if (b.id === NANNING_PROJECT_ID) return 1;
-    return 0;
+    return b.name.localeCompare(a.name, "zh-CN");
   });
   const phaseOptions = Array.from(new Set(visibleProjects.map((p) => p.phase)));
   const roleOptions = userId
@@ -277,23 +305,56 @@ export default function ProjectOverview() {
   };
 
   const confirmCreateProject = () => {
-    if (creatingProject) return;
+    if (creatingProject || !userId) return;
     const name = newProjectName.trim();
     if (!name) {
       setCreateHint("请先填写项目名称。");
       return;
     }
-    setCreatingProject(true);
-    if (createFlowTimerRef.current !== null) {
-      window.clearTimeout(createFlowTimerRef.current);
+    if (!ENABLE_LIVE_CHAT) {
+      setCreateHint("未配置线上 API（VITE_AI_CHAT_ENDPOINT），无法创建项目。");
+      return;
     }
-    createFlowTimerRef.current = window.setTimeout(() => {
-      setCreateHint(
-        "演示流程：项目尚未写入数据库。正式「新建项目」能力开发中；当前请从列表进入已有项目（如南宁生鲜食品智慧港）使用对话与上传。",
-      );
-      setShowCreateModal(false);
-      resetCreateForm();
-    }, 180);
+    setCreatingProject(true);
+    void (async () => {
+      try {
+        const project = await createProjectViaApi({
+          name,
+          detail: newProjectDetail.trim() || undefined,
+          userId,
+        });
+        upsertApiProject(project);
+        const files = [...newProjectFiles];
+        const uploadErrors: string[] = [];
+        for (const file of files) {
+          try {
+            await uploadProjectPackageFile(project.id, userId, file);
+          } catch (e) {
+            uploadErrors.push(
+              `${file.name}：${e instanceof Error ? e.message : "上传失败"}`,
+            );
+          }
+        }
+        setShowCreateModal(false);
+        resetCreateForm();
+        setDetailProjectId(project.id);
+        const uploadNote =
+          uploadErrors.length > 0
+            ? `\n\n部分附件未上传成功：\n${uploadErrors.join("\n")}`
+            : files.length > 0
+              ? `\n\n已上传 ${files.length - uploadErrors.length} 个资料包文件。`
+              : "";
+        setCreateHint(
+          `项目「${project.name}」已保存（ID：${project.id}）。可从列表进入详情并打开对话。${uploadNote}`,
+        );
+      } catch (e) {
+        setCreateHint(
+          e instanceof Error ? e.message : "创建项目失败，请稍后重试。",
+        );
+      } finally {
+        setCreatingProject(false);
+      }
+    })();
   };
 
   const participantOptions = Object.values(WORKSPACE_USERS)
@@ -376,6 +437,12 @@ export default function ProjectOverview() {
                 </span>
                 。点击卡片从右侧展开项目详情，内容与「本项目」角色一致。
               </p>
+              {projectsLoading ? (
+                <p className="mt-2 text-xs text-muted-foreground">正在同步云端项目…</p>
+              ) : null}
+              {projectsLoadError ? (
+                <p className="mt-2 text-xs text-amber-700">{projectsLoadError}</p>
+              ) : null}
             </div>
             <div className="w-full space-y-2.5 sm:w-auto sm:min-w-[220px]">
               <button
@@ -713,6 +780,14 @@ export default function ProjectOverview() {
           )}
           onClose={() => setDetailProjectId(null)}
           onGuestTryChat={() => setGuestDialog(true)}
+          onProjectUpdated={(updated) => {
+            upsertApiProject(updated);
+          }}
+          onProjectDeleted={(id) => {
+            removeApiProject(id);
+            setDetailProjectId(null);
+            setCreateHint("项目已删除。");
+          }}
         />
       ) : null}
 

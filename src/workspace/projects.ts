@@ -14,6 +14,8 @@ export type WorkspaceProject = {
   summary: string;
   /** Guest 在卡片上仅见该句（不含具体机构/金额） */
   guestSummary: string;
+  /** 云端新建项目：创建人 userId，用于编辑/删除鉴权 */
+  createdBy?: string | null;
 };
 
 /** 全平台共 12 个在管项目 */
@@ -152,6 +154,4 @@ export const ALL_PROJECTS: WorkspaceProject[] = [
 
 export const TOTAL_PROJECT_COUNT = ALL_PROJECTS.length;
 
-export function getProjectById(id: string): WorkspaceProject | undefined {
-  return ALL_PROJECTS.find((p) => p.id === id);
-}
+export { getMergedProjectById as getProjectById } from "./project-registry";

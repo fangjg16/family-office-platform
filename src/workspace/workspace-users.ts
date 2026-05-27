@@ -128,7 +128,9 @@ export function getProjectRole(
 ): WorkspaceRole {
   const map = PROJECT_ROLES[userId];
   if (!map) return "guest";
-  return map[projectId] ?? "guest";
+  if (map[projectId]) return map[projectId];
+  if (userId === GUEST_USER_ID) return "guest";
+  return "core";
 }
 
 /** 对话区与表格的展示档位（与旧 core/secondary/broker 对齐） */

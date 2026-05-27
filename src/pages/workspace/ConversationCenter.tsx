@@ -27,11 +27,15 @@ import {
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { cn } from "@/lib/utils";
 import {
+  AI_CHAT_ENDPOINT,
   dedupeFilesByFilename,
+  ENABLE_LIVE_CHAT,
+  fetchProjectByIdFromApi,
   fetchProjectFiles,
   filterConversationSessionFiles,
   type ProjectFileRecord,
 } from "@/lib/project-api";
+import { upsertApiProject } from "@/workspace/project-registry";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
@@ -71,22 +75,11 @@ type SessionConversationState = {
 const EMPTY_LIVE_CHAT_MESSAGES: LiveChatMessage[] = [];
 
 const CHAT_ENTRY_TRANSITION_KEY = "workspace-chat-entry-transition";
-/** 生产：GitHub Secret `VITE_AI_CHAT_ENDPOINT` → Cloudflare Worker `/api/chat` */
-const AI_CHAT_ENDPOINT =
-  (import.meta.env.VITE_AI_CHAT_ENDPOINT as string | undefined)?.trim() ||
-  (import.meta.env.VITE_RAGFLOW_CHAT_ENDPOINT as string | undefined)?.trim() ||
-  "";
 const RAGFLOW_API_KEY =
   (import.meta.env.VITE_RAGFLOW_API_KEY as string | undefined)?.trim() ?? "";
 const RAGFLOW_MODE =
   ((import.meta.env.VITE_RAGFLOW_MODE as string | undefined)?.trim().toLowerCase() ??
     "proxy") as "native" | "openai" | "proxy";
-
-/** 构建时注入 VITE_ENABLE_LIVE_CHAT=1 或 VITE_AI_CHAT_ENDPOINT 后，走真实 AI */
-const ENABLE_LIVE_CHAT =
-  import.meta.env.VITE_ENABLE_LIVE_CHAT === "1" ||
-  import.meta.env.VITE_ENABLE_LIVE_CHAT === "true" ||
-  Boolean(AI_CHAT_ENDPOINT);
 
 /** 录制演示：空格填入下一条预设问题，发送后「思考中」再展示预设回复（时长随文案长度略增） */
 type DemoAssistantPiece =
@@ -1180,6 +1173,35 @@ export default function ConversationCenter() {
     window.requestAnimationFrame(() => setEntryReady(true));
   }, []);
 
+  const [projectLookupDone, setProjectLookupDone] = useState(false);
+
+  useEffect(() => {
+    if (!projectId) {
+      setProjectLookupDone(true);
+      return;
+    }
+    if (getProjectById(projectId)) {
+      setProjectLookupDone(true);
+      return;
+    }
+    if (!ENABLE_LIVE_CHAT) {
+      setProjectLookupDone(true);
+      return;
+    }
+    let cancelled = false;
+    setProjectLookupDone(false);
+    void fetchProjectByIdFromApi(projectId)
+      .then((row) => {
+        if (!cancelled && row) upsertApiProject(row);
+      })
+      .finally(() => {
+        if (!cancelled) setProjectLookupDone(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
   const project = projectId ? getProjectById(projectId) : undefined;
 
   const projectRole = useMemo(() => {
@@ -1192,7 +1214,7 @@ export default function ConversationCenter() {
     : null;
 
   useEffect(() => {
-    if (!userId || !projectId || !projectRole) return;
+    if (!userId || !projectId || !projectRole || !projectLookupDone) return;
     if (projectRole === "guest") {
       navigate("/app/projects", { replace: true });
       return;
@@ -1202,7 +1224,7 @@ export default function ConversationCenter() {
       return;
     }
     saveLastProjectId(projectId);
-  }, [userId, projectId, projectRole, navigate]);
+  }, [userId, projectId, projectRole, projectLookupDone, navigate]);
 
   const resourceDemo = useMemo(
     () => getProjectResourceDemo(projectId ?? ""),

@@ -49,6 +49,13 @@ import {
 } from "./documents-access";
 import { tryHandleHermesRoutes } from "./hermes-bridge";
 import {
+  handleCreateProject,
+  handleDeleteProject,
+  handleGetProject,
+  handleListProjects,
+  handleUpdateProject,
+} from "./projects-routes";
+import {
   buildTavilyQuery,
   formatTavilyBlock,
   searchTavily,
@@ -919,6 +926,21 @@ export default {
       } else if (path.startsWith("/api/hermes")) {
         const hermesRes = await tryHandleHermesRoutes(request, env, path);
         response = hermesRes ?? json({ error: "Not Found" }, 404);
+      } else if (path === "/api/projects" && request.method === "GET") {
+        response = await handleListProjects(env);
+      } else if (path === "/api/projects" && request.method === "POST") {
+        response = await handleCreateProject(request, env);
+      } else if (/^\/api\/projects\/[^/]+$/u.test(path)) {
+        const projectId = path.split("/")[3];
+        if (request.method === "GET") {
+          response = await handleGetProject(env, projectId);
+        } else if (request.method === "PATCH" || request.method === "PUT") {
+          response = await handleUpdateProject(request, env, projectId);
+        } else if (request.method === "DELETE") {
+          response = await handleDeleteProject(request, env, projectId);
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
       } else if (
         /^\/api\/projects\/[^/]+\/citations$/u.test(path) &&
         request.method === "GET"

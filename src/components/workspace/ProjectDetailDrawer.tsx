@@ -1,13 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { MessageSquare, X } from "lucide-react";
+import { MessageSquare, Pencil, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { deleteProjectViaApi } from "@/lib/project-api";
+import { ProjectEditModal } from "@/components/workspace/ProjectEditModal";
 import type { WorkspaceProject } from "@/workspace/projects";
 import {
   getProjectDetailContent,
   type ProjectDetailTier,
 } from "@/workspace/project-details";
 import { ProjectMaterialsSection } from "@/components/workspace/ProjectMaterialsSection";
+import {
+  canUserManageProjectMetadata,
+  isPersistedUserProject,
+} from "@/workspace/project-manage";
 import {
   canEnterChat,
   getProjectRole,
@@ -20,6 +26,8 @@ type ProjectDetailDrawerProps = {
   detailTier: ProjectDetailTier;
   onClose: () => void;
   onGuestTryChat: () => void;
+  onProjectUpdated?: (project: WorkspaceProject) => void;
+  onProjectDeleted?: (projectId: string) => void;
 };
 
 const PANEL_MS = 300;
@@ -31,10 +39,16 @@ export function ProjectDetailDrawer({
   detailTier,
   onClose,
   onGuestTryChat,
+  onProjectUpdated,
+  onProjectDeleted,
 }: ProjectDetailDrawerProps) {
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const [enteringChat, setEnteringChat] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [deleteConfirm, setDeleteConfirm] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [manageError, setManageError] = useState<string | null>(null);
   const enterTimerRef = useRef<number | null>(null);
 
   const requestClose = useCallback(() => {
@@ -73,6 +87,23 @@ export function ProjectDetailDrawer({
   const role = getProjectRole(userId, project.id);
   const chatOk = canEnterChat(role);
   const detail = getProjectDetailContent(project.id, detailTier);
+  const canManage = canUserManageProjectMetadata(userId, project);
+  const userCreated = isPersistedUserProject(project);
+
+  const confirmDelete = () => {
+    setDeleting(true);
+    setManageError(null);
+    void deleteProjectViaApi(project.id, userId)
+      .then(() => {
+        onProjectDeleted?.(project.id);
+        setDeleteConfirm(false);
+        requestClose();
+      })
+      .catch((e) => {
+        setManageError(e instanceof Error ? e.message : "删除失败");
+      })
+      .finally(() => setDeleting(false));
+  };
 
   return (
     <>
@@ -109,16 +140,47 @@ export function ProjectDetailDrawer({
             </h2>
             <p className="mt-2 text-[11px] font-medium text-muted-foreground">
               本项目视角：{roleLabelForProject(role)}
+              {canManage ? " · 你是创建人，可编辑或删除" : null}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={requestClose}
-            className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            aria-label="关闭"
-          >
-            <X className="h-5 w-5" strokeWidth={2} />
-          </button>
+          <div className="flex shrink-0 items-center gap-1">
+            {canManage ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManageError(null);
+                    setEditOpen(true);
+                  }}
+                  className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                  aria-label="编辑项目"
+                  title="编辑项目"
+                >
+                  <Pencil className="h-4 w-4" strokeWidth={2} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setManageError(null);
+                    setDeleteConfirm(true);
+                  }}
+                  className="rounded-full p-2 text-rose-500/90 transition-colors hover:bg-rose-50 hover:text-rose-600"
+                  aria-label="删除项目"
+                  title="删除项目"
+                >
+                  <Trash2 className="h-4 w-4" strokeWidth={2} />
+                </button>
+              </>
+            ) : null}
+            <button
+              type="button"
+              onClick={requestClose}
+              className="rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              aria-label="关闭"
+            >
+              <X className="h-5 w-5" strokeWidth={2} />
+            </button>
+          </div>
         </header>
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4 pb-6 md:px-6">
@@ -172,6 +234,31 @@ export function ProjectDetailDrawer({
                 canManage={chatOk && detailTier !== "guest"}
               />
             </>
+          ) : userCreated ? (
+            <>
+              <p className="text-sm leading-relaxed text-foreground">
+                {detailTier === "guest" ? project.guestSummary : project.summary}
+              </p>
+              <dl className="mt-5 space-y-2.5 rounded-2xl border border-border/70 bg-muted/30 p-4">
+                <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+                  <dt className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    状态
+                  </dt>
+                  <dd className="text-sm font-medium text-foreground">{project.phase}</dd>
+                </div>
+                <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+                  <dt className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                    分类
+                  </dt>
+                  <dd className="text-sm font-medium text-foreground">{project.category}</dd>
+                </div>
+              </dl>
+              <ProjectMaterialsSection
+                projectId={project.id}
+                userId={userId}
+                canManage={chatOk && detailTier !== "guest"}
+              />
+            </>
           ) : (
             <>
               <p className="text-sm text-muted-foreground">
@@ -184,6 +271,9 @@ export function ProjectDetailDrawer({
               />
             </>
           )}
+          {manageError ? (
+            <p className="mt-4 text-sm text-rose-600">{manageError}</p>
+          ) : null}
         </div>
 
         <footer className="shrink-0 border-t border-border/60 bg-white/95 px-5 py-4 backdrop-blur-md md:px-6">
@@ -226,6 +316,52 @@ export function ProjectDetailDrawer({
           )}
         </footer>
       </aside>
+
+      {canManage ? (
+        <ProjectEditModal
+          project={project}
+          userId={userId}
+          open={editOpen}
+          onClose={() => setEditOpen(false)}
+          onSaved={(updated) => onProjectUpdated?.(updated)}
+        />
+      ) : null}
+
+      {deleteConfirm ? (
+        <div
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby="delete-project-title"
+        >
+          <div className="w-full max-w-sm rounded-2xl border border-rose-100 bg-white p-5 shadow-2xl">
+            <h3 id="delete-project-title" className="text-base font-bold text-foreground">
+              删除项目？
+            </h3>
+            <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+              将永久删除「{project.name}」及其资料包、对话记录，且无法恢复。请确认。
+            </p>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => setDeleteConfirm(false)}
+                className="rounded-lg border border-border px-4 py-2 text-sm font-medium"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={confirmDelete}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:opacity-80"
+              >
+                {deleting ? "删除中…" : "确认删除"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </>
   );
 }
