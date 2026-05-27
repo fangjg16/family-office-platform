@@ -1,23 +1,5 @@
 import type { LiveChatMessage } from "@/workspace/chat-types";
-
-/** 解析 getCurrentDateTimeLabel / 云端 time_label（如 2026/5/27 10:30） */
-function parseTimeLabel(label: string | undefined): number {
-  const raw = (label ?? "").trim();
-  if (!raw) return 0;
-
-  const zh = /^(\d{4})[/-](\d{1,2})[/-](\d{1,2})\s+(\d{1,2}):(\d{2})/u.exec(raw);
-  if (zh) {
-    const y = Number(zh[1]);
-    const mo = Number(zh[2]);
-    const d = Number(zh[3]);
-    const h = Number(zh[4]);
-    const mi = Number(zh[5]);
-    return new Date(y, mo - 1, d, h, mi).getTime();
-  }
-
-  const t = Date.parse(raw.replace(/\//gu, "-"));
-  return Number.isNaN(t) ? 0 : t;
-}
+import { parseTimeLabel } from "@/workspace/chat-time";
 
 function timestampFromMessageId(id: string): number {
   if (/^assistant-job-/u.test(id)) return Number.MAX_SAFE_INTEGER;

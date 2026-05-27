@@ -67,6 +67,11 @@ import {
   sortMessagesByConversation,
   sortMessagesChronologically,
 } from "@/workspace/chat-message-order";
+import {
+  formatBubbleTimeLabel,
+  formatSidebarDateLabel,
+  latestMessageTimeLabel,
+} from "@/workspace/chat-time";
 import { ALL_PROJECTS } from "@/workspace/projects";
 import {
   loadSessionUserId,
@@ -134,6 +139,29 @@ function previewFromMessages(msgs: LiveChatMessage[]): string {
   return text.length > 48 ? `${text.slice(0, 48)}…` : text;
 }
 
+/** 用该会话最后一条消息的时间/摘要修正侧栏（避免全部显示「刚打开页面」的时间） */
+function applyConversationMetadataFromMessages(
+  convs: SessionConversation[],
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+): SessionConversation[] {
+  return convs.map((c) => {
+    const msgs = messagesByConversation[c.id];
+    if (!msgs?.length) return c;
+    const lastTime = latestMessageTimeLabel(msgs);
+    const autoPreview = previewFromMessages(msgs);
+    const keepPreview =
+      c.preview.trim() &&
+      c.preview !== "尚未发送消息" &&
+      c.preview !== "对话进行中" &&
+      c.preview !== "对话记录";
+    return {
+      ...c,
+      preview: keepPreview ? c.preview : autoPreview,
+      updatedAt: lastTime || c.updatedAt,
+    };
+  });
+}
+
 /** 云端有消息但会话元数据缺失时，从 message 键恢复侧栏项（避免同步时被误删） */
 function reconcileConversationsWithMessages(
   convs: SessionConversation[],
@@ -151,11 +179,14 @@ function reconcileConversationsWithMessages(
       ...built,
       id: conversationId,
       preview: previewFromMessages(msgs),
-      updatedAt: getCurrentDateTimeLabel(),
+      updatedAt: latestMessageTimeLabel(msgs) || getCurrentDateTimeLabel(),
       variant: "blank",
     });
   }
-  return Array.from(byId.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return applyConversationMetadataFromMessages(
+    Array.from(byId.values()),
+    messagesByConversation,
+  ).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 /** 去掉历史预填侧栏项；有真实消息的预填项一律保留 */
@@ -182,15 +213,16 @@ function mergeConversationsForBootstrap(
     ? stripLegacySidebarPrefill(base, focusProjectId, messagesByConversation)
     : base;
   const reconciled = reconcileConversationsWithMessages(cleaned, messagesByConversation);
+  const withTimes = applyConversationMetadataFromMessages(reconciled, messagesByConversation);
   if (isLiveAiMode) {
-    return reconciled;
+    return withTimes;
   }
-  if (!focusProjectId) return reconciled;
+  if (!focusProjectId) return withTimes;
   const currentConversation = buildConversationFromProject(focusProjectId);
-  if (!currentConversation) return reconciled;
-  const hasCurrent = reconciled.some((item) => item.projectId === focusProjectId);
-  if (hasCurrent) return reconciled;
-  return [withCurrentPreviewTime(currentConversation), ...reconciled];
+  if (!currentConversation) return withTimes;
+  const hasCurrent = withTimes.some((item) => item.projectId === focusProjectId);
+  if (hasCurrent) return withTimes;
+  return [withCurrentPreviewTime(currentConversation), ...withTimes];
 }
 
 function projectDisplayName(projectId: string): string {
@@ -844,13 +876,7 @@ function conversationPath(c: SessionConversation): string {
 }
 
 function UserBubble({ children, time }: { children: ReactNode; time?: string }) {
-  const displayTime =
-    time ??
-    new Intl.DateTimeFormat("zh-CN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(new Date());
+  const displayTime = formatBubbleTimeLabel(time);
   return (
     <div className="flex justify-end">
       <div className="group inline-flex flex-col items-end">
@@ -863,22 +889,18 @@ function UserBubble({ children, time }: { children: ReactNode; time?: string }) 
         >
           {children}
         </div>
-        <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-          {displayTime}
-        </span>
+        {displayTime ? (
+          <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+            {displayTime}
+          </span>
+        ) : null}
       </div>
     </div>
   );
 }
 
 function AiShell({ children, time }: { children: ReactNode; time?: string }) {
-  const displayTime =
-    time ??
-    new Intl.DateTimeFormat("zh-CN", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: false,
-    }).format(new Date());
+  const displayTime = formatBubbleTimeLabel(time);
   return (
     <div className="flex justify-start">
       <div className="group inline-flex flex-col items-start">
@@ -890,9 +912,11 @@ function AiShell({ children, time }: { children: ReactNode; time?: string }) {
         >
           {children}
         </div>
-        <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
-          {displayTime}
-        </span>
+        {displayTime ? (
+          <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
+            {displayTime}
+          </span>
+        ) : null}
       </div>
     </div>
   );
@@ -1469,12 +1493,16 @@ export default function ConversationCenter() {
         0,
       );
       if (snap.conversations.length === 0 && messageCount === 0) return;
-      const convsToSave = snap.isLiveAiMode
+      const baseConvs = snap.isLiveAiMode
         ? reconcileConversationsWithMessages(
             snap.conversations,
             snap.liveMessagesByConversation,
           )
         : snap.conversations;
+      const convsToSave = applyConversationMetadataFromMessages(
+        baseConvs,
+        snap.liveMessagesByConversation,
+      );
       void persistChatStateForUser(
         userId,
         {
@@ -1935,7 +1963,10 @@ export default function ConversationCenter() {
                   ? Array.from(new Set([...t.files, ...fileNames]))
                   : t.files,
               preview,
-              updatedAt: getCurrentDateTimeLabel(),
+              updatedAt:
+                latestMessageTimeLabel(
+                  liveMessagesByConversation[effectiveConversationId],
+                ) || getCurrentDateTimeLabel(),
             }
           : t
       )
@@ -2591,7 +2622,7 @@ export default function ConversationCenter() {
                                   {conversation.preview}
                                 </p>
                                 <p className="shrink-0 text-[10px] text-muted-foreground">
-                                  {conversation.updatedAt.split(" ")[0]}
+                                  {formatSidebarDateLabel(conversation.updatedAt)}
                                 </p>
                               </div>
                             </button>
@@ -2728,13 +2759,13 @@ export default function ConversationCenter() {
                         <ChatSentFilesPanel files={m.files} />
                       ) : null}
                       {m.content.trim() && !isGenericFileOnlyUserText(m.content) ? (
-                        <UserBubble>
+                        <UserBubble time={m.time}>
                           <ChatMarkdown text={m.content} variant="user" />
                         </UserBubble>
                       ) : null}
                     </div>
                   ) : (
-                    <AiShell key={m.id}>
+                    <AiShell key={m.id} time={m.time}>
                       {m.isStreaming ? (
                         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
                           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
