@@ -12,4 +12,6 @@ export type LiveChatMessage = {
   pendingJobId?: string;
   /** 轮询接口返回的实时进度文案 */
   jobProgressLabel?: string;
+  /** SSE 流式生成中：保留「思考中」条，下方同步追加正文 */
+  isStreaming?: boolean;
 };

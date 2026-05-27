@@ -1690,6 +1690,8 @@ export default function ConversationCenter() {
     return sortMessagesChronologically(raw);
   }, [effectiveConversationId, liveMessagesByConversation]);
 
+  const hasStreamingAssistantInThread = liveMessages.some((m) => m.isStreaming);
+
   useLayoutEffect(() => {
     const root = chatScrollRef.current;
     if (!root) return;
@@ -1707,6 +1709,7 @@ export default function ConversationCenter() {
     playbackMsgs,
     playbackThinking,
     isCurrentConversationSending,
+    hasStreamingAssistantInThread,
     showUploadPanel,
   ]);
 
@@ -2121,6 +2124,7 @@ export default function ConversationCenter() {
     if (!userId) return;
 
     const sendConversationId = effectiveConversationId;
+    let streamAssistantId: string | null = null;
     setSendingConversationId(sendConversationId);
     try {
       let uploadNotes = "";
@@ -2179,6 +2183,18 @@ export default function ConversationCenter() {
         RAGFLOW_MODE !== "openai" &&
         Boolean(requestBody && typeof requestBody === "object" && "stream" in requestBody);
 
+      if (useWorkerStream) {
+        streamAssistantId = `assistant-${Date.now()}`;
+        setLiveError(null);
+        appendLiveMessage(effectiveConversationId, {
+          id: streamAssistantId,
+          role: "assistant",
+          content: "",
+          time: getCurrentDateTimeLabel(),
+          isStreaming: true,
+        });
+      }
+
       const res = await fetch(AI_CHAT_ENDPOINT, {
         method: "POST",
         headers: {
@@ -2193,18 +2209,12 @@ export default function ConversationCenter() {
         ...liveCitationMap,
       };
 
-      if (useWorkerStream && (res.headers.get("Content-Type") ?? "").includes("text/event-stream")) {
-        const assistantId = `assistant-${Date.now()}`;
-        setLiveError(null);
-        appendLiveMessage(effectiveConversationId, {
-          id: assistantId,
-          role: "assistant",
-          content: "",
-          time: getCurrentDateTimeLabel(),
-        });
-        setSendingConversationId((cur) =>
-          cur === sendConversationId ? null : cur,
-        );
+      if (
+        useWorkerStream &&
+        streamAssistantId &&
+        (res.headers.get("Content-Type") ?? "").includes("text/event-stream")
+      ) {
+        const assistantId = streamAssistantId;
 
         let streamPayload: { async?: boolean; jobId?: string; assistantMessageId?: string; answer?: string } | null =
           null;
@@ -2254,6 +2264,7 @@ export default function ConversationCenter() {
             ),
             pendingJobId: jobId,
             jobProgressLabel: "任务已提交，正在连接引擎…",
+            isStreaming: false,
           });
           resumedAgentJobIdsRef.current.add(jobId);
           void pollAgentJobUntilDone({
@@ -2283,9 +2294,17 @@ export default function ConversationCenter() {
         updateLiveMessage(effectiveConversationId, assistantId, {
           content: prepared.displayContent,
           knowledgeNetworkHtml: prepared.html || undefined,
+          isStreaming: false,
         });
         flushChatPersist();
         return;
+      }
+
+      if (useWorkerStream && streamAssistantId) {
+        updateLiveMessage(effectiveConversationId, streamAssistantId, {
+          isStreaming: false,
+          content: "流式响应异常，请重试。",
+        });
       }
 
       const payload: unknown = await res.json().catch(() => ({}));
@@ -2380,12 +2399,19 @@ export default function ConversationCenter() {
         error instanceof Error ? error.message : "未知错误";
       const errMsg = formatRagflowRequestError(raw, AI_CHAT_ENDPOINT);
       setLiveError(errMsg);
-      appendLiveMessage(effectiveConversationId, {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: errMsg,
-        time: getCurrentDateTimeLabel(),
-      });
+      if (streamAssistantId) {
+        updateLiveMessage(effectiveConversationId, streamAssistantId, {
+          content: errMsg,
+          isStreaming: false,
+        });
+      } else {
+        appendLiveMessage(effectiveConversationId, {
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          content: errMsg,
+          time: getCurrentDateTimeLabel(),
+        });
+      }
     } finally {
       setSendingConversationId((cur) =>
         cur === sendConversationId ? null : cur,
@@ -2700,12 +2726,26 @@ export default function ConversationCenter() {
                     </div>
                   ) : (
                     <AiShell key={m.id}>
-                      <div className="text-sm">
-                        <ChatMarkdown
-                          text={knPrepared?.displayContent ?? m.content}
-                          variant="assistant"
-                        />
-                      </div>
+                      {m.isStreaming ? (
+                        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
+                          <span className="text-sm font-medium text-muted-foreground">
+                            思考中…
+                          </span>
+                        </div>
+                      ) : null}
+                      {m.content.trim() ? (
+                        <div className="text-sm">
+                          <ChatMarkdown
+                            text={knPrepared?.displayContent ?? m.content}
+                            variant="assistant"
+                          />
+                        </div>
+                      ) : m.isStreaming ? (
+                        <p className="text-xs text-muted-foreground/80">
+                          正在连接引擎并检索资料，请稍候…
+                        </p>
+                      ) : null}
                       {m.pendingJobId ? (
                         <div className="mt-3 flex flex-col gap-1.5">
                           <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
@@ -2731,7 +2771,7 @@ export default function ConversationCenter() {
                         </p>
                       ) : null}
                       <p className="mt-2 text-[11px] text-muted-foreground">
-                        ● Master Agent · AI 返回
+                        ● Master Agent · AI {m.isStreaming ? "处理中" : "返回"}
                         {m.pendingJobId ? " · 后台分析" : ""}
                         {knPrepared?.html ? " · 含知识网络 HTML" : ""}
                       </p>
@@ -2739,7 +2779,7 @@ export default function ConversationCenter() {
                   );
                 })
               )}
-              {isCurrentConversationSending ? (
+              {isCurrentConversationSending && !hasStreamingAssistantInThread ? (
                 <AiShell>
                   <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
