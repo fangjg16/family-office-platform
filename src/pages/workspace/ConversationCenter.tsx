@@ -9,6 +9,8 @@ import {
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
+  ChevronDown,
+  ChevronRight,
   FileSpreadsheet,
   FileUp,
   FileText,
@@ -17,6 +19,7 @@ import {
   Plane,
   Plus,
   Sparkles,
+  Trash2,
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/workspace/ChatMarkdown";
@@ -200,6 +203,39 @@ function conversationSidebarRows(
     ? pruneEmptyLiveConversations(convs, messagesByConversation)
     : convs;
   return [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+}
+
+type SidebarProjectGroup = {
+  projectId: string;
+  projectName: string;
+  latestAt: string;
+  conversations: SessionConversation[];
+};
+
+function groupSidebarByProject(
+  convs: SessionConversation[],
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+  isLiveAiMode: boolean,
+): SidebarProjectGroup[] {
+  const rows = conversationSidebarRows(convs, messagesByConversation, isLiveAiMode);
+  const byProject = new Map<string, SessionConversation[]>();
+  for (const c of rows) {
+    const list = byProject.get(c.projectId) ?? [];
+    list.push(c);
+    byProject.set(c.projectId, list);
+  }
+  const groups: SidebarProjectGroup[] = [];
+  for (const [pid, list] of byProject) {
+    const sorted = [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+    groups.push({
+      projectId: pid,
+      projectName: projectDisplayName(pid),
+      latestAt: sorted[0]?.updatedAt ?? "",
+      conversations: sorted,
+    });
+  }
+  groups.sort((a, b) => b.latestAt.localeCompare(a.latestAt));
+  return groups;
 }
 
 const EMPTY_LIVE_CHAT_MESSAGES: LiveChatMessage[] = [];
@@ -1409,16 +1445,24 @@ export default function ConversationCenter() {
 
   const isBlankThread = activeConversation?.variant === "blank";
 
-  /** 侧栏：全平台「有消息」的会话（不按当前项目隐藏其它项目） */
-  const sidebarConversations = useMemo(
+  const sidebarGroups = useMemo(
     () =>
-      conversationSidebarRows(
-        conversations,
-        liveMessagesByConversation,
-        isLiveAiMode,
-      ),
+      groupSidebarByProject(conversations, liveMessagesByConversation, isLiveAiMode),
     [conversations, liveMessagesByConversation, isLiveAiMode],
   );
+
+  const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(
+    () => new Set(),
+  );
+
+  const toggleProjectCollapsed = (pid: string) => {
+    setCollapsedProjectIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(pid)) next.delete(pid);
+      else next.add(pid);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (!userId) return;
@@ -1810,6 +1854,51 @@ export default function ConversationCenter() {
     );
   };
 
+  const deleteConversation = (target: SessionConversation) => {
+    const label = projectDisplayName(target.projectId);
+    if (
+      !window.confirm(
+        `确定删除「${label}」下的这条对话记录？删除后无法恢复。`,
+      )
+    ) {
+      return;
+    }
+
+    const nextMessages = { ...liveMessagesByConversation };
+    delete nextMessages[target.id];
+    const nextConversations = conversations.filter((c) => c.id !== target.id);
+
+    setConversations(nextConversations);
+    setLiveMessagesByConversation(nextMessages);
+
+    if (
+      target.id === effectiveConversationId &&
+      target.projectId === projectId
+    ) {
+      const sameProject = nextConversations.filter(
+        (c) =>
+          c.projectId === projectId &&
+          Array.isArray(nextMessages[c.id]) &&
+          nextMessages[c.id].length > 0,
+      );
+      if (sameProject[0]) {
+        navigate(conversationPath(sameProject[0]), { replace: true });
+        return;
+      }
+      const anyOther = nextConversations.find(
+        (c) =>
+          Array.isArray(nextMessages[c.id]) && nextMessages[c.id].length > 0,
+      );
+      if (anyOther) {
+        navigate(conversationPath(anyOther), { replace: true });
+        return;
+      }
+      if (projectId) {
+        navigate(`/app/chat/${projectId}`, { replace: true });
+      }
+    }
+  };
+
   const handleSend = async () => {
     if (!projectId) return;
     const trimmed = draftMessage.trim();
@@ -2179,59 +2268,93 @@ export default function ConversationCenter() {
             <Plus className="h-4 w-4" strokeWidth={2} />
             新增对话
           </button>
-          {sidebarConversations.length === 0 ? (
+          {sidebarGroups.length === 0 ? (
             <p className="px-2 py-3 text-[11px] leading-relaxed text-muted-foreground">
-              暂无历史对话。在任意项目下发一条消息，或点「新增对话」开始。
+              暂无对话记录。选择项目后发送消息即可开始。
             </p>
           ) : null}
-          {sidebarConversations.map((conversation) => {
-            const active =
-              conversation.id === effectiveConversationId &&
-              conversation.projectId === projectId;
-            const pname = projectDisplayName(conversation.projectId);
+          {sidebarGroups.map((group) => {
+            const collapsed = collapsedProjectIds.has(group.projectId);
             return (
-              <div
-                key={conversation.id}
-                className={cn(
-                  "relative w-full rounded-xl border px-3 py-3 text-left transition-colors",
-                  conversation.id === newlyAddedConversationId &&
-                    "animate-in fade-in slide-in-from-top-1 duration-200",
-                  active
-                    ? "border-primary/30 bg-primary/[0.08]"
-                    : "border-transparent bg-white/70 hover:border-border/80 hover:bg-white"
-                )}
-              >
-                {active ? (
-                  <span
-                    aria-hidden
-                    className="absolute bottom-1.5 right-0 top-1.5 w-[3px] rounded-full bg-primary/90"
-                  />
-                ) : null}
+              <div key={group.projectId} className="space-y-1">
                 <button
                   type="button"
-                  onClick={() => {
-                    saveLastChatProjectId(conversation.projectId);
-                    navigate(conversationPath(conversation));
-                  }}
-                  className="w-full text-left"
+                  onClick={() => toggleProjectCollapsed(group.projectId)}
+                  className="flex w-full items-center gap-1.5 rounded-lg px-2 py-1.5 text-left hover:bg-muted/50"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <p
-                      className={cn(
-                        "line-clamp-1 pr-1 text-[13px] font-semibold leading-snug",
-                        active ? "text-primary" : "text-foreground",
-                      )}
-                    >
-                      {pname}
-                    </p>
-                    <p className="shrink-0 text-[10px] font-semibold text-primary/65">
-                      {conversation.updatedAt.split(" ")[0]}
-                    </p>
-                  </div>
-                  <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted-foreground/90">
-                    {conversation.preview}
-                  </p>
+                  {collapsed ? (
+                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                  )}
+                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-foreground">
+                    {group.projectName}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-muted-foreground">
+                    {group.conversations.length}
+                  </span>
                 </button>
+                {!collapsed
+                  ? group.conversations.map((conversation) => {
+                      const active =
+                        conversation.id === effectiveConversationId &&
+                        conversation.projectId === projectId;
+                      return (
+                        <div
+                          key={conversation.id}
+                          className={cn(
+                            "group/item relative ml-2 w-[calc(100%-0.5rem)] rounded-xl border px-3 py-2.5 text-left transition-colors",
+                            conversation.id === newlyAddedConversationId &&
+                              "animate-in fade-in slide-in-from-top-1 duration-200",
+                            active
+                              ? "border-primary/30 bg-primary/[0.08]"
+                              : "border-transparent bg-white/70 hover:border-border/80 hover:bg-white",
+                          )}
+                        >
+                          {active ? (
+                            <span
+                              aria-hidden
+                              className="absolute bottom-1.5 right-0 top-1.5 w-[3px] rounded-full bg-primary/90"
+                            />
+                          ) : null}
+                          <div className="flex items-start gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                saveLastChatProjectId(conversation.projectId);
+                                navigate(conversationPath(conversation));
+                              }}
+                              className="min-w-0 flex-1 text-left"
+                            >
+                              <div className="flex items-start justify-between gap-2">
+                                <p
+                                  className={cn(
+                                    "line-clamp-2 pr-1 text-[12px] leading-snug",
+                                    active
+                                      ? "font-semibold text-primary"
+                                      : "text-foreground",
+                                  )}
+                                >
+                                  {conversation.preview}
+                                </p>
+                                <p className="shrink-0 text-[10px] text-muted-foreground">
+                                  {conversation.updatedAt.split(" ")[0]}
+                                </p>
+                              </div>
+                            </button>
+                            <button
+                              type="button"
+                              title="删除此对话"
+                              onClick={() => deleteConversation(conversation)}
+                              className="shrink-0 rounded-md p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/item:opacity-100"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })
+                  : null}
               </div>
             );
           })}
@@ -2568,12 +2691,9 @@ export default function ConversationCenter() {
           <div className="py-3 pl-6 pr-3 md:w-[17rem] md:shrink-0 md:rounded-bl-[1.65rem] md:border-r md:border-border/50">
             {permissionSidebarHint ? (
               <p className="mb-2.5 text-[10px] font-medium leading-snug text-muted-foreground">
-                主区项目：{project?.name ?? "—"} · 权限 {permissionSidebarHint}
+                当前权限：{permissionSidebarHint}
               </p>
             ) : null}
-            <p className="mb-2.5 text-[10px] leading-snug text-muted-foreground/80">
-              侧栏列出全部有记录的项目对话，点选可切换项目。
-            </p>
             <Link
               to="/"
               className="flex items-center gap-1 rounded-full px-1 py-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
