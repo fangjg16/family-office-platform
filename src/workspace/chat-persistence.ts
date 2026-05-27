@@ -181,9 +181,11 @@ export async function persistChatStateForUser(
   };
 
   let toSave = localSorted;
+  let remoteBaselineLoaded = false;
   if (ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT) {
     const remote = await fetchRemoteChatState(userId);
     if (remote) {
+      remoteBaselineLoaded = true;
       toSave = {
         conversations: mergeConversations(remote.conversations, localSorted.conversations),
         messagesByConversation: mergeMessagesByConversation(
@@ -197,6 +199,10 @@ export async function persistChatStateForUser(
   savePersistedConversations(userId, toSave.conversations);
   savePersistedLiveMessages(userId, toSave.messagesByConversation);
   if (ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT) {
-    await saveRemoteChatState(userId, toSave);
+    // 关键保护：如果云端读取失败，就不要把“局部浏览器状态”写回云端，
+    // 因为 /chat-state PUT 会先 DELETE 再 INSERT，可能导致其它会话丢失。
+    if (remoteBaselineLoaded) {
+      await saveRemoteChatState(userId, toSave);
+    }
   }
 }
