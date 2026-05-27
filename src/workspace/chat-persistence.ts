@@ -77,31 +77,66 @@ export function savePersistedLiveMessages(
 export async function loadChatStateForUser(
   userId: string,
 ): Promise<RemoteChatState | null> {
-  if (ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT) {
-    const remote = await fetchRemoteChatState(userId);
-    if (
-      remote &&
-      (remote.conversations.length > 0 ||
-        Object.keys(remote.messagesByConversation).length > 0)
-    ) {
-      savePersistedConversations(userId, remote.conversations);
-      savePersistedLiveMessages(userId, remote.messagesByConversation);
-      return {
-        ...remote,
-        messagesByConversation: sortMessagesByConversation(remote.messagesByConversation),
-      };
-    }
-  }
-
   const localConvs = loadPersistedConversations(userId);
   const localMsgs = loadPersistedLiveMessages(userId);
-  if (localConvs || localMsgs) {
-    return {
-      conversations: localConvs ?? [],
-      messagesByConversation: sortMessagesByConversation(localMsgs ?? {}),
-    };
+  const localState: RemoteChatState = {
+    conversations: localConvs ?? [],
+    messagesByConversation: sortMessagesByConversation(localMsgs ?? {}),
+  };
+
+  const hasLocalData =
+    localState.conversations.length > 0 ||
+    Object.keys(localState.messagesByConversation).length > 0;
+
+  if (!(ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT)) {
+    return hasLocalData ? localState : null;
   }
-  return null;
+
+  try {
+    const remote = await fetchRemoteChatState(userId);
+    const hasRemoteData = Boolean(
+      remote &&
+        (remote.conversations.length > 0 ||
+          Object.keys(remote.messagesByConversation).length > 0),
+    );
+
+    if (!hasRemoteData) {
+      return hasLocalData ? localState : null;
+    }
+
+    const remoteState: RemoteChatState = {
+      conversations: remote!.conversations,
+      messagesByConversation: sortMessagesByConversation(
+        remote!.messagesByConversation,
+      ),
+      syncedAt: remote!.syncedAt,
+    };
+
+    const merged: RemoteChatState = hasLocalData
+      ? {
+          conversations: mergeConversations(
+            remoteState.conversations,
+            localState.conversations,
+          ),
+          messagesByConversation: mergeMessagesByConversation(
+            remoteState.messagesByConversation,
+            localState.messagesByConversation,
+          ),
+          syncedAt: remoteState.syncedAt,
+        }
+      : remoteState;
+
+    // 修复历史异常：如果远端被部分覆盖，加载时用本机补齐后立即回写一次。
+    if (hasLocalData) {
+      void saveRemoteChatState(userId, merged);
+    }
+
+    savePersistedConversations(userId, merged.conversations);
+    savePersistedLiveMessages(userId, merged.messagesByConversation);
+    return merged;
+  } catch {
+    return hasLocalData ? localState : null;
+  }
 }
 
 function mergeConversations(
