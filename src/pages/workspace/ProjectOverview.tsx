@@ -153,6 +153,7 @@ function ProjectCard({
   const Icon = CATEGORY_ICON[project.category] ?? Layers;
   const role = getProjectRole(userId, project.id);
   const roleLabel = roleFootnote(role);
+  const previewText = role === "guest" ? project.guestSummary : project.summary;
 
   return (
     <article
@@ -166,7 +167,7 @@ function ProjectCard({
         }
       }}
       className={cn(
-        "group relative flex min-h-[300px] cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-6 text-left shadow-sm transition-all duration-300",
+        "group relative flex h-full min-h-[300px] cursor-pointer flex-col overflow-hidden rounded-xl border border-gray-200 bg-white p-6 text-left shadow-sm transition-all duration-300",
         "hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-[0_10px_18px_-10px_rgba(15,23,42,0.22)]",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       )}
@@ -184,16 +185,19 @@ function ProjectCard({
           {phaseChipText(project.phase)}
         </span>
       </div>
-      <h2 className="text-lg font-semibold leading-snug text-slate-900">
+      <h2 className="line-clamp-2 text-lg font-semibold leading-snug text-slate-900">
         {project.name}
       </h2>
-      <p className="mt-1 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+      <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">
         {project.category}
       </p>
-      <p className="mt-5 flex-1 text-sm leading-relaxed text-slate-600">
-        {role === "guest" ? project.guestSummary : project.summary}
+      <p
+        title={previewText}
+        className="mt-5 line-clamp-4 flex-1 text-sm leading-relaxed text-slate-600"
+      >
+        {previewText}
       </p>
-      <div className="mt-5 flex items-end justify-between gap-3 border-t border-gray-100 pt-4">
+      <div className="mt-5 flex shrink-0 items-end justify-between gap-3 border-t border-gray-100 pt-4">
         <span
           className={cn(
             "inline-flex min-w-0 items-center rounded-md px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
@@ -500,7 +504,7 @@ export default function ProjectOverview() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 items-stretch gap-6 md:grid-cols-2 lg:grid-cols-3">
           {filteredProjects.map((p) => (
             <div key={p.id}>
               <ProjectCard
