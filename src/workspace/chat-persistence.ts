@@ -17,192 +17,105 @@ export type PersistedConversation = {
   variant?: "demo" | "blank";
 };
 
-function conversationsKey(userId: string) {
-  return `fo-chat-conversations-${userId}`;
-}
-
-function liveMessagesKey(userId: string) {
-  return `fo-chat-live-${userId}`;
-}
-
-export function loadPersistedConversations(
-  userId: string,
-): PersistedConversation[] | null {
-  try {
-    const raw = localStorage.getItem(conversationsKey(userId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as PersistedConversation[];
-    return Array.isArray(parsed) ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-export function savePersistedConversations(
-  userId: string,
-  conversations: PersistedConversation[],
-): void {
-  try {
-    localStorage.setItem(conversationsKey(userId), JSON.stringify(conversations));
-  } catch {
-    /* 容量满时忽略 */
-  }
-}
-
-export function loadPersistedLiveMessages(
-  userId: string,
-): Record<string, LiveChatMessage[]> | null {
-  try {
-    const raw = localStorage.getItem(liveMessagesKey(userId));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Record<string, LiveChatMessage[]>;
-    return parsed && typeof parsed === "object" ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-export function savePersistedLiveMessages(
-  userId: string,
-  messages: Record<string, LiveChatMessage[]>,
-): void {
-  try {
-    localStorage.setItem(liveMessagesKey(userId), JSON.stringify(messages));
-  } catch {
-    /* 容量满时忽略 */
-  }
-}
-
-/** 优先云端，失败则用本机缓存 */
+/** 仅从云端 D1 加载；失败或不可用时返回 null */
 export async function loadChatStateForUser(
   userId: string,
 ): Promise<RemoteChatState | null> {
-  const localConvs = loadPersistedConversations(userId);
-  const localMsgs = loadPersistedLiveMessages(userId);
-  const localState: RemoteChatState = {
-    conversations: localConvs ?? [],
-    messagesByConversation: sortMessagesByConversation(localMsgs ?? {}),
-  };
-
-  const hasLocalData =
-    localState.conversations.length > 0 ||
-    Object.keys(localState.messagesByConversation).length > 0;
-
   if (!(ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT)) {
-    return hasLocalData ? localState : null;
+    return null;
   }
 
   try {
     const remote = await fetchRemoteChatState(userId);
-    const hasRemoteData = Boolean(
-      remote &&
-        (remote.conversations.length > 0 ||
-          Object.keys(remote.messagesByConversation).length > 0),
-    );
+    if (!remote) return null;
 
-    if (!hasRemoteData) {
-      return hasLocalData ? localState : null;
-    }
-
-    const remoteState: RemoteChatState = {
-      conversations: remote!.conversations,
+    return {
+      conversations: remote.conversations,
       messagesByConversation: sortMessagesByConversation(
-        remote!.messagesByConversation,
+        remote.messagesByConversation,
       ),
-      syncedAt: remote!.syncedAt,
+      syncedAt: remote.syncedAt,
     };
-
-    const merged: RemoteChatState = hasLocalData
-      ? {
-          conversations: mergeConversations(
-            remoteState.conversations,
-            localState.conversations,
-          ),
-          messagesByConversation: mergeMessagesByConversation(
-            remoteState.messagesByConversation,
-            localState.messagesByConversation,
-          ),
-          syncedAt: remoteState.syncedAt,
-        }
-      : remoteState;
-
-    // 修复历史异常：如果远端被部分覆盖，加载时用本机补齐后立即回写一次。
-    if (hasLocalData) {
-      void saveRemoteChatState(userId, merged);
-    }
-
-    savePersistedConversations(userId, merged.conversations);
-    savePersistedLiveMessages(userId, merged.messagesByConversation);
-    return merged;
   } catch {
-    return hasLocalData ? localState : null;
+    return null;
   }
 }
 
 function mergeConversations(
   remote: PersistedConversation[],
-  local: PersistedConversation[],
+  incoming: PersistedConversation[],
 ): PersistedConversation[] {
   const byId = new Map<string, PersistedConversation>();
   for (const c of remote) byId.set(c.id, c);
-  for (const c of local) {
+  for (const c of incoming) {
     const prev = byId.get(c.id);
     if (!prev || c.updatedAt.localeCompare(prev.updatedAt) >= 0) {
       byId.set(c.id, c);
     }
   }
-  return Array.from(byId.values()).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  return Array.from(byId.values()).sort((a, b) =>
+    b.updatedAt.localeCompare(a.updatedAt),
+  );
 }
 
 function mergeMessagesByConversation(
   remote: Record<string, LiveChatMessage[]>,
-  local: Record<string, LiveChatMessage[]>,
+  incoming: Record<string, LiveChatMessage[]>,
 ): Record<string, LiveChatMessage[]> {
-  const keys = new Set([...Object.keys(remote), ...Object.keys(local)]);
+  const keys = new Set([...Object.keys(remote), ...Object.keys(incoming)]);
   const merged: Record<string, LiveChatMessage[]> = {};
   for (const key of keys) {
     const byId = new Map<string, LiveChatMessage>();
     for (const m of remote[key] ?? []) byId.set(m.id, m);
-    for (const m of local[key] ?? []) byId.set(m.id, m);
+    for (const m of incoming[key] ?? []) byId.set(m.id, m);
     const list = Array.from(byId.values());
     if (list.length > 0) merged[key] = list;
   }
   return sortMessagesByConversation(merged);
 }
 
-/** 云端 + 本机双写；保存前与远端合并，避免局部状态覆盖删光历史 */
+/**
+ * 保存到云端：先 GET 远端基线再与当前页状态合并后 PUT。
+ * 若无法读取远端基线则跳过 PUT，避免全量替换误删其它会话。
+ */
 export async function persistChatStateForUser(
   userId: string,
   state: RemoteChatState,
 ): Promise<void> {
-  const localSorted = {
+  const incoming = {
     conversations: state.conversations,
-    messagesByConversation: sortMessagesByConversation(state.messagesByConversation),
+    messagesByConversation: sortMessagesByConversation(
+      state.messagesByConversation,
+    ),
   };
 
-  let toSave = localSorted;
+  if (!(ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT)) {
+    return;
+  }
+
   let remoteBaselineLoaded = false;
-  if (ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT) {
+  let toSave = incoming;
+
+  try {
     const remote = await fetchRemoteChatState(userId);
     if (remote) {
       remoteBaselineLoaded = true;
       toSave = {
-        conversations: mergeConversations(remote.conversations, localSorted.conversations),
+        conversations: mergeConversations(
+          remote.conversations,
+          incoming.conversations,
+        ),
         messagesByConversation: mergeMessagesByConversation(
           remote.messagesByConversation,
-          localSorted.messagesByConversation,
+          incoming.messagesByConversation,
         ),
       };
     }
+  } catch {
+    /* 读取失败时不写入云端 */
   }
 
-  savePersistedConversations(userId, toSave.conversations);
-  savePersistedLiveMessages(userId, toSave.messagesByConversation);
-  if (ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT) {
-    // 关键保护：如果云端读取失败，就不要把“局部浏览器状态”写回云端，
-    // 因为 /chat-state PUT 会先 DELETE 再 INSERT，可能导致其它会话丢失。
-    if (remoteBaselineLoaded) {
-      await saveRemoteChatState(userId, toSave);
-    }
+  if (remoteBaselineLoaded) {
+    await saveRemoteChatState(userId, toSave);
   }
 }

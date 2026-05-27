@@ -8,7 +8,6 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { resolveChatEntryPath } from "@/workspace/chat-entry";
 import { clearSession, loadSessionUserId } from "@/workspace/session";
 import {
   GUEST_USER_ID,
@@ -46,7 +45,7 @@ export function WorkspaceTopNav() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const userId = loadSessionUserId();
-  const chatPath = resolveChatEntryPath(userId);
+  const chatPath = "/app/chat";
   const chatActive = pathname.startsWith("/app/chat");
 
   const user = getUserById(userId);

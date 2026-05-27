@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
 import { WorkspaceErrorBoundary } from "@/components/workspace/WorkspaceErrorBoundary";
 import { fetchProjectsFromApi, ENABLE_LIVE_CHAT } from "@/lib/project-api";
-import { resolveChatEntryPath } from "@/workspace/chat-entry";
+import { resolveChatEntryPathAsync } from "@/workspace/chat-entry";
 import { setApiProjects } from "@/workspace/project-registry";
 import { loadSessionUserId } from "@/workspace/session";
 import AdminPortal from "@/pages/workspace/AdminPortal";
@@ -37,7 +37,13 @@ function WorkspaceChatRedirect() {
 
   useEffect(() => {
     if (!ready) return;
-    navigate(resolveChatEntryPath(userId), { replace: true });
+    let cancelled = false;
+    void resolveChatEntryPathAsync(userId).then((path) => {
+      if (!cancelled) navigate(path, { replace: true });
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [ready, userId, navigate]);
 
   return (

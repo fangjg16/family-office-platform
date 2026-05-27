@@ -1,7 +1,4 @@
-import {
-  loadPersistedConversations,
-  loadPersistedLiveMessages,
-} from "@/workspace/chat-persistence";
+import { loadChatStateForUser } from "@/workspace/chat-persistence";
 import { inferProjectIdFromConversationId } from "@/workspace/chat-conversation-id";
 import { ALL_PROJECTS } from "@/workspace/projects";
 import {
@@ -26,8 +23,7 @@ function pickSeedFallbackProjectId(): string {
   return seed?.id ?? ALL_PROJECTS[0]?.id ?? FALLBACK_SEED_PROJECT_ID;
 }
 
-/** 顶部「对话中心」与 /app/chat 重定向：始终进入具体项目对话页 */
-export function resolveChatEntryPath(userId: string | null): string {
+function resolveFromLastChatOrSeed(): string {
   const lastChat = loadLastChatProjectId();
   if (lastChat) {
     if (getProjectById(lastChat)) {
@@ -37,40 +33,59 @@ export function resolveChatEntryPath(userId: string | null): string {
       return `/app/chat/${lastChat}`;
     }
   }
+  return `/app/chat/${pickSeedFallbackProjectId()}`;
+}
 
-  if (userId) {
-    const convs = loadPersistedConversations(userId) ?? [];
-    const msgs = loadPersistedLiveMessages(userId) ?? {};
+function resolveFromChatState(
+  convs: Awaited<ReturnType<typeof loadChatStateForUser>>,
+): string | null {
+  if (!convs) return null;
 
-    const recentWithMessages = [...convs]
-      .filter((c) => {
-        const list = msgs[c.id];
-        return Array.isArray(list) && list.length > 0;
-      })
-      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const msgs = convs.messagesByConversation;
+  const recentWithMessages = [...convs.conversations]
+    .filter((c) => {
+      const list = msgs[c.id];
+      return Array.isArray(list) && list.length > 0;
+    })
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-    if (recentWithMessages[0]) {
-      const c = recentWithMessages[0];
-      if (getProjectById(c.projectId) || c.projectId.startsWith("proj-")) {
-        return pathForConversation(c.projectId, c.id);
-      }
-    }
-
-    let bestProjectId: string | null = null;
-    let bestCount = 0;
-    for (const [conversationId, list] of Object.entries(msgs)) {
-      if (!Array.isArray(list) || list.length === 0) continue;
-      const pid = inferProjectIdFromConversationId(conversationId);
-      if (!pid) continue;
-      if (list.length > bestCount) {
-        bestCount = list.length;
-        bestProjectId = pid;
-      }
-    }
-    if (bestProjectId) {
-      return `/app/chat/${bestProjectId}`;
+  if (recentWithMessages[0]) {
+    const c = recentWithMessages[0];
+    if (getProjectById(c.projectId) || c.projectId.startsWith("proj-")) {
+      return pathForConversation(c.projectId, c.id);
     }
   }
 
-  return `/app/chat/${pickSeedFallbackProjectId()}`;
+  let bestProjectId: string | null = null;
+  let bestCount = 0;
+  for (const [conversationId, list] of Object.entries(msgs)) {
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const pid = inferProjectIdFromConversationId(conversationId);
+    if (!pid) continue;
+    if (list.length > bestCount) {
+      bestCount = list.length;
+      bestProjectId = pid;
+    }
+  }
+  if (bestProjectId) {
+    return `/app/chat/${bestProjectId}`;
+  }
+  return null;
+}
+
+/** 同步兜底：仅用上次打开的项目或种子项目（不读 localStorage） */
+export function resolveChatEntryPath(_userId: string | null): string {
+  return resolveFromLastChatOrSeed();
+}
+
+/** 顶部「对话中心」/ /app/chat：优先云端最近会话，否则上次项目或种子 */
+export async function resolveChatEntryPathAsync(
+  userId: string | null,
+): Promise<string> {
+  if (userId) {
+    const state = await loadChatStateForUser(userId);
+    const fromCloud = resolveFromChatState(state);
+    if (fromCloud) return fromCloud;
+  }
+  return resolveFromLastChatOrSeed();
 }
