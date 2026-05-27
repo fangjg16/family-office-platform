@@ -600,6 +600,7 @@ async function handleChatViaHermes(
     return json({
       async: true,
       jobId,
+      assistantMessageId: `assistant-job-${jobId}`,
       status: "running",
       answer:
         "已提交深度分析。引擎走长对话兼容模式（Runs 未启动时自动降级），通常 3～10 分钟；下方会显示实时进度。",
@@ -618,6 +619,7 @@ async function handleChatViaHermes(
   return json({
     async: true,
     jobId,
+    assistantMessageId: `assistant-job-${jobId}`,
     status: "running",
     answer:
       "已提交深度分析任务，正在由后台引擎处理（通常 1～5 分钟）。下方会显示实时进度，完成后自动更新。",

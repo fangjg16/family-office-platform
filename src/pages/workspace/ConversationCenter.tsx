@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -44,6 +45,7 @@ import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
   loadChatStateForUser,
   persistChatStateForUser,
+  type ChatPersistOptions,
 } from "@/workspace/chat-persistence";
 import {
   getProjectResourceDemo,
@@ -486,6 +488,8 @@ function buildApiHealthProbeUrl(chatEndpoint: string): string | null {
 const AGENT_JOB_POLL_MS = 3000;
 /** 深度任务最长轮询约 12 分钟（与 Worker waitForHermesRun 10 分钟 + 缓冲对齐） */
 const AGENT_JOB_MAX_POLLS = 240;
+/** 合并连续编辑后再 PUT；发消息/任务完成会立即 flush */
+const CHAT_PERSIST_DEBOUNCE_MS = 300;
 
 type AgentJobPollPayload = {
   status?: string;
@@ -511,6 +515,7 @@ async function pollAgentJobUntilDone(params: {
     patch: Partial<LiveChatMessage>,
   ) => void;
   onError: (msg: string) => void;
+  onPersist?: () => void;
 }): Promise<void> {
   const {
     apiBase,
@@ -521,6 +526,7 @@ async function pollAgentJobUntilDone(params: {
     citationMap,
     onUpdate,
     onError,
+    onPersist,
   } = params;
   const root = apiBase.replace(/\/+$/u, "");
   for (let i = 0; i < AGENT_JOB_MAX_POLLS; i++) {
@@ -551,6 +557,7 @@ async function pollAgentJobUntilDone(params: {
           pendingJobId: undefined,
           jobProgressLabel: undefined,
         });
+        onPersist?.();
         return;
       }
       if (data.status === "failed") {
@@ -561,6 +568,7 @@ async function pollAgentJobUntilDone(params: {
           jobProgressLabel: undefined,
         });
         onError(errText);
+        onPersist?.();
         return;
       }
     } catch {
@@ -1295,6 +1303,12 @@ export default function ConversationCenter() {
   const playbackTimeoutRef = useRef<number | null>(null);
   const playbackSeqRef = useRef(0);
   const resumedAgentJobIdsRef = useRef<Set<string>>(new Set());
+  const chatPersistTimerRef = useRef<number | null>(null);
+  const persistSnapshotRef = useRef({
+    conversations: [] as SessionConversation[],
+    liveMessagesByConversation: {} as Record<string, LiveChatMessage[]>,
+    isLiveAiMode: false,
+  });
   const [searchParams] = useSearchParams();
   /** `.env` 设为 `0` / `false` 时可关闭主对话的「默认逐步演示」 */
   const playbackDisabledByEnv =
@@ -1428,6 +1442,64 @@ export default function ConversationCenter() {
   const isLiveAiMode =
     ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
 
+  useLayoutEffect(() => {
+    persistSnapshotRef.current = {
+      conversations,
+      liveMessagesByConversation,
+      isLiveAiMode,
+    };
+  }, [conversations, liveMessagesByConversation, isLiveAiMode]);
+
+  const runChatPersist = useCallback(
+    (options?: ChatPersistOptions) => {
+      if (!userId || !chatSyncReady) return;
+      const snap = persistSnapshotRef.current;
+      const messageCount = Object.values(snap.liveMessagesByConversation).reduce(
+        (n, arr) => n + (arr?.length ?? 0),
+        0,
+      );
+      if (snap.conversations.length === 0 && messageCount === 0) return;
+      const convsToSave = snap.isLiveAiMode
+        ? reconcileConversationsWithMessages(
+            snap.conversations,
+            snap.liveMessagesByConversation,
+          )
+        : snap.conversations;
+      void persistChatStateForUser(
+        userId,
+        {
+          conversations: convsToSave,
+          messagesByConversation: snap.liveMessagesByConversation,
+        },
+        options,
+      );
+    },
+    [userId, chatSyncReady],
+  );
+
+  const flushChatPersist = useCallback(
+    (options?: ChatPersistOptions) => {
+      if (chatPersistTimerRef.current) {
+        window.clearTimeout(chatPersistTimerRef.current);
+        chatPersistTimerRef.current = null;
+      }
+      // 等 React 提交 setState 后再读 snapshot（useLayoutEffect 已更新 ref）
+      window.setTimeout(() => runChatPersist(options), 0);
+    },
+    [runChatPersist],
+  );
+
+  const scheduleChatPersist = useCallback(() => {
+    if (!userId || !chatSyncReady) return;
+    if (chatPersistTimerRef.current) {
+      window.clearTimeout(chatPersistTimerRef.current);
+    }
+    chatPersistTimerRef.current = window.setTimeout(() => {
+      chatPersistTimerRef.current = null;
+      runChatPersist();
+    }, CHAT_PERSIST_DEBOUNCE_MS);
+  }, [userId, chatSyncReady, runChatPersist]);
+
   const activeConversation = useMemo(() => {
     if (!effectiveConversationId || !projectId) return null;
     const found = conversations.find((item) => item.id === effectiveConversationId);
@@ -1551,26 +1623,21 @@ export default function ConversationCenter() {
 
   useEffect(() => {
     if (!userId || !chatSyncReady) return;
-    const messageCount = Object.values(liveMessagesByConversation).reduce(
-      (n, arr) => n + (arr?.length ?? 0),
-      0,
-    );
-    if (conversations.length === 0 && messageCount === 0) return;
     SESSION_CONVERSATION_CACHE[userId] = { conversations };
-    const timer = window.setTimeout(() => {
-      const convsToSave = isLiveAiMode
-        ? reconcileConversationsWithMessages(
-            conversations,
-            liveMessagesByConversation,
-          )
-        : conversations;
-      void persistChatStateForUser(userId, {
-        conversations: convsToSave,
-        messagesByConversation: liveMessagesByConversation,
-      });
-    }, 900);
-    return () => window.clearTimeout(timer);
-  }, [userId, chatSyncReady, conversations, liveMessagesByConversation, isLiveAiMode]);
+    scheduleChatPersist();
+    return () => {
+      if (chatPersistTimerRef.current) {
+        window.clearTimeout(chatPersistTimerRef.current);
+      }
+    };
+  }, [
+    userId,
+    chatSyncReady,
+    conversations,
+    liveMessagesByConversation,
+    isLiveAiMode,
+    scheduleChatPersist,
+  ]);
 
   /** 一次性展开原版预设剧本（不经空格步进） */
   const instantStaticDemoPreferred =
@@ -1805,6 +1872,7 @@ export default function ConversationCenter() {
           citationMap,
           onUpdate: updateLiveMessage,
           onError: setLiveError,
+          onPersist: () => flushChatPersist(),
         });
       }
     }
@@ -1815,6 +1883,7 @@ export default function ConversationCenter() {
     AI_CHAT_ENDPOINT,
     liveMessagesByConversation,
     liveCitationMap,
+    flushChatPersist,
   ]);
 
   const registerLiveChatActivity = () => {
@@ -1855,6 +1924,7 @@ export default function ConversationCenter() {
   };
 
   const deleteConversation = (target: SessionConversation) => {
+    if (!userId) return;
     const label = projectDisplayName(target.projectId);
     if (
       !window.confirm(
@@ -1870,6 +1940,15 @@ export default function ConversationCenter() {
 
     setConversations(nextConversations);
     setLiveMessagesByConversation(nextMessages);
+
+    void persistChatStateForUser(
+      userId,
+      {
+        conversations: nextConversations,
+        messagesByConversation: nextMessages,
+      },
+      { deletedConversationIds: [target.id] },
+    );
 
     if (
       target.id === effectiveConversationId &&
@@ -1998,6 +2077,7 @@ export default function ConversationCenter() {
       files: fileNames.length > 0 ? fileNames.map((name) => ({ name })) : undefined,
       time: getCurrentDateTimeLabel(),
     });
+    flushChatPersist();
     updateConversationPreview(displayText || `已发送 ${fileNames.length} 个文件`, fileNames);
     setDraftMessage("");
     setSelectedFiles([]);
@@ -2113,11 +2193,15 @@ export default function ConversationCenter() {
 
       if (isAsyncJob) {
         const jobId = (payload as { jobId: string }).jobId;
+        const assistantId =
+          typeof (payload as { assistantMessageId?: unknown }).assistantMessageId ===
+          "string"
+            ? (payload as { assistantMessageId: string }).assistantMessageId
+            : `assistant-job-${jobId}`;
         const placeholderAnswer = formatCitationMarkers(
           String((payload as { answer?: string }).answer ?? "正在深度分析…"),
           mergedCitationMap,
         );
-        const assistantId = `assistant-${Date.now()}`;
         setLiveError(null);
         appendLiveMessage(effectiveConversationId, {
           id: assistantId,
@@ -2137,7 +2221,9 @@ export default function ConversationCenter() {
           citationMap: mergedCitationMap,
           onUpdate: updateLiveMessage,
           onError: setLiveError,
+          onPersist: () => flushChatPersist(),
         });
+        flushChatPersist();
         return;
       }
 
@@ -2159,6 +2245,7 @@ export default function ConversationCenter() {
         time: getCurrentDateTimeLabel(),
         knowledgeNetworkHtml: prepared.html || undefined,
       });
+      flushChatPersist();
     } catch (error) {
       const raw =
         error instanceof Error ? error.message : "未知错误";

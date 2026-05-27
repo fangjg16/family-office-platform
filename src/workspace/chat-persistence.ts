@@ -2,6 +2,8 @@ import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
   fetchRemoteChatState,
   saveRemoteChatState,
+  type ChatStatePatch,
+  type DeletedMessageRef,
   type RemoteChatState,
 } from "@/lib/chat-sync-api";
 import { ENABLE_LIVE_CHAT, AI_CHAT_ENDPOINT } from "@/lib/project-api";
@@ -15,6 +17,13 @@ export type PersistedConversation = {
   updatedAt: string;
   files: string[];
   variant?: "demo" | "blank";
+};
+
+export type ChatPersistOptions = {
+  deletedConversationIds?: string[];
+  deletedMessageIds?: DeletedMessageRef[];
+  /** true：跳过 GET 合并，直接写入（删除操作等） */
+  skipMerge?: boolean;
 };
 
 /** 仅从云端 D1 加载；失败或不可用时返回 null */
@@ -75,13 +84,14 @@ function mergeMessagesByConversation(
 }
 
 /**
- * 保存到云端：先 GET 远端基线再与当前页状态合并后 PUT。
- * 若无法读取远端基线则跳过 PUT，避免全量替换误删其它会话。
+ * 增量保存到云端：upsert 会话、按会话替换消息列表、显式 deleted* 字段处理删除。
+ * 默认仍先 GET 合并，避免多标签局部内存覆盖其它会话。
  */
 export async function persistChatStateForUser(
   userId: string,
   state: RemoteChatState,
-): Promise<void> {
+  options: ChatPersistOptions = {},
+): Promise<boolean> {
   const incoming = {
     conversations: state.conversations,
     messagesByConversation: sortMessagesByConversation(
@@ -90,32 +100,35 @@ export async function persistChatStateForUser(
   };
 
   if (!(ENABLE_LIVE_CHAT && AI_CHAT_ENDPOINT)) {
-    return;
+    return false;
   }
 
-  let remoteBaselineLoaded = false;
-  let toSave = incoming;
+  let patch: ChatStatePatch = {
+    ...incoming,
+    deletedConversationIds: options.deletedConversationIds ?? [],
+    deletedMessageIds: options.deletedMessageIds ?? [],
+  };
 
-  try {
-    const remote = await fetchRemoteChatState(userId);
-    if (remote) {
-      remoteBaselineLoaded = true;
-      toSave = {
-        conversations: mergeConversations(
-          remote.conversations,
-          incoming.conversations,
-        ),
-        messagesByConversation: mergeMessagesByConversation(
-          remote.messagesByConversation,
-          incoming.messagesByConversation,
-        ),
-      };
+  if (!options.skipMerge) {
+    try {
+      const remote = await fetchRemoteChatState(userId);
+      if (remote) {
+        patch = {
+          conversations: mergeConversations(remote.conversations, incoming.conversations),
+          messagesByConversation: mergeMessagesByConversation(
+            remote.messagesByConversation,
+            incoming.messagesByConversation,
+          ),
+          deletedConversationIds: options.deletedConversationIds ?? [],
+          deletedMessageIds: options.deletedMessageIds ?? [],
+        };
+      } else {
+        return false;
+      }
+    } catch {
+      return false;
     }
-  } catch {
-    /* 读取失败时不写入云端 */
   }
 
-  if (remoteBaselineLoaded) {
-    await saveRemoteChatState(userId, toSave);
-  }
+  return saveRemoteChatState(userId, patch);
 }

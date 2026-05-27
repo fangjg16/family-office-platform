@@ -1,4 +1,5 @@
 import type { SkillIntent } from "./chat-modes";
+import { syncCompletedAgentJobToChat } from "./chat-sync";
 
 export type AgentJobEnv = { DB: D1Database };
 
@@ -74,6 +75,17 @@ export async function completeAgentJob(
   )
     .bind(result.answer, result.knowledgeNetworkHtml, nowIso(), jobId)
     .run();
+
+  const row = await env.DB.prepare(
+    `SELECT id, project_id, user_id, conversation_id, skill_intent, status,
+            hermes_run_id, answer, knowledge_network_html, error, created_at, updated_at
+     FROM agent_jobs WHERE id = ?`,
+  )
+    .bind(jobId)
+    .first<AgentJobRow>();
+  if (row) {
+    await syncCompletedAgentJobToChat(env, row, result);
+  }
 }
 
 export async function failAgentJob(env: AgentJobEnv, jobId: string, error: string): Promise<void> {
