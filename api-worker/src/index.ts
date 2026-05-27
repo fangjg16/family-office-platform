@@ -5,14 +5,12 @@ import {
   handlePutChatState,
 } from "./chat-sync";
 import { extractPdfPlainText } from "./pdf-text";
+import { buildHermesMaterialsDigest } from "./hermes-materials-digest";
 import {
   detectSkillIntent,
   extractKnowledgeNetworkHtml,
-  shouldForceExternalSearch,
   shouldRouteToHermes,
-  skillIntentSystemLines,
   usesFullPackageCorpus,
-  websitePlatformIdentityLines,
   type SkillIntent,
 } from "./chat-modes";
 import {
@@ -589,8 +587,9 @@ async function processHermesJobBackground(
   intent: SkillIntent,
 ): Promise<void> {
   try {
+    const maxWaitMs = intent === "knowledge_network" ? 18 * 60_000 : 10 * 60_000;
     const result = await waitForHermesRun(env, runId, {
-      maxWaitMs: 12 * 60_000,
+      maxWaitMs,
       pollIntervalMs: 3000,
     });
     if (result.status === "completed") {
@@ -672,12 +671,27 @@ async function handleChatViaHermes(
   }
 
   const sessionId = `jfo-${params.projectId}-${params.conversationId || "default"}`;
-  const instructions = buildHermesAgentInstructions(
+  let instructions = buildHermesAgentInstructions(
     env,
     params.chatMode,
     params.projectId,
     params.projectTitleHint,
   );
+
+  if (usesFullPackageCorpus(params.chatMode)) {
+    try {
+      const digest = await buildHermesMaterialsDigest(
+        env,
+        params.projectId,
+        params.userId,
+        params.conversationId,
+        params.message,
+      );
+      if (digest) instructions += digest;
+    } catch {
+      /* D1 未就绪时仍依赖 Hermes jfo-r2-materials */
+    }
+  }
 
   const { runId, error } = await startHermesRun(env, {
     userMessage: params.message,

@@ -226,11 +226,14 @@ export function buildHermesAgentInstructions(
   if (intent === "knowledge_network") {
     lines.push(
       "",
-      "【知识网络 HTML — 硬性要求】",
-      "按 knowledge-base-generation 与 STYLE_GUIDE（Portable 米色主题）生成完整单文件 HTML。",
-      "必须把完整 HTML 正文放在回复末尾的 ```html ... ``` 代码块中（以 <!DOCTYPE html> 或 <html 开头）。",
-      "禁止只写「文件已保存」「文件位置：xxx.html」而不附 HTML 源码——家办网站无法访问 Hermes 服务器磁盘，预览按钮只认代码块。",
-      "可先给 3～5 行摘要，再跟 ```html 代码块。",
+      "【知识网络 HTML — 硬性要求（完整度优先，禁止简化版）】",
+      "必须执行 knowledge-base-generation skill，并 **verbatim 复制** STYLE_GUIDE.md 中 Portable 米色 `<style>` 到 `<head>`（勿手写简化 CSS）。",
+      "Section 必须尽量 Populated（非 Stub）：一项目快照（含 .kb-summary）、二平台能力、三法律结构、四业务模式（优先 Journey Map + details.topic 折叠块，勿用纯文字糊弄）、",
+      "五融资结构、六项目时间轴（八.1 用年→月→日嵌套 details，勿扁平列表）、七关键风险、八待补充信息、九决策框架、附录 B 术语表。",
+      "Hide-and-renumber：仅隐藏 truly Empty 的 slot；有资料的部分必须填充，不得因省事整段 Stub。",
+      "必须把完整 HTML 放在回复末尾 ```html ... ``` 代码块（<!DOCTYPE html> 或 <html 开头）。",
+      "禁止只写文件路径；禁止输出「简版/演示版/骨架页」。",
+      "可先给 section 状态表摘要，再跟 ```html 代码块。",
       `逻辑文件名（摘要里可提）：[AI] ${projectTitleHint}_知识网络.html`,
     );
   }
