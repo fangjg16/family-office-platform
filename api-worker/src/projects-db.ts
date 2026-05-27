@@ -68,21 +68,10 @@ export async function getProjectById(
   return row ? rowToJson(row) : null;
 }
 
-function slugifyIdPart(name: string): string {
-  const ascii = name
-    .trim()
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}]+/gu, "-")
-    .replace(/^-+|-+$/gu, "")
-    .slice(0, 40);
-  if (ascii) return ascii;
-  return "project";
-}
-
-export function buildProjectId(name: string): string {
-  const slug = slugifyIdPart(name);
-  const suffix = crypto.randomUUID().replace(/-/gu, "").slice(0, 8);
-  return `proj-${slug}-${suffix}`;
+/** 仅用 ASCII，避免 PATCH 路径含中文导致边缘 404 */
+export function buildProjectId(_name: string): string {
+  const suffix = crypto.randomUUID().replace(/-/gu, "").slice(0, 12);
+  return `proj-${suffix}`;
 }
 
 export async function createProject(

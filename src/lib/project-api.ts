@@ -127,6 +127,7 @@ export async function updateProjectViaApi(
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
+        projectId,
         name: input.name,
         detail: input.detail,
         guestSummary: input.guestSummary,
@@ -154,7 +155,7 @@ export async function deleteProjectViaApi(
 ): Promise<void> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
   if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
-  const q = new URLSearchParams({ userId });
+  const q = new URLSearchParams({ userId, projectId });
   let res: Response;
   try {
     res = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}?${q}`, {

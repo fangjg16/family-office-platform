@@ -7,6 +7,7 @@ import {
   normalizeProjectPhase,
   updateProject,
 } from "./projects-db";
+import { decodePathProjectId, resolveProjectForManage } from "./projects-resolve";
 
 type Env = { DB: D1Database; FILES: R2Bucket };
 
@@ -28,8 +29,12 @@ export async function handleListProjects(env: Env): Promise<Response> {
   return json({ projects });
 }
 
-export async function handleGetProject(env: Env, projectId: string): Promise<Response> {
-  const project = await getProjectById(env, projectId);
+export async function handleGetProject(
+  env: Env,
+  pathProjectId: string,
+  queryProjectId?: string | null,
+): Promise<Response> {
+  const project = await resolveProjectForManage(env, pathProjectId, queryProjectId);
   if (!project) return json({ error: "项目不存在" }, 404);
   return json({ project });
 }
@@ -88,9 +93,10 @@ export async function handleCreateProject(request: Request, env: Env): Promise<R
 export async function handleUpdateProject(
   request: Request,
   env: Env,
-  projectId: string,
+  pathProjectId: string,
 ): Promise<Response> {
   let body: {
+    projectId?: string;
     name?: string;
     detail?: string;
     summary?: string;
@@ -108,12 +114,13 @@ export async function handleUpdateProject(
   const userId = normalizeUserId(body.userId ?? null);
   if (!userId) return json({ error: "缺少 userId" }, 400);
 
-  const existing = await getProjectById(env, projectId);
+  const existing = await resolveProjectForManage(env, pathProjectId, body.projectId);
   if (!existing) return json({ error: "项目不存在" }, 404);
   if (!canManageProjectRecord(existing, userId)) {
     return json({ error: "仅项目创建人或平台管理员可编辑" }, 403);
   }
 
+  const projectId = existing.id;
   const detail = (body.detail ?? body.summary)?.trim();
   try {
     const project = await updateProject(env, projectId, {
@@ -134,14 +141,18 @@ export async function handleUpdateProject(
 export async function handleDeleteProject(
   request: Request,
   env: Env,
-  projectId: string,
+  pathProjectId: string,
 ): Promise<Response> {
   const url = new URL(request.url);
   let userId = normalizeUserId(url.searchParams.get("userId"));
+  let bodyProjectId: string | null = decodePathProjectId(
+    url.searchParams.get("projectId") ?? "",
+  );
   if (!userId && request.headers.get("Content-Type")?.includes("application/json")) {
     try {
-      const body = (await request.json()) as { userId?: string };
+      const body = (await request.json()) as { userId?: string; projectId?: string };
       userId = normalizeUserId(body.userId ?? null);
+      if (body.projectId) bodyProjectId = body.projectId.trim();
     } catch {
       /* 无 body */
     }
@@ -149,12 +160,13 @@ export async function handleDeleteProject(
 
   if (!userId) return json({ error: "缺少 userId" }, 400);
 
-  const existing = await getProjectById(env, projectId);
+  const existing = await resolveProjectForManage(env, pathProjectId, bodyProjectId);
   if (!existing) return json({ error: "项目不存在" }, 404);
   if (!canManageProjectRecord(existing, userId)) {
     return json({ error: "仅项目创建人或平台管理员可删除" }, 403);
   }
 
+  const projectId = existing.id;
   try {
     await deleteProjectCascade(env, projectId);
     return json({ ok: true, projectId });

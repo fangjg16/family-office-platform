@@ -12,6 +12,8 @@ const PHASE_OPTIONS: ProjectPhase[] = [
 ];
 
 type ProjectEditModalProps = {
+  /** 稳定主键（勿随表单名称变化） */
+  projectId: string;
   project: WorkspaceProject;
   userId: string;
   open: boolean;
@@ -20,6 +22,7 @@ type ProjectEditModalProps = {
 };
 
 export function ProjectEditModal({
+  projectId,
   project,
   userId,
   open,
@@ -54,7 +57,7 @@ export function ProjectEditModal({
     }
     setSaving(true);
     setError(null);
-    void updateProjectViaApi(project.id, {
+    void updateProjectViaApi(projectId, {
       name: trimmedName,
       detail: detail.trim(),
       category: category.trim() || "未分类",

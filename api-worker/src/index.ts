@@ -57,6 +57,7 @@ import {
   handleListProjects,
   handleUpdateProject,
 } from "./projects-routes";
+import { decodePathProjectId } from "./projects-resolve";
 import {
   buildTavilyQuery,
   formatTavilyBlock,
@@ -971,13 +972,17 @@ export default {
       } else if (path === "/api/projects" && request.method === "POST") {
         response = await handleCreateProject(request, env);
       } else if (/^\/api\/projects\/[^/]+$/u.test(path)) {
-        const projectId = path.split("/")[3];
+        const pathProjectId = decodePathProjectId(path.split("/")[3] ?? "");
         if (request.method === "GET") {
-          response = await handleGetProject(env, projectId);
+          response = await handleGetProject(
+            env,
+            pathProjectId,
+            url.searchParams.get("projectId"),
+          );
         } else if (request.method === "PATCH" || request.method === "PUT") {
-          response = await handleUpdateProject(request, env, projectId);
+          response = await handleUpdateProject(request, env, pathProjectId);
         } else if (request.method === "DELETE") {
-          response = await handleDeleteProject(request, env, projectId);
+          response = await handleDeleteProject(request, env, pathProjectId);
         } else {
           response = json({ error: "Method Not Allowed" }, 405);
         }
@@ -985,10 +990,10 @@ export default {
         /^\/api\/projects\/[^/]+\/citations$/u.test(path) &&
         request.method === "GET"
       ) {
-        const projectId = path.split("/")[3];
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
         response = await handleCitations(projectId);
       } else if (/^\/api\/projects\/[^/]+\/files$/u.test(path)) {
-        const projectId = path.split("/")[3];
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
         if (request.method === "GET") {
           const uid = normalizeUserId(url.searchParams.get("userId"));
           if (!uid) {

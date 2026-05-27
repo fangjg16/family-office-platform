@@ -319,6 +319,7 @@ export function ProjectDetailDrawer({
 
       {canManage ? (
         <ProjectEditModal
+          projectId={project.id}
           project={project}
           userId={userId}
           open={editOpen}
