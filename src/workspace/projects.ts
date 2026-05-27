@@ -157,4 +157,15 @@ export const ALL_PROJECTS: WorkspaceProject[] = [
 
 export const TOTAL_PROJECT_COUNT = ALL_PROJECTS.length;
 
-export { getMergedProjectById as getProjectById } from "./project-registry";
+export const DEFAULT_PROJECT_PHASE: ProjectPhase = "Active（资源筹备中）";
+
+export function normalizeProjectPhase(raw: string | undefined | null): ProjectPhase {
+  const phases: ProjectPhase[] = [
+    "Active（资源筹备中）",
+    "Completed（已签约）",
+    "Paused（暂停）",
+    "Cancelled（已取消）",
+  ];
+  const p = (raw ?? "").trim() as ProjectPhase;
+  return phases.includes(p) ? p : DEFAULT_PROJECT_PHASE;
+}

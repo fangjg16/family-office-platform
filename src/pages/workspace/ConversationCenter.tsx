@@ -46,7 +46,7 @@ import {
   getProjectResourceDemo,
   type ProjectChatSnippet,
 } from "@/workspace/project-resource-demos";
-import { getProjectById } from "@/workspace/projects";
+import { getProjectById } from "@/workspace/project-registry";
 import { loadSessionUserId, saveLastProjectId } from "@/workspace/session";
 import type { WorkspaceRole } from "@/workspace/types";
 import {

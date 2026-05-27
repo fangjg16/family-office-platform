@@ -1,3 +1,5 @@
+import { normalizeProjectPhase } from "@/workspace/projects";
+
 /** Cloudflare Worker 基址（由 VITE_AI_CHAT_ENDPOINT 推导） */
 export function apiBaseFromChatEndpoint(chatEndpoint: string): string {
   const trimmed = chatEndpoint.trim().replace(/\/+$/u, "");
@@ -35,11 +37,11 @@ export type ApiProjectJson = {
 function mapApiProject(row: ApiProjectJson) {
   return {
     id: row.id,
-    name: row.name,
-    category: row.category,
-    phase: row.phase as import("@/workspace/projects").ProjectPhase,
-    summary: row.summary,
-    guestSummary: row.guestSummary,
+    name: row.name || "未命名项目",
+    category: row.category || "未分类",
+    phase: normalizeProjectPhase(row.phase),
+    summary: row.summary || "",
+    guestSummary: row.guestSummary || "",
     createdBy: row.createdBy ?? null,
     createdAt: row.createdAt ?? null,
     updatedAt: row.updatedAt ?? null,

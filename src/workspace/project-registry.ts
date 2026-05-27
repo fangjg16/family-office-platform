@@ -57,3 +57,7 @@ export function getMergedProjectById(id: string): WorkspaceProject | undefined {
   if (fromApi) return fromApi;
   return ALL_PROJECTS.find((p) => p.id === id);
 }
+
+export function getProjectById(id: string): WorkspaceProject | undefined {
+  return getMergedProjectById(id);
+}

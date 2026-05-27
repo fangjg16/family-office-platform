@@ -23,7 +23,7 @@ import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { cn } from "@/lib/utils";
 import { ProjectDetailDrawer } from "@/components/workspace/ProjectDetailDrawer";
 import {
-  getProjectById,
+  normalizeProjectPhase,
   type ProjectPhase,
   type WorkspaceProject,
 } from "@/workspace/projects";
@@ -118,10 +118,15 @@ const ROLE_PILL_CLASS: Record<WorkspaceRole, string> = {
   guest: "border border-primary/20 bg-primary/5 text-primary/80",
 };
 
-function phaseChipText(phase: ProjectPhase): string {
-  const english = phase.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? "ACTIVE";
-  const cn = phase.match(/（(.+?)）/)?.[1] ?? "";
+function phaseChipText(phase: ProjectPhase | undefined): string {
+  const safe = normalizeProjectPhase(phase);
+  const english = safe.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() ?? "ACTIVE";
+  const cn = safe.match(/（(.+?)）/)?.[1] ?? "";
   return `${english} ${cn}`.trim();
+}
+
+function phaseBadgeClass(phase: ProjectPhase | undefined): string {
+  return PHASE_BADGE_CLASS[normalizeProjectPhase(phase)];
 }
 
 /** 卡片脚注用短标签，避免与对话区完整称谓重复抢视觉 */
@@ -183,7 +188,7 @@ function ProjectCard({
         <span
           className={cn(
             "rounded-full px-2.5 py-1 text-[10px] font-semibold tracking-wide",
-            PHASE_BADGE_CLASS[project.phase]
+            phaseBadgeClass(project.phase),
           )}
         >
           {phaseChipText(project.phase)}
@@ -228,7 +233,7 @@ export default function ProjectOverview() {
   const navigate = useNavigate();
   const [userId, setUserId] = useState<string | null>(null);
   const [guestDialog, setGuestDialog] = useState(false);
-  const [detailProjectId, setDetailProjectId] = useState<string | null>(null);
+  const [detailProject, setDetailProject] = useState<WorkspaceProject | null>(null);
   const [phaseFilter, setPhaseFilter] = useState<"all" | ProjectPhase>("all");
   const [roleFilter, setRoleFilter] = useState<"all" | WorkspaceRole>("all");
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -346,7 +351,6 @@ export default function ProjectOverview() {
         }
         setShowCreateModal(false);
         resetCreateForm();
-        setDetailProjectId(project.id);
         const uploadNote =
           uploadErrors.length > 0
             ? `\n\n部分附件未上传成功：\n${uploadErrors.join("\n")}`
@@ -354,7 +358,7 @@ export default function ProjectOverview() {
               ? `\n\n已上传 ${files.length - uploadErrors.length} 个资料包文件。`
               : "";
         setCreateHint(
-          `项目「${project.name}」已保存（ID：${project.id}）。可从列表进入详情并打开对话。${uploadNote}`,
+          `项目「${project.name}」已保存。请在列表中点击卡片查看详情并进入对话。${uploadNote}`,
         );
       } catch (e) {
         setCreateHint(
@@ -515,7 +519,7 @@ export default function ProjectOverview() {
               <ProjectCard
                 project={p}
                 userId={userId}
-                onOpenDetail={() => setDetailProjectId(p.id)}
+                onOpenDetail={() => setDetailProject(p)}
               />
             </div>
           ))}
@@ -780,21 +784,22 @@ export default function ProjectOverview() {
         </div>
       ) : null}
 
-      {detailProjectId ? (
+      {detailProject ? (
         <ProjectDetailDrawer
-          project={getProjectById(detailProjectId) ?? null}
+          project={detailProject}
           userId={userId}
           detailTier={workspaceRoleToDetailTier(
-            getProjectRole(userId, detailProjectId)
+            getProjectRole(userId, detailProject.id),
           )}
-          onClose={() => setDetailProjectId(null)}
+          onClose={() => setDetailProject(null)}
           onGuestTryChat={() => setGuestDialog(true)}
           onProjectUpdated={(updated) => {
             upsertApiProject(updated);
+            setDetailProject(updated);
           }}
           onProjectDeleted={(id) => {
             removeApiProject(id);
-            setDetailProjectId(null);
+            setDetailProject(null);
             setCreateHint("项目已删除。");
           }}
         />

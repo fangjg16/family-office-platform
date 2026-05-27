@@ -1,4 +1,5 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { WorkspaceErrorBoundary } from "@/components/workspace/WorkspaceErrorBoundary";
 import { loadLastProjectId } from "@/workspace/session";
 import AdminPortal from "@/pages/workspace/AdminPortal";
 import ConversationCenter from "@/pages/workspace/ConversationCenter";
@@ -19,11 +20,32 @@ export default function WorkspaceRoutes() {
         <Route path="login" element={<Login />} />
         <Route element={<RequireAuth />}>
           <Route index element={<Navigate to="/app/projects" replace />} />
-          <Route path="projects" element={<ProjectOverview />} />
+          <Route
+            path="projects"
+            element={
+              <WorkspaceErrorBoundary>
+                <ProjectOverview />
+              </WorkspaceErrorBoundary>
+            }
+          />
           <Route path="admin" element={<AdminPortal />} />
           <Route path="chat" element={<WorkspaceChatRedirect />} />
-          <Route path="chat/:projectId/:conversationId" element={<ConversationCenter />} />
-          <Route path="chat/:projectId" element={<ConversationCenter />} />
+          <Route
+            path="chat/:projectId/:conversationId"
+            element={
+              <WorkspaceErrorBoundary>
+                <ConversationCenter />
+              </WorkspaceErrorBoundary>
+            }
+          />
+          <Route
+            path="chat/:projectId"
+            element={
+              <WorkspaceErrorBoundary>
+                <ConversationCenter />
+              </WorkspaceErrorBoundary>
+            }
+          />
         </Route>
       </Routes>
     </div>
