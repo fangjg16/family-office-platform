@@ -17,6 +17,7 @@ export type SyncChatMessage = {
   files?: { name: string }[];
   time: string;
   sortIndex?: number;
+  knowledgeNetworkHtml?: string | null;
 };
 
 type ChatStateBody = {
@@ -73,7 +74,7 @@ export async function handleGetChatState(
   });
 
   const { results: msgRows } = await env.DB.prepare(
-    `SELECT id, conversation_id, role, content, files_json, time_label, sort_index
+    `SELECT id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html
      FROM user_chat_messages WHERE user_id = ? ORDER BY conversation_id, sort_index`,
   )
     .bind(userId)
@@ -85,6 +86,7 @@ export async function handleGetChatState(
       files_json: string | null;
       time_label: string;
       sort_index: number;
+      knowledge_network_html: string | null;
     }>();
 
   const messagesByConversation: Record<string, SyncChatMessage[]> = {};
@@ -106,6 +108,7 @@ export async function handleGetChatState(
       files,
       time: r.time_label,
       sortIndex: r.sort_index,
+      knowledgeNetworkHtml: r.knowledge_network_html,
     });
     messagesByConversation[r.conversation_id] = list;
   }
@@ -162,9 +165,11 @@ export async function handlePutChatState(
         typeof m.sortIndex === "number" && Number.isFinite(m.sortIndex)
           ? m.sortIndex
           : idx;
+      const knHtml =
+        typeof m.knowledgeNetworkHtml === "string" ? m.knowledgeNetworkHtml : null;
       await env.DB.prepare(
-        `INSERT INTO user_chat_messages (id, user_id, conversation_id, role, content, files_json, time_label, sort_index, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO user_chat_messages (id, user_id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
         .bind(
           m.id,
@@ -175,6 +180,7 @@ export async function handlePutChatState(
           m.files?.length ? JSON.stringify(m.files) : null,
           m.time ?? now,
           sortIndex,
+          knHtml,
           now,
         )
         .run();

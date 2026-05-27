@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS user_chat_messages (
   files_json TEXT,
   time_label TEXT NOT NULL,
   sort_index INTEGER NOT NULL,
+  knowledge_network_html TEXT,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (user_id, id)
 );
