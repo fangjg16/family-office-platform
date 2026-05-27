@@ -52,10 +52,16 @@ import {
   subscribeApiProjects,
 } from "@/workspace/project-registry";
 import {
+  conversationRoutePath,
+  inferProjectIdFromConversationId as inferProjectIdFromConvId,
+  pickConversationIdForProject,
+} from "@/workspace/chat-conversation-id";
+import {
   appendMessageWithSortIndex,
   sortMessagesByConversation,
   sortMessagesChronologically,
 } from "@/workspace/chat-message-order";
+import { ALL_PROJECTS } from "@/workspace/projects";
 import {
   loadSessionUserId,
   saveLastChatProjectId,
@@ -105,10 +111,8 @@ function inferProjectIdFromConversationId(
 ): string | null {
   const hit = known.find((c) => c.id === conversationId);
   if (hit) return hit.projectId;
-  const mainMatch = /^(.+)-main$/u.exec(conversationId);
-  if (mainMatch?.[1] && getProjectById(mainMatch[1])) return mainMatch[1];
-  const blankMatch = /^(.+)-blank-/u.exec(conversationId);
-  if (blankMatch?.[1] && getProjectById(blankMatch[1])) return blankMatch[1];
+  const inferred = inferProjectIdFromConvId(conversationId);
+  if (inferred) return inferred;
   for (const project of getMergedProjects()) {
     if (conversationId === project.id || conversationId.startsWith(`${project.id}-`)) {
       return project.id;
@@ -733,7 +737,19 @@ function withCurrentPreviewTime(conversation: SessionConversation): SessionConve
 }
 
 function buildConversationFromProject(projectId: string): SessionConversation | null {
-  const project = getProjectById(projectId);
+  const project =
+    getProjectById(projectId) ??
+    ALL_PROJECTS.find((p) => p.id === projectId) ??
+    (projectId.startsWith("proj-")
+      ? {
+          id: projectId,
+          name: "云端项目",
+          category: "",
+          phase: "Active（资源筹备中）" as const,
+          summary: "",
+          guestSummary: "",
+        }
+      : null);
   if (!project) return null;
   const demo = getProjectResourceDemo(projectId);
   const names: string[] = [];
@@ -1346,8 +1362,14 @@ export default function ConversationCenter() {
   const timeMeta = projectId ? getProjectTimeMeta(projectId) : getProjectTimeMeta("");
   const todayLabel = timeMeta.dayLabel;
 
-  const effectiveConversationId =
-    projectId && conversationId ? conversationId : projectId ? `${projectId}-main` : "";
+  const effectiveConversationId = useMemo(() => {
+    if (!projectId) return "";
+    return pickConversationIdForProject(
+      projectId,
+      conversationId,
+      liveMessagesByConversation,
+    );
+  }, [projectId, conversationId, liveMessagesByConversation]);
 
   const isLiveAiMode =
     ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
@@ -1370,9 +1392,12 @@ export default function ConversationCenter() {
   const isBlankThread = activeConversation?.variant === "blank";
 
   const sidebarConversations = useMemo(() => {
-    if (!isLiveAiMode) return conversations;
-    return pruneEmptyLiveConversations(conversations, liveMessagesByConversation);
-  }, [conversations, liveMessagesByConversation, isLiveAiMode]);
+    const forProject = projectId
+      ? conversations.filter((c) => c.projectId === projectId)
+      : conversations;
+    if (!isLiveAiMode) return forProject;
+    return pruneEmptyLiveConversations(forProject, liveMessagesByConversation);
+  }, [conversations, liveMessagesByConversation, isLiveAiMode, projectId]);
 
   useEffect(() => {
     if (!projectId || !userId) return;
@@ -1381,7 +1406,6 @@ export default function ConversationCenter() {
 
     const bootstrap = async () => {
       const cacheKey = userId;
-      if (!getProjectById(projectId)) return;
 
       const remote = await loadChatStateForUser(userId);
       if (cancelled) return;
@@ -1437,7 +1461,31 @@ export default function ConversationCenter() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, userId, isLiveAiMode, project?.id]);
+  }, [projectId, userId, isLiveAiMode]);
+
+  /** URL 落在空的 -main 时，自动切到有消息的会话（如 blank- 线程） */
+  useEffect(() => {
+    if (!projectId || !chatSyncReady) return;
+    const picked = pickConversationIdForProject(
+      projectId,
+      conversationId,
+      liveMessagesByConversation,
+    );
+    const path = conversationRoutePath(projectId, picked);
+    const currentPath =
+      conversationId && conversationId !== `${projectId}-main`
+        ? `/app/chat/${projectId}/${conversationId}`
+        : `/app/chat/${projectId}`;
+    if (path !== currentPath) {
+      navigate(path, { replace: true });
+    }
+  }, [
+    projectId,
+    conversationId,
+    chatSyncReady,
+    liveMessagesByConversation,
+    navigate,
+  ]);
 
   useEffect(() => {
     if (!userId || !chatSyncReady) return;
