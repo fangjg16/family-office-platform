@@ -51,7 +51,11 @@ import {
   getProjectById,
   subscribeApiProjects,
 } from "@/workspace/project-registry";
-import { sortMessagesByConversation } from "@/workspace/chat-message-order";
+import {
+  appendMessageWithSortIndex,
+  sortMessagesByConversation,
+  sortMessagesChronologically,
+} from "@/workspace/chat-message-order";
 import {
   loadSessionUserId,
   saveLastChatProjectId,
@@ -1487,9 +1491,11 @@ export default function ConversationCenter() {
     setShowUploadPanel(false);
   }, [effectiveConversationId]);
 
-  const liveMessages = effectiveConversationId
-    ? liveMessagesByConversation[effectiveConversationId] ?? EMPTY_LIVE_CHAT_MESSAGES
-    : EMPTY_LIVE_CHAT_MESSAGES;
+  const liveMessages = useMemo(() => {
+    if (!effectiveConversationId) return EMPTY_LIVE_CHAT_MESSAGES;
+    const raw = liveMessagesByConversation[effectiveConversationId] ?? EMPTY_LIVE_CHAT_MESSAGES;
+    return sortMessagesChronologically(raw);
+  }, [effectiveConversationId, liveMessagesByConversation]);
 
   useLayoutEffect(() => {
     const root = chatScrollRef.current;
@@ -1651,10 +1657,10 @@ export default function ConversationCenter() {
   };
 
   const appendLiveMessage = (conversationKey: string, message: LiveChatMessage) => {
-    setLiveMessagesByConversation((prev) => {
-      const next = [...(prev[conversationKey] ?? []), message];
-      return { ...prev, [conversationKey]: next };
-    });
+    setLiveMessagesByConversation((prev) => ({
+      ...prev,
+      [conversationKey]: appendMessageWithSortIndex(prev[conversationKey] ?? [], message),
+    }));
   };
 
   const updateLiveMessage = (

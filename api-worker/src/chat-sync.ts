@@ -16,6 +16,7 @@ export type SyncChatMessage = {
   content: string;
   files?: { name: string }[];
   time: string;
+  sortIndex?: number;
 };
 
 type ChatStateBody = {
@@ -104,6 +105,7 @@ export async function handleGetChatState(
       content: r.content,
       files,
       time: r.time_label,
+      sortIndex: r.sort_index,
     });
     messagesByConversation[r.conversation_id] = list;
   }
@@ -156,6 +158,10 @@ export async function handlePutChatState(
     let idx = 0;
     for (const m of msgs) {
       if (!m.id) continue;
+      const sortIndex =
+        typeof m.sortIndex === "number" && Number.isFinite(m.sortIndex)
+          ? m.sortIndex
+          : idx;
       await env.DB.prepare(
         `INSERT INTO user_chat_messages (id, user_id, conversation_id, role, content, files_json, time_label, sort_index, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -168,10 +174,11 @@ export async function handlePutChatState(
           m.content ?? "",
           m.files?.length ? JSON.stringify(m.files) : null,
           m.time ?? now,
-          idx++,
+          sortIndex,
           now,
         )
         .run();
+      idx = Math.max(idx, sortIndex + 1);
     }
   }
 
