@@ -2226,6 +2226,11 @@ export default function ConversationCenter() {
               setLiveCitationMap((prev) => ({ ...prev, ...meta.citationMap! }));
             }
           },
+          onStatus: (label) => {
+            updateLiveMessage(effectiveConversationId, assistantId, {
+              streamStatusLabel: label,
+            });
+          },
           onDelta: (text) => {
             setLiveMessagesByConversation((prev) => ({
               ...prev,
@@ -2265,6 +2270,7 @@ export default function ConversationCenter() {
             pendingJobId: jobId,
             jobProgressLabel: "任务已提交，正在连接引擎…",
             isStreaming: false,
+            streamStatusLabel: undefined,
           });
           resumedAgentJobIdsRef.current.add(jobId);
           void pollAgentJobUntilDone({
@@ -2295,6 +2301,7 @@ export default function ConversationCenter() {
           content: prepared.displayContent,
           knowledgeNetworkHtml: prepared.html || undefined,
           isStreaming: false,
+          streamStatusLabel: undefined,
         });
         flushChatPersist();
         return;
@@ -2303,6 +2310,7 @@ export default function ConversationCenter() {
       if (useWorkerStream && streamAssistantId) {
         updateLiveMessage(effectiveConversationId, streamAssistantId, {
           isStreaming: false,
+          streamStatusLabel: undefined,
           content: "流式响应异常，请重试。",
         });
       }
@@ -2403,6 +2411,7 @@ export default function ConversationCenter() {
         updateLiveMessage(effectiveConversationId, streamAssistantId, {
           content: errMsg,
           isStreaming: false,
+          streamStatusLabel: undefined,
         });
       } else {
         appendLiveMessage(effectiveConversationId, {
@@ -2743,7 +2752,8 @@ export default function ConversationCenter() {
                         </div>
                       ) : m.isStreaming ? (
                         <p className="text-xs text-muted-foreground/80">
-                          正在连接引擎并检索资料，请稍候…
+                          {m.streamStatusLabel?.trim() ||
+                            "正在连接引擎并检索资料，请稍候…"}
                         </p>
                       ) : null}
                       {m.pendingJobId ? (

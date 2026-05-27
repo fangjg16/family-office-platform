@@ -14,6 +14,7 @@ export async function consumeChatSse(
   response: Response,
   handlers: {
     onMeta?: (meta: ChatStreamMeta) => void;
+    onStatus?: (label: string) => void;
     onDelta: (text: string) => void;
     onDone: (payload: ChatStreamDone) => void;
     onError?: (message: string) => void;
@@ -65,6 +66,9 @@ export async function consumeChatSse(
 
     if (eventName === "meta") {
       handlers.onMeta?.(parsed as ChatStreamMeta);
+    } else if (eventName === "status") {
+      const label = typeof parsed.label === "string" ? parsed.label : "";
+      if (label) handlers.onStatus?.(label);
     } else if (eventName === "delta") {
       const text = typeof parsed.text === "string" ? parsed.text : "";
       if (text) handlers.onDelta(text);

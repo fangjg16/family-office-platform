@@ -123,7 +123,7 @@ function sanitizeMessagesForSync(
   const out: Record<string, LiveChatMessage[]> = {};
   for (const [convId, msgs] of Object.entries(messagesByConversation)) {
     out[convId] = (msgs ?? []).map(
-      ({ jobProgressLabel: _j, isStreaming: _s, ...rest }) => rest,
+      ({ jobProgressLabel: _j, isStreaming: _s, streamStatusLabel: _l, ...rest }) => rest,
     );
   }
   return out;

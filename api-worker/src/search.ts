@@ -127,13 +127,17 @@ export async function selectChunksForChatWithVectors(
   chunks: ChunkRow[],
   query: string,
   options: { deep: boolean; maxChars: number; topK?: number },
+  queryEmbedding?: number[] | null,
 ): Promise<ChunkRow[]> {
   const topK = options.topK ?? 8;
   const embedded = chunks.filter((c) => c.embedding && c.embedding.length > 0);
   if (!options.deep && embedded.length >= 3 && (env.DASHSCOPE_API_KEY || "").trim()) {
     try {
-      const vectors = await embedTexts(env, [query]);
-      const qVec = vectors[0];
+      let qVec = queryEmbedding;
+      if (!qVec?.length) {
+        const vectors = await embedTexts(env, [query]);
+        qVec = vectors[0];
+      }
       if (qVec?.length) {
         const ranked = scoreChunksByEmbedding(
           chunks.map((c) => ({ row: c, embedding: c.embedding ?? null })),

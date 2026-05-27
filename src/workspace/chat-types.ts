@@ -14,4 +14,6 @@ export type LiveChatMessage = {
   jobProgressLabel?: string;
   /** SSE 流式生成中：保留「思考中」条，下方同步追加正文 */
   isStreaming?: boolean;
+  /** Worker SSE status 阶段文案（检索/生成等） */
+  streamStatusLabel?: string;
 };

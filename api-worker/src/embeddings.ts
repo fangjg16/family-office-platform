@@ -1,4 +1,4 @@
-type EmbedEnv = {
+export type EmbedEnv = {
   DASHSCOPE_API_KEY?: string;
   DASHSCOPE_BASE_URL?: string;
 };
