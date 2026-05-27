@@ -35,10 +35,6 @@ import type { WorkspaceRole } from "@/workspace/types";
 
 const NANNING_PROJECT_ID = "nn-fresh-port";
 
-/** 演示快捷填充：在对应输入框按空格键写入 */
-const DEMO_CREATE_PROJECT_NAME = "南宁生鲜智慧港";
-const DEMO_CREATE_PROJECT_DETAIL =
-  '卡卡公司拟作为收购主体，出资约2.9 亿元用于一期资产收购及改造；吉米公司拟作为运营主体，承接招商、园区运营与增值服务落地，双方按"保底管理费 + 招商/经营提成"协同。';
 const CREATE_PERMISSION_OPTIONS = ["core", "mid", "low"] as const;
 type CreatePermission = (typeof CREATE_PERMISSION_OPTIONS)[number];
 type CreateParticipant = { userId: string; name: string; permission: CreatePermission };
@@ -488,11 +484,6 @@ export default function ProjectOverview() {
                   type="text"
                   value={newProjectName}
                   onChange={(e) => setNewProjectName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== " ") return;
-                    e.preventDefault();
-                    setNewProjectName(DEMO_CREATE_PROJECT_NAME);
-                  }}
                   placeholder="请输入项目名称"
                   className="w-full rounded-xl border border-border/70 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-primary/30"
                 />
@@ -503,11 +494,6 @@ export default function ProjectOverview() {
                 <textarea
                   value={newProjectDetail}
                   onChange={(e) => setNewProjectDetail(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key !== " ") return;
-                    e.preventDefault();
-                    setNewProjectDetail(DEMO_CREATE_PROJECT_DETAIL);
-                  }}
                   rows={4}
                   placeholder="请输入项目简介、交易结构、关键里程碑，以及资金/产业/渠道/合规/运营等资源需求说明"
                   className="w-full resize-none rounded-xl border border-border/70 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-primary/30"
