@@ -88,3 +88,25 @@ export function extractKnowledgeNetworkHtmlFromMarkdown(text: string): string | 
   if (!/<html[\s>]/i.test(html) && !/kb-shell|项目知识网络/i.test(html)) return null;
   return html;
 }
+
+const KN_HTML_FALLBACK_SUMMARY =
+  "知识网络 HTML 已生成，请使用下方按钮预览或在新标签页打开。";
+
+/** 展示用：去掉 ```html 大块源码，保留摘要与预览按钮 */
+export function stripKnowledgeNetworkHtmlBlock(text: string): string {
+  let out = text.replace(/```html\s*[\s\S]*?```/gi, "").trim();
+  out = out.replace(/\n---\n+\*\*网站预览说明\*\*[\s\S]*$/u, "").trim();
+  if (!out || out.length < 12) return KN_HTML_FALLBACK_SUMMARY;
+  return out;
+}
+
+export function prepareKnowledgeNetworkMessageDisplay(
+  content: string,
+  knowledgeNetworkHtml?: string | null,
+): { displayContent: string; html: string | null } {
+  const html =
+    (typeof knowledgeNetworkHtml === "string" ? knowledgeNetworkHtml.trim() : "") ||
+    extractKnowledgeNetworkHtmlFromMarkdown(content);
+  if (!html) return { displayContent: content, html: null };
+  return { displayContent: stripKnowledgeNetworkHtmlBlock(content), html };
+}

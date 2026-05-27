@@ -21,8 +21,8 @@ import {
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/workspace/ChatMarkdown";
 import {
-  extractKnowledgeNetworkHtmlFromMarkdown,
   KnowledgeNetworkPreview,
+  prepareKnowledgeNetworkMessageDisplay,
 } from "@/components/workspace/KnowledgeNetworkPreview";
 import { WorkspaceShell } from "@/components/workspace/WorkspaceShell";
 import { cn } from "@/lib/utils";
@@ -381,13 +381,14 @@ async function pollAgentJobUntilDone(params: {
       if (data.status === "completed") {
         const raw = String(data.answer ?? "").trim() || "（任务已完成，但未返回正文。）";
         const answer = formatCitationMarkers(raw, citationMap);
-        const kn =
-          (typeof data.knowledgeNetworkHtml === "string"
+        const knFromApi =
+          typeof data.knowledgeNetworkHtml === "string"
             ? data.knowledgeNetworkHtml.trim()
-            : "") || extractKnowledgeNetworkHtmlFromMarkdown(answer);
+            : "";
+        const prepared = prepareKnowledgeNetworkMessageDisplay(answer, knFromApi || null);
         onUpdate(conversationKey, assistantMsgId, {
-          content: answer,
-          knowledgeNetworkHtml: kn || undefined,
+          content: prepared.displayContent,
+          knowledgeNetworkHtml: prepared.html || undefined,
           pendingJobId: undefined,
           jobProgressLabel: undefined,
         });
@@ -1814,15 +1815,14 @@ export default function ConversationCenter() {
           "string"
           ? (payload as { knowledgeNetworkHtml: string }).knowledgeNetworkHtml
           : null;
-      const knowledgeNetworkHtml =
-        knFromApi?.trim() || extractKnowledgeNetworkHtmlFromMarkdown(answer);
+      const prepared = prepareKnowledgeNetworkMessageDisplay(answer, knFromApi);
       setLiveError(null);
       appendLiveMessage(effectiveConversationId, {
         id: `assistant-${Date.now()}`,
         role: "assistant",
-        content: answer,
+        content: prepared.displayContent,
         time: getCurrentDateTimeLabel(),
-        knowledgeNetworkHtml: knowledgeNetworkHtml || undefined,
+        knowledgeNetworkHtml: prepared.html || undefined,
       });
     } catch (error) {
       const raw =
@@ -2087,8 +2087,15 @@ export default function ConversationCenter() {
                   </p>
                 </AiShell>
               ) : (
-                liveMessages.map((m) =>
-                  m.role === "user" ? (
+                liveMessages.map((m) => {
+                  const knPrepared =
+                    m.role === "assistant"
+                      ? prepareKnowledgeNetworkMessageDisplay(
+                          m.content,
+                          m.knowledgeNetworkHtml,
+                        )
+                      : null;
+                  return m.role === "user" ? (
                     <div key={m.id} className="flex flex-col items-end gap-3">
                       {m.files && m.files.length > 0 ? (
                         <ChatSentFilesPanel files={m.files} />
@@ -2102,7 +2109,10 @@ export default function ConversationCenter() {
                   ) : (
                     <AiShell key={m.id}>
                       <div className="text-sm">
-                        <ChatMarkdown text={m.content} variant="assistant" />
+                        <ChatMarkdown
+                          text={knPrepared?.displayContent ?? m.content}
+                          variant="assistant"
+                        />
                       </div>
                       {m.pendingJobId ? (
                         <div className="mt-3 flex flex-col gap-1.5">
@@ -2117,8 +2127,8 @@ export default function ConversationCenter() {
                           </p>
                         </div>
                       ) : null}
-                      {m.knowledgeNetworkHtml ? (
-                        <KnowledgeNetworkPreview html={m.knowledgeNetworkHtml} />
+                      {knPrepared?.html ? (
+                        <KnowledgeNetworkPreview html={knPrepared.html} />
                       ) : /知识网络|\.html|文件位置/u.test(m.content) ? (
                         <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
                           本次回复未附带可预览的 HTML 代码块（可能只写了 Hermes
@@ -2131,11 +2141,11 @@ export default function ConversationCenter() {
                       <p className="mt-2 text-[11px] text-muted-foreground">
                         ● Master Agent · AI 返回
                         {m.pendingJobId ? " · 后台分析" : ""}
-                        {m.knowledgeNetworkHtml ? " · 含知识网络 HTML" : ""}
+                        {knPrepared?.html ? " · 含知识网络 HTML" : ""}
                       </p>
                     </AiShell>
-                  )
-                )
+                  );
+                })
               )}
               {sending ? (
                 <AiShell>
