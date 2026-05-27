@@ -1289,7 +1289,10 @@ export default function ConversationCenter() {
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
   const [chatSyncReady, setChatSyncReady] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
-  const [sending, setSending] = useState(false);
+  /** 仅标记「当前会话」正在等同步 /api/chat 响应；深度任务用 pendingJobId，不占此项 */
+  const [sendingConversationId, setSendingConversationId] = useState<string | null>(
+    null,
+  );
   const [liveMessagesByConversation, setLiveMessagesByConversation] = useState<
     Record<string, LiveChatMessage[]>
   >({});
@@ -1438,6 +1441,10 @@ export default function ConversationCenter() {
       liveMessagesByConversation,
     );
   }, [projectId, conversationId, liveMessagesByConversation]);
+
+  const isCurrentConversationSending = Boolean(
+    effectiveConversationId && sendingConversationId === effectiveConversationId,
+  );
 
   const isLiveAiMode =
     ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
@@ -1690,7 +1697,7 @@ export default function ConversationCenter() {
     liveMessages,
     playbackMsgs,
     playbackThinking,
-    sending,
+    isCurrentConversationSending,
     showUploadPanel,
   ]);
 
@@ -1985,7 +1992,7 @@ export default function ConversationCenter() {
 
     /** 仅附件、无文字：演示剧本模式下也可发送（更新侧栏预览）；Live 走下方正式上传 */
     if (fileNames.length > 0 && !trimmed && !isLiveAiMode) {
-      if (sending) return;
+      if (isCurrentConversationSending) return;
       setLiveError(null);
       updateConversationPreview(`已选择 ${fileNames.length} 个文件`, fileNames);
       setSelectedFiles([]);
@@ -2058,7 +2065,13 @@ export default function ConversationCenter() {
       return;
     }
 
-    if (!effectiveConversationId || (!trimmed && fileNames.length === 0) || sending) return;
+    if (
+      !effectiveConversationId ||
+      (!trimmed && fileNames.length === 0) ||
+      isCurrentConversationSending
+    ) {
+      return;
+    }
 
     registerLiveChatActivity();
 
@@ -2098,7 +2111,8 @@ export default function ConversationCenter() {
 
     if (!userId) return;
 
-    setSending(true);
+    const sendConversationId = effectiveConversationId;
+    setSendingConversationId(sendConversationId);
     try {
       let uploadNotes = "";
       if (filesToUpload.length > 0) {
@@ -2258,7 +2272,9 @@ export default function ConversationCenter() {
         time: getCurrentDateTimeLabel(),
       });
     } finally {
-      setSending(false);
+      setSendingConversationId((cur) =>
+        cur === sendConversationId ? null : cur,
+      );
     }
   };
 
@@ -2608,7 +2624,7 @@ export default function ConversationCenter() {
                   );
                 })
               )}
-              {sending ? (
+              {isCurrentConversationSending ? (
                 <AiShell>
                   <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
                     <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
@@ -2887,7 +2903,7 @@ export default function ConversationCenter() {
                 <button
                   key={item.label}
                   type="button"
-                  disabled={sending || playbackThinking}
+                  disabled={isCurrentConversationSending || playbackThinking}
                   onClick={() => setDraftMessage(item.message)}
                   className="rounded-full border border-border/80 bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground disabled:opacity-50"
                 >
@@ -2919,7 +2935,7 @@ export default function ConversationCenter() {
                   void handleSend();
                 }
               }}
-              disabled={sending || playbackThinking}
+              disabled={isCurrentConversationSending || playbackThinking}
               autoComplete="off"
               spellCheck={false}
               aria-label="对话输入"
@@ -2935,7 +2951,7 @@ export default function ConversationCenter() {
               className={cn(
                 "h-12 min-h-[48px] flex-1 rounded-full border border-input bg-white px-5 text-sm font-medium shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 draftMessage ? "text-foreground" : "text-muted-foreground",
-                (sending || playbackThinking) && "opacity-70",
+                (isCurrentConversationSending || playbackThinking) && "opacity-70",
               )}
             />
             <label
@@ -2955,7 +2971,7 @@ export default function ConversationCenter() {
               type="button"
               onClick={() => void handleSend()}
               disabled={
-                sending ||
+                isCurrentConversationSending ||
                 playbackThinking ||
                 (playbackActive ? !playbackSendAllowed : false) ||
                 (!playbackActive &&
@@ -2969,7 +2985,7 @@ export default function ConversationCenter() {
               className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-8 text-sm font-semibold text-primary-foreground shadow-[0_2px_12px_-2px_rgba(37,99,235,0.28)] transition-all hover:bg-primary/92 active:scale-[0.98]"
             >
               <Plane className="h-4 w-4" strokeWidth={2} />
-              {sending ? "发送中…" : "发送"}
+              {isCurrentConversationSending ? "发送中…" : "发送"}
             </button>
           </div>
         </footer>
