@@ -41,6 +41,8 @@ function mapApiProject(row: ApiProjectJson) {
     summary: row.summary,
     guestSummary: row.guestSummary,
     createdBy: row.createdBy ?? null,
+    createdAt: row.createdAt ?? null,
+    updatedAt: row.updatedAt ?? null,
   };
 }
 

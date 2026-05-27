@@ -33,10 +33,13 @@ import {
   fetchProjectsFromApi,
   uploadProjectPackageFile,
 } from "@/lib/project-api";
+import { formatProjectCreatedAt } from "@/workspace/project-manage";
 import {
   getMergedProjects,
+  isCloudProject,
   removeApiProject,
   setApiProjects,
+  sortProjectsForOverview,
   upsertApiProject,
 } from "@/workspace/project-registry";
 import { workspaceRoleToDetailTier } from "@/workspace/project-details";
@@ -152,6 +155,9 @@ function ProjectCard({
   const role = getProjectRole(userId, project.id);
   const roleLabel = roleFootnote(role);
   const previewText = role === "guest" ? project.guestSummary : project.summary;
+  const createdLabel = isCloudProject(project)
+    ? formatProjectCreatedAt(project.createdAt)
+    : null;
 
   return (
     <article
@@ -186,9 +192,14 @@ function ProjectCard({
       <h2 className="line-clamp-2 text-lg font-semibold leading-snug text-slate-900">
         {project.name}
       </h2>
-      <p className="mt-1 truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">
-        {project.category}
-      </p>
+      <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+        <p className="truncate text-[11px] font-medium uppercase tracking-wide text-slate-400">
+          {project.category}
+        </p>
+        {createdLabel ? (
+          <p className="text-[10px] font-medium text-slate-400">创建 {createdLabel}</p>
+        ) : null}
+      </div>
       <p
         title={previewText}
         className="mt-5 line-clamp-4 flex-1 text-sm leading-relaxed text-slate-600"
@@ -274,9 +285,7 @@ export default function ProjectOverview() {
   }, [newProjectOpenness]);
 
   const user = getUserById(userId);
-  const visibleProjects = [...getMergedProjects()].sort((a, b) =>
-    a.name.localeCompare(b.name, "zh-CN"),
-  );
+  const visibleProjects = sortProjectsForOverview(getMergedProjects());
   const phaseOptions = Array.from(new Set(visibleProjects.map((p) => p.phase)));
   const roleOptions = userId
     ? Array.from(

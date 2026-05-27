@@ -24,6 +24,34 @@ export function getMergedProjects(): WorkspaceProject[] {
   return Array.from(byId.values());
 }
 
+const SEED_IDS = new Set(ALL_PROJECTS.map((p) => p.id));
+
+/** 云端登记项目（D1），含历史带中文 id 的 proj-* */
+export function isCloudProject(project: WorkspaceProject): boolean {
+  if (project.createdAt) return true;
+  if (project.id.startsWith("proj-")) return true;
+  return !SEED_IDS.has(project.id) && Boolean(project.createdBy);
+}
+
+function cloudSortKey(project: WorkspaceProject): number {
+  const raw = project.createdAt || project.updatedAt || "";
+  const t = Date.parse(raw);
+  return Number.isNaN(t) ? 0 : t;
+}
+
+/** 总览列表：云端项目按创建时间倒序在前，种子项目按名称排序在后 */
+export function sortProjectsForOverview(projects: WorkspaceProject[]): WorkspaceProject[] {
+  const cloud: WorkspaceProject[] = [];
+  const seed: WorkspaceProject[] = [];
+  for (const p of projects) {
+    if (isCloudProject(p)) cloud.push(p);
+    else seed.push(p);
+  }
+  cloud.sort((a, b) => cloudSortKey(b) - cloudSortKey(a));
+  seed.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+  return [...cloud, ...seed];
+}
+
 export function getMergedProjectById(id: string): WorkspaceProject | undefined {
   const fromApi = apiProjects.find((p) => p.id === id);
   if (fromApi) return fromApi;

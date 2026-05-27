@@ -16,6 +16,9 @@ export type WorkspaceProject = {
   guestSummary: string;
   /** 云端新建项目：创建人 userId，用于编辑/删除鉴权 */
   createdBy?: string | null;
+  /** 云端项目创建时间（ISO）；种子项目无此字段 */
+  createdAt?: string | null;
+  updatedAt?: string | null;
 };
 
 /** 全平台共 12 个在管项目 */

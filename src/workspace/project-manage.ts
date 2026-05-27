@@ -6,6 +6,23 @@ export function isPersistedUserProject(project: WorkspaceProject): boolean {
   return project.id.startsWith("proj-");
 }
 
+export function formatProjectCreatedAt(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  try {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return null;
+  }
+}
+
 export function canUserManageProjectMetadata(
   userId: string,
   project: WorkspaceProject,

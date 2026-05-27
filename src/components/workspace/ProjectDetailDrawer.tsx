@@ -12,8 +12,10 @@ import {
 import { ProjectMaterialsSection } from "@/components/workspace/ProjectMaterialsSection";
 import {
   canUserManageProjectMetadata,
+  formatProjectCreatedAt,
   isPersistedUserProject,
 } from "@/workspace/project-manage";
+import { isCloudProject } from "@/workspace/project-registry";
 import {
   canEnterChat,
   getProjectRole,
@@ -89,6 +91,9 @@ export function ProjectDetailDrawer({
   const detail = getProjectDetailContent(project.id, detailTier);
   const canManage = canUserManageProjectMetadata(userId, project);
   const userCreated = isPersistedUserProject(project);
+  const createdLabel = isCloudProject(project)
+    ? formatProjectCreatedAt(project.createdAt)
+    : null;
 
   const confirmDelete = () => {
     setDeleting(true);
@@ -252,6 +257,14 @@ export function ProjectDetailDrawer({
                   </dt>
                   <dd className="text-sm font-medium text-foreground">{project.category}</dd>
                 </div>
+                {createdLabel ? (
+                  <div className="flex flex-col gap-0.5 sm:flex-row sm:justify-between sm:gap-4">
+                    <dt className="text-[11px] font-bold uppercase tracking-wide text-muted-foreground">
+                      创建时间
+                    </dt>
+                    <dd className="text-sm font-medium text-foreground">{createdLabel}</dd>
+                  </div>
+                ) : null}
               </dl>
               <ProjectMaterialsSection
                 projectId={project.id}
