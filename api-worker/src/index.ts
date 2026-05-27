@@ -56,6 +56,7 @@ import {
   chunkPlainText,
   isGenericProjectQuestion,
   isPlaceholderChunkText,
+  selectChunksForChat,
   selectChunksForChatWithVectors,
   type ChunkRow,
 } from "./search";
@@ -127,6 +128,9 @@ const FILE_ONLY_USER_PROMPT =
 const DEEP_EXCERPT_MAX_CHARS = 95_000;
 /** 轻问但属「项目概览」类：注入资料包前段的上限 */
 const OVERVIEW_EXCERPT_MAX_CHARS = 36_000;
+/** 轻问快速模式：减少首包等待（摘录体积与检索开销） */
+const LIGHT_FAST_EXCERPT_MAX_CHARS = 4_500;
+const LIGHT_FAST_EXCERPT_TOPK = 4;
 
 const GITHUB_PAGES_ORIGIN = "https://fangjg16.github.io";
 
@@ -289,9 +293,15 @@ async function handleUpload(
 ): Promise<Response> {
   const form = await request.formData();
   const file = form.get("file");
-  if (!(file instanceof File)) {
+  if (!file || typeof file === "string") {
     return json({ error: "缺少 file 字段" }, 400);
   }
+  // 这里避免依赖 TS lib 对全局 `File` 类型的定义（不同环境 lints 可能把它推成 never）。
+  const fileObj = file as any as {
+    name: string;
+    type: string;
+    arrayBuffer: () => Promise<ArrayBuffer>;
+  };
 
   const uploadedBy = normalizeUserId(String(form.get("userId") || ""));
   if (!uploadedBy) {
@@ -303,14 +313,14 @@ async function handleUpload(
     ? String(form.get("conversationId"))
     : null;
   const docId = crypto.randomUUID();
-  const safeName = file.name.replace(/[^\w.\-一-龥]/gu, "_");
+  const safeName = fileObj.name.replace(/[^\w.\-一-龥]/gu, "_");
   const r2Key =
     scope === "session" && conversationId
       ? sessionR2Key(projectId, uploadedBy, conversationId, docId, safeName)
       : packageR2Key(projectId, docId, safeName);
 
-  const mime = file.type || "";
-  const bytes = await file.arrayBuffer();
+  const mime = fileObj.type || "";
+  const bytes = await fileObj.arrayBuffer();
 
   await env.FILES.put(r2Key, bytes, {
     httpMetadata: { contentType: mime || "application/octet-stream" },
@@ -329,17 +339,17 @@ async function handleUpload(
   if (isText) {
     text = new TextDecoder().decode(bytes);
   } else if (isPdf) {
-    const extracted = await extractPdfPlainText(bytes, file.name);
+    const extracted = await extractPdfPlainText(bytes, fileObj.name);
     pdfWarning = extracted.warning;
     if (extracted.parsed && extracted.text) {
       text = extracted.text;
     } else {
       parsed = false;
-      text = `（已上传 PDF：${file.name}。${extracted.warning ?? "未能提取正文"}）`;
+      text = `（已上传 PDF：${fileObj.name}。${extracted.warning ?? "未能提取正文"}）`;
     }
   } else {
     parsed = false;
-    text = `（已上传文件：${file.name}，类型 ${mime || "未知"}，暂未解析正文。）`;
+    text = `（已上传文件：${fileObj.name}，类型 ${mime || "未知"}，暂未解析正文。）`;
   }
 
   const now = new Date().toISOString();
@@ -351,7 +361,7 @@ async function handleUpload(
       docId,
       projectId,
       conversationId,
-      file.name,
+      fileObj.name,
       r2Key,
       mime,
       scope === "session" ? "session" : "package",
@@ -382,7 +392,7 @@ async function handleUpload(
   return json({
     ok: true,
     documentId: docId,
-    filename: file.name,
+    filename: fileObj.name,
     r2Key,
     chunks: parts.length,
     parsed,
@@ -921,6 +931,10 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
   const overviewQuestion = isGenericProjectQuestion(message);
   const injectPackageCorpus = deepMode || overviewQuestion;
 
+  /** 轻问（Hermes 同步快答）快速模式：避免每次请求做 query 向量 embedding */
+  const lightFastKeyword =
+    chatMode === "standard" && isHermesAgentConfigured(env) && !injectPackageCorpus;
+
   let excerptBlock = "（未检索到资料摘录；请明确说明依据不足，勿编造。）";
   let hadPackageChunks = false;
   try {
@@ -928,25 +942,37 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     hadPackageChunks = allChunks.length > 0;
     const fileHint = (body.files ?? []).join(" ");
     const searchQuery = fileHint ? `${message} ${fileHint}` : message;
-    let hits = await selectChunksForChatWithVectors(env, allChunks, searchQuery, {
-      deep: injectPackageCorpus,
-      maxChars: injectPackageCorpus
-        ? overviewQuestion && !deepMode
-          ? OVERVIEW_EXCERPT_MAX_CHARS
-          : DEEP_EXCERPT_MAX_CHARS
-        : 8_000,
-      topK: overviewQuestion ? 24 : 5,
-    });
+    let hits = lightFastKeyword
+      ? selectChunksForChat(allChunks, searchQuery, {
+          deep: false,
+          maxChars: LIGHT_FAST_EXCERPT_MAX_CHARS,
+          topK: LIGHT_FAST_EXCERPT_TOPK,
+        })
+      : await selectChunksForChatWithVectors(env, allChunks, searchQuery, {
+          deep: injectPackageCorpus,
+          maxChars: injectPackageCorpus
+            ? overviewQuestion && !deepMode
+              ? OVERVIEW_EXCERPT_MAX_CHARS
+              : DEEP_EXCERPT_MAX_CHARS
+            : 8_000,
+          topK: overviewQuestion ? 24 : 5,
+        });
     if (
       hits.length === 0 &&
       allChunks.length > 0 &&
       (FILE_ONLY_USER_PROMPT.test(message) || overviewQuestion)
     ) {
-      hits = await selectChunksForChatWithVectors(env, allChunks, searchQuery, {
-        deep: true,
-        maxChars: OVERVIEW_EXCERPT_MAX_CHARS,
-        topK: 24,
-      });
+      hits = lightFastKeyword
+        ? selectChunksForChat(allChunks, searchQuery, {
+            deep: true,
+            maxChars: OVERVIEW_EXCERPT_MAX_CHARS,
+            topK: 24,
+          })
+        : await selectChunksForChatWithVectors(env, allChunks, searchQuery, {
+            deep: true,
+            maxChars: OVERVIEW_EXCERPT_MAX_CHARS,
+            topK: 24,
+          });
     }
     if (hits.length > 0) {
       const onlyPlaceholders = hits.every((h) => isPlaceholderChunkText(h.text));
@@ -1000,12 +1026,21 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
 
   const systemParts = [
     ...websitePlatformIdentityLines(),
-    "你是联合家办平台项目助手，服务机会型投资尽调场景。回答须综合三类依据：（1）【资料摘录】中的项目内事实；（2）若有【外部检索】则纳入公开网页信息；（3）为衔接上下文的行业/流程推论——须标明「推论」或「待核实」，不得冒充已核实事实。",
-    "你不是「只能读上传 PDF」的机器人：项目内问题以摘录为主；公开信息、政策、市场动态在触发联网或摘录不足时，应结合外部检索或明确说明缺口与下一步（如建议用户说「查外部资料：…」）。",
-    "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；与摘录中「南宁东盟生鲜食品智慧港」等明显同一项目时，应正常作答，勿因简称不同而拒绝。",
+    ...(lightFastKeyword
+      ? [
+          "轻问模式：直接基于【资料摘录】作答；如有【外部检索】则结合网页信息。推论请标明“推论/待核实”，不得冒充已核实事实。",
+          "项目简称兼容：如摘录中出现明显同一项目，即使用户使用简称也应正常作答；资料不足时说明缺口并建议下一步（如“查外部资料：…”）。",
+        ]
+      : [
+          "你是联合家办平台项目助手，服务机会型投资尽调场景。回答须综合三类依据：（1）【资料摘录】中的项目内事实；（2）若有【外部检索】则纳入公开网页信息；（3）为衔接上下文的行业/流程推论——须标明「推论」或「待核实」，不得冒充已核实事实。",
+          "你不是「只能读上传 PDF」的机器人：项目内问题以摘录为主；公开信息、政策、市场动态在触发联网或摘录不足时，应结合外部检索或明确说明缺口与下一步（如建议用户说「查外部资料：…」）。",
+          "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；与摘录中「南宁东盟生鲜食品智慧港」等明显同一项目时，应正常作答，勿因简称不同而拒绝。",
+        ]),
     ...(overviewQuestion || hadPackageChunks
       ? [
-          "若【资料摘录】或【项目登记信息】中已有本项目资料包内容，必须基于其介绍项目背景与要点；禁止声称「没有看到任何项目资料」。",
+          lightFastKeyword
+            ? "如已检索到资料摘录或登记信息，必须基于其作答，勿声称未看到。"
+            : "若【资料摘录】或【项目登记信息】中已有本项目资料包内容，必须基于其介绍项目背景与要点；禁止声称「没有看到任何项目资料」。",
         ]
       : []),
     "引用规范：上传资料用 [ID:n]（仅可引用摘录中实际出现且下列存在的编号）；网页用 [WEB:n] 并附 URL；勿混用。",
