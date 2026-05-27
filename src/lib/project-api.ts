@@ -121,18 +121,23 @@ export async function updateProjectViaApi(
 ): Promise<import("@/workspace/projects").WorkspaceProject> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
   if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
-  const res = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}`, {
-    method: "PATCH",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      name: input.name,
-      detail: input.detail,
-      guestSummary: input.guestSummary,
-      category: input.category,
-      phase: input.phase,
-      userId: input.userId,
-    }),
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: input.name,
+        detail: input.detail,
+        guestSummary: input.guestSummary,
+        category: input.category,
+        phase: input.phase,
+        userId: input.userId,
+      }),
+    });
+  } catch {
+    throw new Error("无法连接 API（多为跨域未放行 PATCH）。请确认 Worker 已部署最新版后强刷页面。");
+  }
   const data = (await res.json().catch(() => ({}))) as {
     project?: ApiProjectJson;
     error?: string;
@@ -150,10 +155,14 @@ export async function deleteProjectViaApi(
   const base = apiBaseFromChatEndpoint(chatEndpoint);
   if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
   const q = new URLSearchParams({ userId });
-  const res = await fetch(
-    `${base}/api/projects/${encodeURIComponent(projectId)}?${q}`,
-    { method: "DELETE" },
-  );
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/projects/${encodeURIComponent(projectId)}?${q}`, {
+      method: "DELETE",
+    });
+  } catch {
+    throw new Error("无法连接 API（多为跨域未放行 DELETE）。请确认 Worker 已部署最新版后强刷页面。");
+  }
   const data = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(data.error || `删除项目失败（${res.status}）`);
 }

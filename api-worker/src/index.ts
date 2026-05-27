@@ -118,7 +118,7 @@ function corsHeaders(origin: string | null, env: Env): HeadersInit {
     origin?.startsWith(`${allowed}/`);
   return {
     "Access-Control-Allow-Origin": ok && origin ? origin : allowed,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, Authorization",
     "Access-Control-Max-Age": "86400",
   };
