@@ -2,6 +2,7 @@ import {
   loadPersistedConversations,
   loadPersistedLiveMessages,
 } from "@/workspace/chat-persistence";
+import { inferProjectIdFromConversationId } from "@/workspace/chat-conversation-id";
 import { ALL_PROJECTS } from "@/workspace/projects";
 import {
   getMergedProjects,
@@ -11,24 +12,6 @@ import {
 import { loadLastChatProjectId } from "@/workspace/session";
 
 const FALLBACK_SEED_PROJECT_ID = "nn-fresh-port";
-
-function inferProjectIdFromConversationId(conversationId: string): string | null {
-  const mainMatch = /^(.+)-main$/u.exec(conversationId);
-  if (mainMatch?.[1] && getProjectById(mainMatch[1])) return mainMatch[1];
-  const blankMatch = /^(.+)-blank-/u.exec(conversationId);
-  if (blankMatch?.[1] && getProjectById(blankMatch[1])) return blankMatch[1];
-  for (const project of getMergedProjects()) {
-    if (conversationId === project.id || conversationId.startsWith(`${project.id}-`)) {
-      return project.id;
-    }
-  }
-  for (const seed of ALL_PROJECTS) {
-    if (conversationId === seed.id || conversationId.startsWith(`${seed.id}-`)) {
-      return seed.id;
-    }
-  }
-  return null;
-}
 
 function pathForConversation(projectId: string, conversationId: string): string {
   if (conversationId === `${projectId}-main`) {

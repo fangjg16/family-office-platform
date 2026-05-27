@@ -168,20 +168,38 @@ function stripLegacySidebarPrefill(
 
 function mergeConversationsForBootstrap(
   base: SessionConversation[],
-  projectId: string,
   messagesByConversation: Record<string, LiveChatMessage[]>,
   isLiveAiMode: boolean,
+  focusProjectId?: string,
 ): SessionConversation[] {
-  const cleaned = stripLegacySidebarPrefill(base, projectId, messagesByConversation);
+  const cleaned = focusProjectId
+    ? stripLegacySidebarPrefill(base, focusProjectId, messagesByConversation)
+    : base;
   const reconciled = reconcileConversationsWithMessages(cleaned, messagesByConversation);
   if (isLiveAiMode) {
     return reconciled;
   }
-  const currentConversation = buildConversationFromProject(projectId);
+  if (!focusProjectId) return reconciled;
+  const currentConversation = buildConversationFromProject(focusProjectId);
   if (!currentConversation) return reconciled;
-  const hasCurrent = reconciled.some((item) => item.projectId === projectId);
+  const hasCurrent = reconciled.some((item) => item.projectId === focusProjectId);
   if (hasCurrent) return reconciled;
   return [withCurrentPreviewTime(currentConversation), ...reconciled];
+}
+
+function projectDisplayName(projectId: string): string {
+  return getProjectById(projectId)?.name ?? (projectId.startsWith("proj-") ? "云端项目" : projectId);
+}
+
+function conversationSidebarRows(
+  convs: SessionConversation[],
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+  isLiveAiMode: boolean,
+): SessionConversation[] {
+  const list = isLiveAiMode
+    ? pruneEmptyLiveConversations(convs, messagesByConversation)
+    : convs;
+  return [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 }
 
 const EMPTY_LIVE_CHAT_MESSAGES: LiveChatMessage[] = [];
@@ -1391,16 +1409,19 @@ export default function ConversationCenter() {
 
   const isBlankThread = activeConversation?.variant === "blank";
 
-  const sidebarConversations = useMemo(() => {
-    const forProject = projectId
-      ? conversations.filter((c) => c.projectId === projectId)
-      : conversations;
-    if (!isLiveAiMode) return forProject;
-    return pruneEmptyLiveConversations(forProject, liveMessagesByConversation);
-  }, [conversations, liveMessagesByConversation, isLiveAiMode, projectId]);
+  /** 侧栏：全平台「有消息」的会话（不按当前项目隐藏其它项目） */
+  const sidebarConversations = useMemo(
+    () =>
+      conversationSidebarRows(
+        conversations,
+        liveMessagesByConversation,
+        isLiveAiMode,
+      ),
+    [conversations, liveMessagesByConversation, isLiveAiMode],
+  );
 
   useEffect(() => {
-    if (!projectId || !userId) return;
+    if (!userId) return;
     let cancelled = false;
     setChatSyncReady(false);
 
@@ -1422,7 +1443,6 @@ export default function ConversationCenter() {
       if (hasPersistedData) {
         const next = mergeConversationsForBootstrap(
           persistedConvs,
-          projectId,
           messagesByConversation,
           isLiveAiMode,
         );
@@ -1436,7 +1456,6 @@ export default function ConversationCenter() {
       if (!cached || cached.conversations.length === 0) {
         const next = mergeConversationsForBootstrap(
           [],
-          projectId,
           messagesByConversation,
           isLiveAiMode,
         );
@@ -1448,7 +1467,6 @@ export default function ConversationCenter() {
 
       const next = mergeConversationsForBootstrap(
         cached.conversations,
-        projectId,
         messagesByConversation,
         isLiveAiMode,
       );
@@ -1461,7 +1479,7 @@ export default function ConversationCenter() {
     return () => {
       cancelled = true;
     };
-  }, [projectId, userId, isLiveAiMode]);
+  }, [userId, isLiveAiMode]);
 
   /** URL 落在空的 -main 时，自动切到有消息的会话（如 blank- 线程） */
   useEffect(() => {
@@ -2161,8 +2179,16 @@ export default function ConversationCenter() {
             <Plus className="h-4 w-4" strokeWidth={2} />
             新增对话
           </button>
+          {sidebarConversations.length === 0 ? (
+            <p className="px-2 py-3 text-[11px] leading-relaxed text-muted-foreground">
+              暂无历史对话。在任意项目下发一条消息，或点「新增对话」开始。
+            </p>
+          ) : null}
           {sidebarConversations.map((conversation) => {
-            const active = conversation.id === effectiveConversationId;
+            const active =
+              conversation.id === effectiveConversationId &&
+              conversation.projectId === projectId;
+            const pname = projectDisplayName(conversation.projectId);
             return (
               <div
                 key={conversation.id}
@@ -2183,23 +2209,26 @@ export default function ConversationCenter() {
                 ) : null}
                 <button
                   type="button"
-                  onClick={() => navigate(conversationPath(conversation))}
+                  onClick={() => {
+                    saveLastChatProjectId(conversation.projectId);
+                    navigate(conversationPath(conversation));
+                  }}
                   className="w-full text-left"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <p
                       className={cn(
                         "line-clamp-1 pr-1 text-[13px] font-semibold leading-snug",
-                        active ? "text-primary" : "text-foreground"
+                        active ? "text-primary" : "text-foreground",
                       )}
                     >
-                      {conversation.title}
+                      {pname}
                     </p>
                     <p className="shrink-0 text-[10px] font-semibold text-primary/65">
                       {conversation.updatedAt.split(" ")[0]}
                     </p>
                   </div>
-                  <p className="mt-1 line-clamp-1 text-[12px] leading-snug text-muted-foreground">
+                  <p className="mt-0.5 line-clamp-1 text-[11px] leading-snug text-muted-foreground/90">
                     {conversation.preview}
                   </p>
                 </button>
@@ -2539,9 +2568,12 @@ export default function ConversationCenter() {
           <div className="py-3 pl-6 pr-3 md:w-[17rem] md:shrink-0 md:rounded-bl-[1.65rem] md:border-r md:border-border/50">
             {permissionSidebarHint ? (
               <p className="mb-2.5 text-[10px] font-medium leading-snug text-muted-foreground">
-                当前项目权限：{permissionSidebarHint}
+                主区项目：{project?.name ?? "—"} · 权限 {permissionSidebarHint}
               </p>
             ) : null}
+            <p className="mb-2.5 text-[10px] leading-snug text-muted-foreground/80">
+              侧栏列出全部有记录的项目对话，点选可切换项目。
+            </p>
             <Link
               to="/"
               className="flex items-center gap-1 rounded-full px-1 py-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
