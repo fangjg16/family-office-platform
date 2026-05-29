@@ -40,9 +40,10 @@ export async function buildHermesMaterialsDigest(
 
   return [
     "",
-    "【Worker 预注入 · 项目资料包摘录（与网站对话同源，务必作为生成依据）】",
-    "以下正文来自 Cloudflare D1/R2 已解析资料；生成知识网络时必须引用其中的商业模式、时间轴、区位、财务等事实。",
-    "禁止因篇幅原因省略 STYLE_GUIDE 组件（时间轴层级、Journey Map、kb-summary、附录 B 术语表等）。",
+    "【Worker 预注入 · 项目资料包摘录（事实依据，非版式依据）】",
+    "以下正文来自 Cloudflare D1/R2 已解析资料，用于填充各 section 的事实、数字、节点与时间。",
+    "版式与组件：仍须以 knowledge-base-generation skill 目录中的 kb-template.html + STYLE_GUIDE 为准，勿为塞内容而手写简化 CSS 或改掉 panel-switcher。",
+    "摘录中有时间/里程碑 → 时间轴用年→月→日嵌套 details；有流程/阶段 → 业务模式优先 Journey Map；有摘要要点 → 写入 .kb-summary。",
     excerpt,
   ].join("\n");
 }

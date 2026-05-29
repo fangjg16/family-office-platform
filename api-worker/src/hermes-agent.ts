@@ -227,10 +227,15 @@ export function buildHermesAgentInstructions(
     lines.push(
       "",
       "【知识网络 HTML — 硬性要求】",
-      "用 knowledge-base-generation 与 STYLE_GUIDE（Portable 米色主题）生成完整单文件 HTML。",
+      "执行 knowledge-base-generation；**先读 skill 目录 kb-template.html**，将其中 `<style>`、panel-switcher 脚本与 HTML 壳 **原样带入** `<head>`/`<body>`，再按 STYLE_GUIDE 填内容（Portable 米色）。禁止手写一套「看起来像」的简化 CSS。",
+      "若上方有【Worker 预注入 · 项目资料包摘录】：摘录只供**事实与细节**（时间轴节点、商业模式、财务数字）；**不得**为塞摘录而破坏模板结构或省略 kb-template 已有组件。",
+      "有资料时必须体现（非纯段落糊弄）：项目快照含 .kb-summary；业务模式有流程时用 Journey Map；有术语则维护附录 B。",
+      "时间轴 slot（#timeline）必须同时输出 <h3>8.1</h3>、<h3>8.2</h3>、<h3>8.3</h3> 三个子块；8.2 无推进中事项时写 Stub/缺乏资料 callout，禁止从 8.1 直跳 8.3。",
+      "8.1 已发生事件：多条或 >4 条日级事件时用 .tl-tree（年→月→日嵌套 details），勿仅用「年份 + badge」扁平列表；结构对照 knowledge-base-generation/assets/components.html Section D。",
+      "「投资论点」写在十一决策框架（#decision-framework）内，3–5 条且每条带 href 指向对应 section 锚点的证据链，勿单独裸 <ul> 漂在其它 panel。",
       "必须把完整 HTML 正文放在回复末尾的 ```html ... ``` 代码块中（以 <!DOCTYPE html> 或 <html 开头）。",
       "禁止只写「文件已保存」「文件位置：xxx.html」而不附 HTML 源码——家办网站无法访问 Hermes 服务器磁盘，预览按钮只认代码块。",
-      "可先给 3–5 行摘要，再跟 ```html 代码块。",
+      "可先给 3–5 行摘要（含各 section Populated/Stub 一句），再跟 ```html 代码块。",
       `逻辑文件名（摘要里可提）：[AI] ${projectTitleHint}_知识网络.html`,
     );
   }
