@@ -45,6 +45,7 @@ import { embedDocumentChunks } from "./embeddings";
 import { chunkPlainText, isGenericProjectQuestion } from "./search";
 import { getProjectById as getDbProjectById } from "./projects-db";
 import { LIST_FILES_SQL, packageR2Key, sessionR2Key } from "./documents-access";
+import { handleDeleteProjectFile } from "./documents-routes";
 import { tryHandleHermesRoutes } from "./hermes-bridge";
 import {
   handleCreateProject,
@@ -1056,6 +1057,14 @@ export default {
       ) {
         const projectId = decodePathProjectId(path.split("/")[3] ?? "");
         response = await handleCitations(projectId);
+      } else if (/^\/api\/projects\/[^/]+\/files\/[^/]+$/u.test(path)) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        const docId = path.split("/")[5] ?? "";
+        if (request.method === "DELETE") {
+          response = await handleDeleteProjectFile(request, env, projectId, docId);
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
       } else if (/^\/api\/projects\/[^/]+\/files$/u.test(path)) {
         const projectId = decodePathProjectId(path.split("/")[3] ?? "");
         if (request.method === "GET") {

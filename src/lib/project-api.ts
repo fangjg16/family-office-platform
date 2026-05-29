@@ -249,3 +249,24 @@ export async function uploadProjectPackageFile(
     throw new Error(err || `上传失败（${res.status}）`);
   }
 }
+
+export async function deleteProjectFile(
+  projectId: string,
+  documentId: string,
+  userId: string,
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<void> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  const q = new URLSearchParams({ userId });
+  let res: Response;
+  try {
+    res = await fetch(
+      `${base}/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(documentId)}?${q}`,
+      { method: "DELETE" },
+    );
+  } catch {
+    throw new Error("无法连接 API（多为跨域未放行 DELETE）。请确认 Worker 已部署最新版后强刷页面。");
+  }
+  const data = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(data.error || `删除失败（${res.status}）`);
+}
