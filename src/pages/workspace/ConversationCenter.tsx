@@ -15,6 +15,7 @@ import {
   FileSpreadsheet,
   FileUp,
   FileText,
+  Loader2,
   MoreHorizontal,
   Paperclip,
   Plane,
@@ -33,6 +34,7 @@ import { cn } from "@/lib/utils";
 import {
   AI_CHAT_ENDPOINT,
   dedupeFilesByFilename,
+  deleteProjectFile,
   ENABLE_LIVE_CHAT,
   fetchProjectByIdFromApi,
   fetchProjectFiles,
@@ -1313,6 +1315,7 @@ export default function ConversationCenter() {
     ProjectFileRecord[]
   >([]);
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
+  const [deletingSessionFileId, setDeletingSessionFileId] = useState<string | null>(null);
   const [chatSyncReady, setChatSyncReady] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
   /** 仅标记「当前会话」正在等同步 /api/chat 响应；深度任务用 pendingJobId，不占此项 */
@@ -1797,14 +1800,18 @@ export default function ConversationCenter() {
     if (isLiveAiMode && conversationFileRecords.length > 0) {
       return conversationFileRecords.map((f) => ({
         key: f.id,
+        documentId: f.id,
         name: f.filename,
         meta: `${f.chunkCount} 段 · ${new Date(f.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
+        canDelete: true,
       }));
     }
     return (activeConversation?.files ?? []).map((name) => ({
       key: name,
+      documentId: undefined as string | undefined,
       name,
       meta: undefined as string | undefined,
+      canDelete: false,
     }));
   }, [
     isLiveAiMode,
@@ -1812,6 +1819,33 @@ export default function ConversationCenter() {
     activeConversation,
     projectId,
   ]);
+
+  const handleDeleteSessionFile = useCallback(
+    async (documentId: string, filename: string) => {
+      if (!projectId || !userId || !effectiveConversationId || !isLiveAiMode) return;
+      const ok = window.confirm(
+        `确定从本对话中删除「${filename}」？\n删除后检索将不再包含该附件，且无法恢复。`,
+      );
+      if (!ok) return;
+      setDeletingSessionFileId(documentId);
+      setLiveError(null);
+      try {
+        await deleteProjectFile(
+          projectId,
+          documentId,
+          userId,
+          AI_CHAT_ENDPOINT,
+          effectiveConversationId,
+        );
+        setFileTreeRefreshKey((k) => k + 1);
+      } catch (e) {
+        setLiveError(e instanceof Error ? e.message : String(e));
+      } finally {
+        setDeletingSessionFileId(null);
+      }
+    },
+    [projectId, userId, effectiveConversationId, isLiveAiMode],
+  );
 
   useEffect(() => {
     if (!isLiveAiMode || !AI_CHAT_ENDPOINT) return;
@@ -2711,22 +2745,46 @@ export default function ConversationCenter() {
                     </p>
                   ) : (
                     <ul className="space-y-1.5">
-                      {conversationFileTreeItems.map((item) => (
-                        <li
-                          key={item.key}
-                          className="rounded-lg border border-border/50 bg-white/80 px-2 py-1.5"
-                        >
-                          <div className="flex items-start gap-1.5 text-[11px] text-foreground">
-                            <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
-                            <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
-                          </div>
-                          {item.meta ? (
-                            <p className="mt-0.5 pl-5 text-[10px] text-muted-foreground">
-                              {item.meta}
-                            </p>
-                          ) : null}
-                        </li>
-                      ))}
+                      {conversationFileTreeItems.map((item) => {
+                        const isDeleting = deletingSessionFileId === item.documentId;
+                        return (
+                          <li
+                            key={item.key}
+                            className="rounded-lg border border-border/50 bg-white/80 px-2 py-1.5"
+                          >
+                            <div className="flex items-start gap-1.5 text-[11px] text-foreground">
+                              <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
+                              <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
+                              {item.canDelete && item.documentId ? (
+                                <button
+                                  type="button"
+                                  disabled={Boolean(deletingSessionFileId)}
+                                  onClick={() =>
+                                    void handleDeleteSessionFile(item.documentId!, item.name)
+                                  }
+                                  className={cn(
+                                    "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600",
+                                    isDeleting && "pointer-events-none opacity-50",
+                                  )}
+                                  aria-label={`删除 ${item.name}`}
+                                  title="从本对话删除"
+                                >
+                                  {isDeleting ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                                  ) : (
+                                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                                  )}
+                                </button>
+                              ) : null}
+                            </div>
+                            {item.meta ? (
+                              <p className="mt-0.5 pl-5 text-[10px] text-muted-foreground">
+                                {item.meta}
+                              </p>
+                            ) : null}
+                          </li>
+                        );
+                      })}
                     </ul>
                   )}
                 </div>

@@ -255,9 +255,11 @@ export async function deleteProjectFile(
   documentId: string,
   userId: string,
   chatEndpoint = AI_CHAT_ENDPOINT,
+  conversationId?: string,
 ): Promise<void> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
   const q = new URLSearchParams({ userId });
+  if (conversationId?.trim()) q.set("conversationId", conversationId.trim());
   let res: Response;
   try {
     res = await fetch(

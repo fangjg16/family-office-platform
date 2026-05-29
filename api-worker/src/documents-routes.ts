@@ -57,6 +57,16 @@ export async function handleDeleteProjectFile(
   const accessErr = documentAccessError(row, userId);
   if (accessErr) return json({ error: accessErr }, 403);
 
+  const conversationId = (url.searchParams.get("conversationId") ?? "").trim();
+  if (
+    row.scope === "session" &&
+    conversationId &&
+    row.conversation_id &&
+    row.conversation_id !== conversationId
+  ) {
+    return json({ error: "该文件不属于当前对话" }, 403);
+  }
+
   if (!canDeleteDocument(row, userId, project)) {
     return json({ error: "仅项目创建人、平台管理员或该文件上传者可删除" }, 403);
   }
