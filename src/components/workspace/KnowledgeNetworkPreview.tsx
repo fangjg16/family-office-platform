@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ExternalLink, Eye, X } from "lucide-react";
+import { Download, ExternalLink, Eye, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type KnowledgeNetworkPreviewProps = {
@@ -27,6 +27,18 @@ export function KnowledgeNetworkPreview({ html, filename }: KnowledgeNetworkPrev
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
   };
 
+  const downloadHtml = () => {
+    const blob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = safeName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  };
+
   return (
     <>
       <div className="mt-3 flex flex-wrap gap-2">
@@ -37,6 +49,10 @@ export function KnowledgeNetworkPreview({ html, filename }: KnowledgeNetworkPrev
         <Button type="button" size="sm" variant="outline" onClick={openInNewTab}>
           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
           新标签页打开
+        </Button>
+        <Button type="button" size="sm" variant="outline" onClick={downloadHtml}>
+          <Download className="mr-1.5 h-3.5 w-3.5" />
+          下载 HTML
         </Button>
       </div>
       {open ? (
