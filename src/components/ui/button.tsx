@@ -18,11 +18,18 @@ const buttonVariants = cva(
           "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
         ghost: "hover:bg-accent hover:text-accent-foreground",
         link: "text-primary underline-offset-4 hover:underline",
-        /** 落地页导航：青蓝渐变 pill */
+        /** 落地页：酒红主按钮 */
         landingCta:
-          "rounded-full bg-gradient-to-r from-sky-500 to-blue-600 text-white shadow-[0_0_16px_rgba(14,165,233,0.35)] transition-all hover:-translate-y-px hover:shadow-[0_0_28px_rgba(14,165,233,0.45)] active:scale-[0.98]",
+          "rounded-sm bg-primary text-primary-foreground shadow-[0_4px_20px_hsl(5_32%_46%/0.22)] transition-all hover:bg-[hsl(5_34%_40%)] active:scale-[0.99]",
+        /** 落地页 Hero：毛玻璃主按钮 */
+        landingGlass:
+          "glass-bohemian-hero glass-bohemian-hero-btn rounded-sm text-[hsl(var(--hero-foreground))] active:scale-[0.99]",
+        /** 落地页 Hero 深色底：描边幽灵按钮 */
         landingGhost:
-          "rounded-full border border-white/10 bg-white/[0.04] text-[hsl(214_32%_91%)] backdrop-blur-md transition-all hover:border-sky-400/25 hover:bg-sky-500/10",
+          "rounded-[var(--glass-hero-radius)] border border-[var(--glass-hero-border)] bg-[rgba(255,248,240,0.04)] text-[hsl(36_28%_92%)] backdrop-blur-[24px] backdrop-saturate-[125%] transition-all hover:border-[rgba(255,248,240,0.16)] hover:bg-[rgba(255,248,240,0.07)]",
+        /** 落地页米色正文区 / 导航：描边幽灵按钮 */
+        landingGhostLight:
+          "rounded-sm border border-[hsl(5_32%_46%/0.35)] bg-white/30 text-[hsl(5_28%_38%)] backdrop-blur-md transition-all hover:border-[hsl(5_32%_46%/0.5)] hover:bg-white/50",
         /** 工作台浅色玻璃按钮 */
         navCta:
           "rounded-full border border-border/80 bg-white/80 text-foreground shadow-sm backdrop-blur-md hover:bg-white active:scale-[0.98] transition-all uppercase text-xs tracking-widest px-5",

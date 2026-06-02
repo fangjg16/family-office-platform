@@ -114,7 +114,7 @@ export function ProjectDetailDrawer({
     <>
       <div
         className={cn(
-          "fixed inset-0 z-[80] bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ease-out",
+          "fixed inset-0 z-[100] bg-black/40 backdrop-blur-[2px] transition-opacity duration-200 ease-out",
           open ? "opacity-100" : "opacity-0 pointer-events-none",
           enteringChat && "opacity-60"
         )}
@@ -123,7 +123,7 @@ export function ProjectDetailDrawer({
       />
       <aside
         className={cn(
-          "fixed right-0 top-0 z-[90] flex h-full w-full max-w-lg flex-col border-l border-border/80 bg-white shadow-[-12px_0_40px_-20px_rgba(15,23,42,0.2)]",
+          "fixed right-0 top-0 z-[110] flex h-full w-full max-w-lg flex-col border-l border-border/80 bg-white shadow-[-12px_0_40px_-20px_rgba(15,23,42,0.2)]",
           "transition-[transform,opacity,filter] duration-200 ease-out",
           open ? "translate-x-0 opacity-100 blur-0" : "translate-x-full opacity-0",
           enteringChat && "translate-x-1 opacity-95 blur-[1px]"
@@ -307,7 +307,7 @@ export function ProjectDetailDrawer({
                 }, 180);
               }}
               disabled={enteringChat}
-              className="flex w-full items-center justify-center gap-2 rounded-full bg-primary py-3.5 text-sm font-semibold text-primary-foreground shadow-[0_2px_12px_-2px_rgba(37,99,235,0.28)] transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-primary/92 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-90"
+              className="flex w-full items-center justify-center gap-2 rounded-full border border-[hsl(var(--wine-deep))] bg-[hsl(var(--wine-deep))] py-3.5 text-sm font-semibold text-[hsl(var(--wine-deep-foreground))] shadow-[0_8px_22px_-10px_hsl(var(--wine-deep)/0.55)] transition-[background-color,transform,box-shadow] duration-150 ease-out hover:bg-[hsl(353_42%_28%)] active:scale-[0.98] disabled:pointer-events-none disabled:opacity-90"
             >
               <MessageSquare
                 className={cn("h-4 w-4", enteringChat && "animate-pulse")}
@@ -343,7 +343,7 @@ export function ProjectDetailDrawer({
 
       {deleteConfirm ? (
         <div
-          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-[125] flex items-center justify-center bg-black/40 p-4"
           role="alertdialog"
           aria-modal="true"
           aria-labelledby="delete-project-title"

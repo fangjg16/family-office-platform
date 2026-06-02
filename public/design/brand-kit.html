@@ -1,0 +1,977 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>合域 · 视觉识别备忘 · v1</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500&family=Noto+Serif+SC:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="brand-tokens.css" />
+    <style>
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+
+      html {
+        font-size: 17px;
+        -webkit-font-smoothing: antialiased;
+      }
+
+      body {
+        margin: 0;
+        color: hsl(var(--warm-charcoal));
+        background: hsl(var(--linen));
+        font-family: "Noto Sans SC", sans-serif;
+        font-weight: 400;
+        line-height: 1.82;
+        letter-spacing: 0.01em;
+      }
+
+      /* 书页容器 */
+      .volume {
+        max-width: 42rem;
+        margin: 0 auto;
+        padding: 4.5rem 1.75rem 6rem;
+      }
+
+      @media (min-width: 900px) {
+        .volume {
+          max-width: 52rem;
+          padding-left: 3rem;
+          padding-right: 3rem;
+        }
+      }
+
+      .serif {
+        font-family: "Noto Serif SC", serif;
+      }
+
+      /* 页码与栏外注 */
+      .folio {
+        font-family: "Noto Serif SC", serif;
+        font-size: 0.75rem;
+        color: hsl(var(--warm-charcoal-muted));
+        letter-spacing: 0.08em;
+      }
+
+      .margin-note {
+        display: block;
+        margin-top: 0.35rem;
+        font-size: 0.72rem;
+        line-height: 1.5;
+        color: hsl(var(--warm-charcoal-muted));
+        letter-spacing: 0.04em;
+      }
+
+      hr.rule {
+        border: none;
+        border-top: 1px solid hsl(var(--border));
+        margin: 3.5rem 0;
+      }
+
+      hr.rule-wine {
+        border: none;
+        border-top: 1px solid hsl(var(--wine));
+        width: 3rem;
+        margin: 2.5rem 0 2rem;
+        opacity: 0.55;
+      }
+
+      /* ── 封面：左对齐、留白、像画册扉页 ── */
+      .half-title {
+        min-height: 72vh;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        padding-bottom: 2rem;
+      }
+
+      .half-title .folio {
+        margin-bottom: auto;
+        padding-top: 0.5rem;
+      }
+
+      .half-title h1 {
+        font-family: "Noto Serif SC", serif;
+        font-size: clamp(2.4rem, 6vw, 3.4rem);
+        font-weight: 600;
+        line-height: 1.18;
+        letter-spacing: 0.06em;
+        margin: 0 0 1.25rem;
+        font-feature-settings: "halt";
+      }
+
+      .half-title .subtitle {
+        font-family: "Noto Serif SC", serif;
+        font-size: 1.05rem;
+        font-weight: 400;
+        color: hsl(var(--warm-charcoal-muted));
+        line-height: 1.7;
+        max-width: 22em;
+        margin: 0;
+      }
+
+      .colophon {
+        margin-top: 4rem;
+        font-size: 0.78rem;
+        line-height: 1.65;
+        color: hsl(var(--warm-charcoal-muted));
+      }
+
+      /* ── 章题 ── */
+      .chapter {
+        margin-top: 4rem;
+      }
+
+      .chapter-num {
+        font-family: "Noto Serif SC", serif;
+        font-size: 0.8rem;
+        color: hsl(var(--wine));
+        margin-bottom: 0.75rem;
+        display: block;
+      }
+
+      .chapter h2 {
+        font-family: "Noto Serif SC", serif;
+        font-size: 1.55rem;
+        font-weight: 600;
+        line-height: 1.35;
+        margin: 0 0 1.75rem;
+        letter-spacing: 0.04em;
+      }
+
+      p {
+        margin: 0 0 1.15rem;
+        text-align: justify;
+        text-justify: inter-ideograph;
+      }
+
+      p:last-child {
+        margin-bottom: 0;
+      }
+
+      .opening {
+        font-family: "Noto Serif SC", serif;
+        font-size: 1.12rem;
+        line-height: 1.9;
+        color: hsl(25 14% 28%);
+        margin-bottom: 2rem;
+      }
+
+      /* 引文 */
+      blockquote {
+        margin: 2.25rem 0;
+        padding: 0 0 0 1.35rem;
+        border-left: 2px solid hsl(var(--wine) / 0.45);
+        font-family: "Noto Serif SC", serif;
+        font-size: 1rem;
+        line-height: 1.85;
+        color: hsl(25 12% 32%);
+      }
+
+      blockquote cite {
+        display: block;
+        margin-top: 0.85rem;
+        font-family: "Noto Sans SC", sans-serif;
+        font-size: 0.72rem;
+        font-style: normal;
+        color: hsl(var(--warm-charcoal-muted));
+        letter-spacing: 0.06em;
+      }
+
+      /* 目录 */
+      .contents {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+      }
+
+      .contents li {
+        display: flex;
+        align-items: baseline;
+        gap: 0.5rem;
+        padding: 0.55rem 0;
+        border-bottom: 1px dotted hsl(var(--border));
+        font-size: 0.92rem;
+      }
+
+      .contents a {
+        color: inherit;
+        text-decoration: none;
+        flex: 1;
+      }
+
+      .contents a:hover {
+        color: hsl(var(--wine));
+      }
+
+      .contents .pg {
+        font-family: "Noto Serif SC", serif;
+        font-size: 0.78rem;
+        color: hsl(var(--warm-charcoal-muted));
+      }
+
+      /* 结构：竖向尺规，非 UI  mock */
+      .spread-diagram {
+        margin: 2.5rem 0;
+        font-size: 0.8rem;
+        line-height: 1.5;
+        color: hsl(var(--warm-charcoal-muted));
+      }
+
+      .spread-diagram .band {
+        padding: 1.1rem 1.25rem;
+        border-left: 1px solid hsl(var(--border));
+      }
+
+      .spread-diagram .band-dark {
+        background: hsl(var(--hero-bg));
+        color: hsl(var(--hero-muted));
+        min-height: 5.5rem;
+        border-left-color: hsl(var(--wine) / 0.5);
+      }
+
+      .spread-diagram .band-light {
+        background: hsl(var(--linen));
+        min-height: 4rem;
+        padding-top: 1.5rem;
+      }
+
+      .spread-diagram .band-light em {
+        font-style: normal;
+        color: hsl(var(--warm-charcoal));
+      }
+
+      /* 色板：书籍拉条，非卡片网格 */
+      .palette-strip {
+        margin: 2rem 0 2.5rem;
+      }
+
+      .palette-row {
+        display: grid;
+        grid-template-columns: 5.5rem 1fr;
+        gap: 1.25rem;
+        align-items: start;
+        padding: 0.85rem 0;
+        border-bottom: 1px solid hsl(var(--border));
+        font-size: 0.82rem;
+        line-height: 1.55;
+      }
+
+      .palette-row:last-child {
+        border-bottom: none;
+      }
+
+      .palette-chip {
+        height: 2.75rem;
+        width: 100%;
+      }
+
+      .palette-row .name {
+        font-family: "Noto Serif SC", serif;
+        color: hsl(var(--warm-charcoal));
+        margin-bottom: 0.15rem;
+      }
+
+      .palette-row .code {
+        font-size: 0.72rem;
+        color: hsl(var(--warm-charcoal-muted));
+        font-variant-numeric: tabular-nums;
+      }
+
+      .palette-row .use {
+        color: hsl(var(--warm-charcoal-muted));
+        margin-top: 0.2rem;
+      }
+
+      /* 酒红三阶示意（对齐知识网络 masthead stat-row） */
+      .wine-scale-stat {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 1px;
+        margin: 1.75rem 0 0.5rem;
+        background: hsl(var(--wine) / 0.18);
+        max-width: 36rem;
+      }
+
+      @media (max-width: 640px) {
+        .wine-scale-stat {
+          grid-template-columns: 1fr;
+        }
+      }
+
+      .wine-scale-stat > div {
+        padding: 1rem 1.1rem;
+        min-height: 5.25rem;
+      }
+
+      .wine-scale-stat .stat-label {
+        font-size: 0.62rem;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        opacity: 0.78;
+        margin-bottom: 0.35rem;
+      }
+
+      .wine-scale-stat .stat-value {
+        font-family: "Noto Serif SC", serif;
+        font-size: 1.65rem;
+        font-weight: 700;
+        line-height: 1;
+      }
+
+      .wine-scale-stat .stat-note {
+        font-size: 0.62rem;
+        margin: 0.4rem 0 0;
+        opacity: 0.85;
+      }
+
+      .wine-scale-a {
+        background: hsl(36 22% 88%);
+        color: hsl(var(--warm-charcoal));
+      }
+
+      .wine-scale-a .stat-value {
+        color: hsl(var(--wine));
+      }
+
+      .wine-scale-b {
+        background: hsl(var(--wine-mid));
+        color: hsl(var(--wine-mid-foreground));
+      }
+
+      .wine-scale-c {
+        background: hsl(var(--wine-deep));
+        color: hsl(var(--wine-deep-foreground));
+      }
+
+      .wine-scale-c .stat-note {
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-style: normal;
+      }
+
+      /* 双栏（宽屏） */
+      .two-col {
+        column-count: 1;
+        column-gap: 2.5rem;
+      }
+
+      @media (min-width: 720px) {
+        .two-col {
+          column-count: 2;
+        }
+      }
+
+      .two-col p {
+        margin-bottom: 1rem;
+        break-inside: avoid;
+      }
+
+      /* 字体样张 */
+      .specimen-display {
+        margin: 2.5rem 0 1.5rem;
+        padding: 2rem 0 2.25rem;
+        border-top: 1px solid hsl(var(--border));
+        border-bottom: 1px solid hsl(var(--border));
+      }
+
+      .specimen-display .line-1 {
+        font-family: "Noto Serif SC", serif;
+        font-size: 2rem;
+        font-weight: 600;
+        line-height: 1.3;
+        letter-spacing: 0.05em;
+        margin-bottom: 1rem;
+      }
+
+      .specimen-display .line-2 {
+        font-family: "Noto Serif SC", serif;
+        font-size: 1.15rem;
+        font-weight: 400;
+        line-height: 1.65;
+        margin-bottom: 1.5rem;
+        color: hsl(25 12% 30%);
+      }
+
+      .specimen-display .line-3 {
+        font-family: "Noto Sans SC", sans-serif;
+        font-size: 0.95rem;
+        line-height: 1.85;
+        max-width: 28em;
+      }
+
+      .type-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 0.8rem;
+        margin-top: 1.5rem;
+      }
+
+      .type-table th,
+      .type-table td {
+        text-align: left;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid hsl(var(--border));
+        font-weight: 400;
+      }
+
+      .type-table th {
+        font-family: "Noto Serif SC", serif;
+        color: hsl(var(--warm-charcoal-muted));
+        font-size: 0.72rem;
+        letter-spacing: 0.06em;
+      }
+
+      /* 毛玻璃：单图注式 */
+      .figure {
+        margin: 2.5rem 0;
+      }
+
+      .figure-stage {
+        position: relative;
+        padding: 3rem 1.5rem;
+        background: hsl(var(--sand));
+        /* 背景需有一定对比，毛玻璃的透视才读得出来 */
+        background-image: linear-gradient(
+            105deg,
+            hsl(var(--terracotta) / 0.22) 0%,
+            transparent 42%
+          ),
+          linear-gradient(
+            -20deg,
+            transparent 48%,
+            hsl(var(--sage) / 0.18) 100%
+          ),
+          linear-gradient(
+            90deg,
+            hsl(var(--wine) / 0.06) 0%,
+            transparent 30%,
+            hsl(var(--linen)) 100%
+          );
+      }
+
+      .figure-stage .glass-bohemian {
+        max-width: 18rem;
+        margin: 0 auto;
+        padding: 1.35rem 1.5rem;
+        font-size: 0.88rem;
+        line-height: 1.7;
+        text-align: center;
+        font-family: "Noto Serif SC", serif;
+      }
+
+      .figure-stage-hero {
+        background: hsl(var(--hero-bg));
+        background-image:
+          radial-gradient(ellipse 55% 45% at 18% 42%, hsl(var(--wine) / 0.22), transparent 58%),
+          radial-gradient(ellipse 50% 40% at 82% 58%, hsl(var(--terracotta) / 0.14), transparent 55%),
+          radial-gradient(ellipse 70% 50% at 50% 100%, hsl(25 18% 6% / 0.9), transparent 62%);
+      }
+
+      .figure-stage-hero .glass-bohemian-hero {
+        max-width: 22rem;
+        margin: 0 auto;
+        padding: 1.75rem 1.85rem;
+        font-family: "Noto Serif SC", serif;
+        font-size: 0.95rem;
+        line-height: 1.65;
+        color: hsl(var(--hero-foreground));
+        text-align: left;
+      }
+
+      .figure-stage-hero .glass-bohemian-hero strong {
+        display: block;
+        font-size: 1.12rem;
+        font-weight: 600;
+        margin-bottom: 0.65rem;
+        letter-spacing: 0.03em;
+      }
+
+      .figure-stage-hero .glass-bohemian-hero span {
+        font-size: 0.82rem;
+        color: hsl(var(--hero-muted));
+        line-height: 1.75;
+      }
+
+      .figure figcaption {
+        margin-top: 1rem;
+        font-size: 0.78rem;
+        line-height: 1.65;
+        color: hsl(var(--warm-charcoal-muted));
+        text-align: left;
+      }
+
+      .spec-table {
+        width: 100%;
+        font-size: 0.78rem;
+        border-collapse: collapse;
+        margin-top: 1.75rem;
+      }
+
+      .spec-table td {
+        padding: 0.45rem 0;
+        border-bottom: 1px solid hsl(var(--border));
+        vertical-align: top;
+      }
+
+      .spec-table td:first-child {
+        width: 28%;
+        color: hsl(var(--warm-charcoal-muted));
+        font-family: "Noto Serif SC", serif;
+      }
+
+      .spec-table td:last-child {
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+        color: hsl(25 12% 28%);
+      }
+
+      /* 组件：行文说明，非按钮阵列 */
+      .component-note {
+        font-size: 0.88rem;
+        line-height: 1.8;
+      }
+
+      .component-inline {
+        margin: 1.75rem 0;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 1.25rem 2rem;
+      }
+
+      .btn-primary {
+        font-family: "Noto Sans SC", sans-serif;
+        font-size: 0.82rem;
+        font-weight: 500;
+        letter-spacing: 0.06em;
+        padding: 0.65rem 1.6rem;
+        border: none;
+        background: hsl(var(--wine));
+        color: hsl(var(--wine-foreground));
+        cursor: default;
+      }
+
+      .btn-text {
+        font-size: 0.82rem;
+        color: hsl(var(--wine));
+        text-decoration: underline;
+        text-underline-offset: 0.2em;
+        text-decoration-color: hsl(var(--wine) / 0.35);
+        background: none;
+        border: none;
+        padding: 0;
+        cursor: default;
+        font-family: "Noto Sans SC", sans-serif;
+      }
+
+      .endmatter {
+        margin-top: 5rem;
+        padding-top: 2rem;
+        border-top: 1px solid hsl(var(--border));
+        font-size: 0.75rem;
+        line-height: 1.7;
+        color: hsl(var(--warm-charcoal-muted));
+        text-align: center;
+      }
+
+      .endmatter p {
+        text-align: center;
+      }
+    </style>
+  </head>
+  <body>
+    <article class="volume">
+      <!-- 扉页 -->
+      <header class="half-title" id="top">
+        <span class="folio">备忘 · 二〇二六 · 五月</span>
+        <h1 class="serif">合域<br />视觉识别</h1>
+        <p class="subtitle">
+          联合家办平台改版。波西米亚气质：亚麻纸色、波尔多酒红、衬线版面；首屏深、正文浅。
+        </p>
+        <p class="colophon">
+          本文档供内部评审，非对外物料。<br />
+          实现参照 <span style="font-variant-numeric: tabular-nums">design/brand-tokens.css</span>
+        </p>
+      </header>
+
+      <hr class="rule" />
+
+      <!-- 目录 -->
+      <nav aria-label="目录">
+        <span class="folio">目录</span>
+        <ul class="contents" style="margin-top: 1.25rem">
+          <li>
+            <a href="#ch1">一　意图</a>
+            <span class="pg">3</span>
+          </li>
+          <li>
+            <a href="#ch2">二　版面结构</a>
+            <span class="pg">4</span>
+          </li>
+          <li>
+            <a href="#ch3">三　色彩</a>
+            <span class="pg">5</span>
+          </li>
+          <li>
+            <a href="#ch4">四　字体</a>
+            <span class="pg">8</span>
+          </li>
+          <li>
+            <a href="#ch5">五　毛玻璃</a>
+            <span class="pg">9</span>
+          </li>
+          <li>
+            <a href="#ch6">六　界面成分</a>
+            <span class="pg">10</span>
+          </li>
+        </ul>
+      </nav>
+
+      <hr class="rule" />
+
+      <!-- 第一章 -->
+      <section class="chapter" id="ch1">
+        <span class="chapter-num">一</span>
+        <h2>意图</h2>
+        <p class="opening">
+          视觉从「科技产品默认皮」转向「可长期信赖的家办语境」——更像信笺与酒庄扉页，而非仪表盘与霓虹。
+        </p>
+        <p>
+          波西米亚在此不是装饰花纹，而是一种节奏：米色留出呼吸，酒红标记承诺与决断，陶土与鼠尾草仅作极少点缀。整体应安静、耐读，经得起反复打开。
+        </p>
+        <blockquote>
+          信任感来自克制与温度，而非动效与材质的堆砌。
+          <cite>— 改版原则</cite>
+        </blockquote>
+        <div class="two-col">
+          <p>
+            <span class="serif" style="font-size: 0.95rem">家办</span
+            >：服务家族跨代资产配置。界面宜沉稳，避免快消式促销语言与饱和色块。
+          </p>
+          <p>
+            <span class="serif" style="font-size: 0.95rem">分层</span
+            >：首屏深色承载品牌与电影感滚动；下拉进入亚麻米色正文，完成信息阅读。二者对比即叙事。
+          </p>
+        </div>
+      </section>
+
+      <hr class="rule-wine" />
+
+      <!-- 第二章 -->
+      <section class="chapter" id="ch2">
+        <span class="chapter-num">二</span>
+        <h2>版面结构</h2>
+        <p>落地页纵向分为两个「地带」，色温与密度不同，不宜混为一谈。</p>
+        <div class="spread-diagram" role="img" aria-label="落地页纵向结构示意">
+          <div class="band band-dark">
+            首屏 · 暖炭底（hsl 25° 22% 11%）<br />
+            <span class="margin-note">衬线主标题 · 酒红仅作强调 · 电影感动效预留</span>
+          </div>
+          <div class="band band-light">
+            正文 · 亚麻米底<br />
+            <em>信息框采用毛玻璃（见第五章）</em>
+          </div>
+        </div>
+        <p style="font-size: 0.85rem; color: hsl(var(--warm-charcoal-muted))">
+          图 1　落地页纵剖示意。实装时由 Hero 与正文区 DOM 分区实现，勿在米色区沿用深蓝科技底。
+        </p>
+      </section>
+
+      <hr class="rule-wine" />
+
+      <!-- 第三章 -->
+      <section class="chapter" id="ch3">
+        <span class="chapter-num">三</span>
+        <h2>色彩</h2>
+        <p>
+          主色为 <span class="serif">5°</span> 经典酒红——偏波尔多、略正式；饱和度约 32%，明度约
+          46%。另设<strong>中酒红</strong>与<strong>深酒红</strong>两档（对齐项目知识网络 HTML 的 Factor B /
+          综合成熟度色块），用于强调条、统计块与深色底上的白字，避免仅靠主色加透明度「伪深色」。
+        </p>
+
+        <div class="palette-strip">
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(5, 32%, 46%)"></div>
+            <div>
+              <div class="name">经典酒红 · <code>--wine</code></div>
+              <div class="code">hsl(5, 32%, 46%) · #A06358</div>
+              <div class="use">主按钮、链接、章节强调</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(5, 34%, 40%)"></div>
+            <div>
+              <div class="name">酒红 · 悬停 · <code>--wine-hover</code></div>
+              <div class="code">hsl(5, 34%, 40%) · #8F564C</div>
+              <div class="use">按钮 / 链接悬停</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div
+              class="palette-chip"
+              style="background: hsl(var(--wine-mid)); color: hsl(var(--wine-mid-foreground))"
+            ></div>
+            <div>
+              <div class="name">中酒红 · <code>--wine-mid</code></div>
+              <div class="code">hsl(353, 32%, 43%) · #8F4A52</div>
+              <div class="use">次要强调块、双栏统计 B 格（Factor B）</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div
+              class="palette-chip"
+              style="background: hsl(var(--wine-deep)); color: hsl(var(--wine-deep-foreground))"
+            ></div>
+            <div>
+              <div class="name">深酒红 · <code>--wine-deep</code></div>
+              <div class="code">hsl(353, 42%, 32%) · #722F37</div>
+              <div class="use">综合成熟度、徽章实心、表头强调、深色 KPI 底</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(5, 24%, 92%)"></div>
+            <div>
+              <div class="name">酒红浅底 · <code>--wine-muted</code></div>
+              <div class="code">hsl(5, 24%, 92%)</div>
+              <div class="use">标签底、选中浅底</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(36, 32%, 94%)"></div>
+            <div>
+              <div class="name">亚麻米</div>
+              <div class="code">hsl(36, 32%, 94%) · #F6F1E8</div>
+              <div class="use">正文背景</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(34, 22%, 88%)"></div>
+            <div>
+              <div class="name">沙米</div>
+              <div class="code">hsl(34, 22%, 88%) · #E8E0D4</div>
+              <div class="use">次级表面、图版底</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(25, 22%, 11%)"></div>
+            <div>
+              <div class="name">暖炭</div>
+              <div class="code">hsl(25, 22%, 11%) · #1C1816</div>
+              <div class="use">首屏深色区（非冷蓝黑）</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(25, 18%, 18%)"></div>
+            <div>
+              <div class="name">暖炭 · 正文</div>
+              <div class="code">hsl(25, 18%, 18%) · #2E2824</div>
+              <div class="use">米色底上的主文字</div>
+            </div>
+          </div>
+        </div>
+
+        <p style="font-size: 0.88rem; margin-top: 1.5rem">
+          图 2　酒红三阶（与知识网络 masthead <code>stat-row</code> 一致）：
+        </p>
+        <div class="wine-scale-stat" role="img" aria-label="酒红三阶示意">
+          <div class="wine-scale-a">
+            <div class="stat-label">Factor A</div>
+            <div class="stat-value">28%</div>
+            <p class="stat-note">浅米底 · 数值用主酒红</p>
+          </div>
+          <div class="wine-scale-b">
+            <div class="stat-label">Factor B</div>
+            <div class="stat-value">54%</div>
+            <p class="stat-note">中酒红底</p>
+          </div>
+          <div class="wine-scale-c">
+            <div class="stat-label">综合成熟度</div>
+            <div class="stat-value">35%</div>
+            <p class="stat-note">Early Stage</p>
+          </div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: hsl(var(--warm-charcoal-muted)); margin-top: 0.75rem">
+          实现：<code>hsl(var(--wine-deep))</code> / <code>text-wine-deep</code>（Tailwind）。勿用主色 +
+          透明度冒充深酒红。
+        </p>
+
+        <p style="font-size: 0.88rem; margin-top: 2rem">点缀，宜克制：</p>
+        <div class="palette-strip">
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(18, 28%, 58%)"></div>
+            <div>
+              <div class="name">陶土</div>
+              <div class="code">hsl(18, 28%, 58%) · #B8876F</div>
+              <div class="use">分隔、极少图标</div>
+            </div>
+          </div>
+          <div class="palette-row">
+            <div class="palette-chip" style="background: hsl(145, 18%, 42%)"></div>
+            <div>
+              <div class="name">鼠尾草</div>
+              <div class="code">hsl(145, 18%, 42%) · #5A735F</div>
+              <div class="use">成功、次要语义</div>
+            </div>
+          </div>
+        </div>
+
+        <p style="font-size: 0.85rem; color: hsl(var(--warm-charcoal-muted)); margin-top: 2rem">
+          弃用：深夜蓝与电光青蓝之科技配色；低透明、弱模糊的「灰雾卡片」。
+        </p>
+      </section>
+
+      <hr class="rule-wine" />
+
+      <!-- 第四章 -->
+      <section class="chapter" id="ch4">
+        <span class="chapter-num">四</span>
+        <h2>字体</h2>
+        <p>中文以衬线承担标题与品牌名，无衬线承担正文与界面；二者对比即层级。</p>
+
+        <div class="specimen-display">
+          <p class="line-1">合域 · 联合家办平台</p>
+          <p class="line-2">结构化智库，辅助家族长期决策</p>
+          <p class="line-3">
+            正文用 Noto Sans SC，保证长文可读。标题、Hero、章节名用 Noto Serif SC。正文区避免等宽「代码感」字体。
+          </p>
+        </div>
+
+        <table class="type-table">
+          <thead>
+            <tr>
+              <th>层级</th>
+              <th>字体</th>
+              <th>字重</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Display</td>
+              <td>Noto Serif SC</td>
+              <td>600–700</td>
+            </tr>
+            <tr>
+              <td>标题</td>
+              <td>Noto Serif SC</td>
+              <td>500–600</td>
+            </tr>
+            <tr>
+              <td>正文 / UI</td>
+              <td>Noto Sans SC</td>
+              <td>400–500</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <hr class="rule-wine" />
+
+      <!-- 第五章 -->
+      <section class="chapter" id="ch5">
+        <span class="chapter-num">五</span>
+        <h2>毛玻璃</h2>
+        <p>
+          参考高端深色 UI（高斯模糊 + 暗色半透明底 + 细亮描边）。关键不是把背后抹白，而是<strong>低不透明、较强
+          blur</strong>，让背景色块仍可读。浅色正文区用
+          <code>.glass-bohemian</code>；Hero 深色区用 <code>.glass-bohemian-hero</code>。
+        </p>
+
+        <figure class="figure">
+          <div class="figure-stage figure-stage-hero">
+            <div class="glass-bohemian-hero">
+              <strong>平台能力</strong>
+              <span>输入、处理、分析、决策链路清晰可演示，每个功能模块都围绕真实需求设计。</span>
+            </div>
+          </div>
+          <figcaption>
+            图 2　Hero 深色区卡片。类名 <code style="font-size: 0.9em">.glass-bohemian-hero</code>，blur 约
+            36px。
+          </figcaption>
+        </figure>
+
+        <figure class="figure">
+          <div class="figure-stage">
+            <div class="glass-bohemian">智库 Schema<br />分级脱敏</div>
+          </div>
+          <figcaption>
+            图 3　浅色正文区卡片。类名 <code style="font-size: 0.9em">.glass-bohemian</code>。
+          </figcaption>
+        </figure>
+
+        <table class="spec-table">
+          <tbody>
+            <tr>
+              <td colspan="2" style="padding-top: 0.5rem; color: hsl(var(--wine))">Hero · glass-bohemian-hero</td>
+            </tr>
+            <tr>
+              <td>底色</td>
+              <td>暖色渐变 + rgba(42, 32, 30, 0.36)</td>
+            </tr>
+            <tr>
+              <td>模糊</td>
+              <td>blur(36px) saturate(130%)</td>
+            </tr>
+            <tr>
+              <td>描边</td>
+              <td>1px rgba(255, 248, 240, 0.14)</td>
+            </tr>
+            <tr>
+              <td>圆角</td>
+              <td>1.5rem</td>
+            </tr>
+            <tr>
+              <td colspan="2" style="padding-top: 0.85rem; color: hsl(var(--wine))">正文 · glass-bohemian</td>
+            </tr>
+            <tr>
+              <td>底色</td>
+              <td>浅色渐变 + rgba(255, 252, 248, 0.2)</td>
+            </tr>
+            <tr>
+              <td>模糊</td>
+              <td>blur(28px) saturate(165%)</td>
+            </tr>
+            <tr>
+              <td>描边</td>
+              <td>1px rgba(255, 255, 255, 0.38)</td>
+            </tr>
+            <tr>
+              <td>圆角</td>
+              <td>1.5rem</td>
+            </tr>
+          </tbody>
+        </table>
+      </section>
+
+      <hr class="rule-wine" />
+
+      <!-- 第六章 -->
+      <section class="chapter" id="ch6">
+        <span class="chapter-num">六</span>
+        <h2>界面成分</h2>
+        <p class="component-note">
+          主按钮：实色酒红、直角略圆（非胶囊促销感）。次行动：酒红下划线文字链。标签少用色块，优先字距与细线框。
+        </p>
+        <div class="component-inline">
+          <button type="button" class="btn-primary">进入工作台</button>
+          <button type="button" class="btn-text">了解更多</button>
+        </div>
+      </section>
+
+      <footer class="endmatter">
+        <p class="serif">合域 · 视觉识别备忘 · v1</p>
+        <p>family-office-platform-redesign · 改版沙盒</p>
+      </footer>
+    </article>
+  </body>
+</html>

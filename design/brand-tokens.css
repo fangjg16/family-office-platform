@@ -1,0 +1,174 @@
+/**
+ * 合域 · 波西米亚品牌 Token v1
+ * 单一事实来源：design/brand-kit.html 与本文件保持一致；落地实现时同步至 src/index.css
+ */
+:root {
+  /* ── 语义：设计意义锚点 ── */
+  --brand-name: "合域";
+
+  /* ── 酒红阶（5° 主色；深/中档对齐知识网络 HTML #722f37 / #8f4a52） ── */
+  --wine: 5 32% 46%;
+  --wine-hover: 5 34% 40%;
+  --wine-muted: 5 24% 92%;
+  --wine-foreground: 36 40% 98%;
+  /** 中酒红 · Factor B 色块 */
+  --wine-mid: 353 32% 43%;
+  --wine-mid-foreground: 36 40% 98%;
+  /** 深酒红 · 综合成熟度 / --burgundy */
+  --wine-deep: 353 42% 32%;
+  --wine-deep-foreground: 36 40% 98%;
+
+  /* ── 米色体系 ── */
+  --linen: 36 32% 94%;
+  --sand: 34 22% 88%;
+  --warm-charcoal: 25 18% 18%;
+  --warm-charcoal-muted: 25 10% 45%;
+
+  /* ── 点缀色 ── */
+  --terracotta: 18 28% 58%;
+  --sage: 145 18% 42%;
+
+  /* ── Hero 深色区 ── */
+  --hero-bg: 25 22% 11%;
+  --hero-foreground: 36 28% 92%;
+  --hero-muted: 30 12% 62%;
+
+  /* ── 浅色正文区（映射 shadcn 变量） ── */
+  --background: var(--linen);
+  --foreground: var(--warm-charcoal);
+  --primary: var(--wine);
+  --primary-foreground: var(--wine-foreground);
+  --secondary: var(--sand);
+  --secondary-foreground: 25 16% 28%;
+  --muted: 35 18% 90%;
+  --muted-foreground: var(--warm-charcoal-muted);
+  --accent: var(--wine-muted);
+  --accent-foreground: 5 28% 38%;
+  --border: 34 16% 82%;
+  --input: 35 20% 91%;
+  --ring: var(--wine);
+  --radius: 0.875rem;
+  --landing-accent: var(--wine);
+
+  /**
+   * 毛玻璃 · 浅色正文区（低不透明 + 较强模糊，保留背后色块透视）
+   */
+  --glass-bg: rgba(255, 252, 248, 0.2);
+  --glass-bg-hover: rgba(255, 252, 248, 0.3);
+  --glass-blur: 28px;
+  --glass-saturate: 165%;
+  --glass-border: rgba(255, 255, 255, 0.38);
+  --glass-rim: rgba(255, 255, 255, 0.52);
+  --glass-edge: rgba(25, 18, 18, 0.06);
+  --glass-shadow:
+    0 12px 40px rgba(25, 18, 18, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  --glass-radius: 1.5rem;
+
+  /**
+   * 毛玻璃 · Hero 深色区（参考 Nodum：高 blur、暗底、细亮描边）
+   */
+  --glass-hero-bg: rgba(42, 32, 30, 0.36);
+  --glass-hero-bg-hover: rgba(52, 40, 37, 0.42);
+  --glass-hero-blur: 36px;
+  --glass-hero-saturate: 130%;
+  --glass-hero-border: rgba(255, 248, 240, 0.14);
+  --glass-hero-rim: rgba(255, 248, 240, 0.2);
+  --glass-hero-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 248, 240, 0.14);
+  --glass-hero-radius: 1.5rem;
+}
+
+.glass-bohemian {
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.34) 0%,
+    var(--glass-bg) 42%,
+    rgba(255, 250, 245, 0.14) 100%
+  );
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  box-shadow:
+    0 0 0 1px var(--glass-edge),
+    var(--glass-shadow);
+  isolation: isolate;
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.glass-bohemian:hover {
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    var(--glass-bg-hover) 42%,
+    rgba(255, 250, 245, 0.2) 100%
+  );
+}
+
+.glass-bohemian-hero {
+  background: linear-gradient(
+    168deg,
+    rgba(255, 248, 240, 0.14) 0%,
+    var(--glass-hero-bg) 38%,
+    rgba(28, 20, 18, 0.32) 100%
+  );
+  backdrop-filter: blur(var(--glass-hero-blur)) saturate(var(--glass-hero-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-hero-blur)) saturate(var(--glass-hero-saturate));
+  border: 1px solid var(--glass-hero-border);
+  border-radius: var(--glass-hero-radius);
+  box-shadow: var(--glass-hero-shadow);
+  isolation: isolate;
+  transition:
+    background 0.3s ease,
+    border-color 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.glass-bohemian-hero:hover {
+  background: linear-gradient(
+    168deg,
+    rgba(255, 248, 240, 0.18) 0%,
+    var(--glass-hero-bg-hover) 38%,
+    rgba(32, 24, 22, 0.38) 100%
+  );
+  border-color: rgba(255, 248, 240, 0.18);
+}
+
+.glass-bohemian-hero-circle {
+  background: linear-gradient(
+    168deg,
+    rgba(255, 248, 240, 0.14) 0%,
+    var(--glass-hero-bg) 38%,
+    rgba(28, 20, 18, 0.32) 100%
+  );
+  backdrop-filter: blur(var(--glass-hero-blur)) saturate(var(--glass-hero-saturate));
+  -webkit-backdrop-filter: blur(var(--glass-hero-blur)) saturate(var(--glass-hero-saturate));
+  border: 1px solid var(--glass-hero-border);
+  border-radius: 50%;
+  box-shadow: var(--glass-hero-shadow);
+  isolation: isolate;
+  overflow: hidden;
+  aspect-ratio: 1 / 1;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glass-bohemian {
+    background: rgba(255, 252, 248, 0.92);
+  }
+
+  .glass-bohemian-hero {
+    background: rgba(22, 16, 15, 0.92);
+  }
+
+  .glass-bohemian-hero-circle {
+    background: rgba(22, 16, 15, 0.92);
+  }
+}

@@ -40,6 +40,16 @@ export default {
         "nav-button": "hsl(var(--nav-button))",
         "hero-bg": "hsl(var(--hero-bg))",
         "surface-alt": "hsl(var(--surface-alt))",
+        wine: {
+          DEFAULT: "hsl(var(--wine))",
+          hover: "hsl(var(--wine-hover))",
+          muted: "hsl(var(--wine-muted))",
+          mid: "hsl(var(--wine-mid))",
+          "mid-foreground": "hsl(var(--wine-mid-foreground))",
+          deep: "hsl(var(--wine-deep))",
+          "deep-foreground": "hsl(var(--wine-deep-foreground))",
+          foreground: "hsl(var(--wine-foreground))",
+        },
       },
       borderRadius: {
         lg: "var(--radius)",

@@ -113,7 +113,7 @@ export function ProjectMaterialsSection({
 
   return (
     <section
-      className="mt-5 rounded-2xl border border-primary/15 bg-primary/[0.03] p-4"
+      className="mt-5 rounded-2xl border border-[hsl(var(--wine-deep)/0.18)] bg-[hsl(var(--wine-muted)/0.28)] p-4"
       aria-labelledby="project-materials-heading"
     >
       <div className="flex items-start justify-between gap-3">
@@ -135,7 +135,7 @@ export function ProjectMaterialsSection({
             disabled={uploading || Boolean(deletingId)}
             onClick={() => fileInputRef.current?.click()}
             className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-primary/25 bg-primary/[0.06] px-3 py-1.5 text-[11px] font-semibold text-primary transition-colors hover:bg-primary/10",
+              "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[hsl(var(--wine-deep)/0.32)] bg-[hsl(var(--wine-deep)/0.06)] px-3 py-1.5 text-[11px] font-semibold text-[hsl(var(--wine-deep))] transition-colors hover:bg-[hsl(var(--wine-deep)/0.1)]",
               (uploading || deletingId) && "pointer-events-none opacity-60",
             )}
           >
@@ -224,7 +224,7 @@ function MaterialsList({
               key={file.id}
               className="flex items-start gap-2.5 rounded-xl border border-border/60 bg-white px-3 py-2.5 shadow-[0_1px_0_rgba(15,23,42,0.04)]"
             >
-              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-primary/70" strokeWidth={2} aria-hidden />
+              <FileText className="mt-0.5 h-4 w-4 shrink-0 text-[hsl(var(--wine-deep)/0.75)]" strokeWidth={2} aria-hidden />
               <div className="min-w-0 flex-1">
                 <p className="truncate text-sm font-medium text-foreground" title={row.name}>
                   {row.name}

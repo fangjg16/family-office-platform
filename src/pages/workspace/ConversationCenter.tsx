@@ -933,7 +933,7 @@ function UploadSelectedFileIcon({ name }: { name: string }) {
   if (lower.endsWith(".pdf")) {
     return <FileText className="h-4 w-4 shrink-0 text-rose-600" strokeWidth={2} aria-hidden />;
   }
-  return <FileUp className="h-4 w-4 shrink-0 text-primary" strokeWidth={2} aria-hidden />;
+  return <FileUp className="h-4 w-4 shrink-0 text-[hsl(var(--wine-deep))]" strokeWidth={2} aria-hidden />;
 }
 
 /** 对话内「已发送附件」：与用户气泡同色系，仅展示文件名（非上传引导） */
@@ -2567,7 +2567,7 @@ export default function ConversationCenter() {
     >
       <div
         className={cn(
-          "flex h-full min-h-0 flex-1 flex-col overflow-hidden md:rounded-[1.75rem] md:border md:border-border/45 md:bg-white/55 md:shadow-[0_28px_90px_-48px_rgba(37,99,235,0.2)] md:backdrop-blur-xl",
+          "flex h-full min-h-0 flex-1 flex-col overflow-hidden md:rounded-[1.75rem] md:border md:border-border/45 md:bg-white/55 md:shadow-[0_28px_90px_-48px_rgba(73,45,41,0.22)] md:backdrop-blur-xl",
           "transition-[opacity,transform,filter] duration-220",
           entryReady
             ? "opacity-100 translate-y-0 scale-100 blur-0"
@@ -2579,7 +2579,7 @@ export default function ConversationCenter() {
         <aside className="flex w-full shrink-0 flex-col overflow-hidden border-b border-border/60 bg-white/70 backdrop-blur-md md:w-[17rem] md:rounded-tl-[1.75rem] md:border-b-0 md:border-r md:border-border/50">
         <div className="border-b border-border/60 px-4 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-primary/15 to-primary/5 text-primary shadow-inner shadow-primary/5 transition-colors hover:from-primary/20">
+            <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-[hsl(var(--wine-deep)/0.14)] to-[hsl(var(--wine-deep)/0.05)] text-[hsl(var(--wine-deep))] shadow-inner shadow-[hsl(var(--wine-deep)/0.06)] transition-colors hover:from-[hsl(var(--wine-deep)/0.2)]">
               <Sparkles size={24} strokeWidth={2} />
             </div>
             <div>
@@ -2607,7 +2607,7 @@ export default function ConversationCenter() {
               }, 260);
               navigate(`/app/chat/${projectId}/${newId}`);
             }}
-            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-primary/30 bg-primary/10 px-3 py-2.5 text-xs font-semibold text-primary transition-colors hover:bg-primary/15"
+            className="flex w-full items-center justify-center gap-2 rounded-2xl border border-[hsl(var(--wine-deep)/0.32)] bg-[hsl(var(--wine-deep)/0.08)] px-3 py-2.5 text-xs font-semibold text-[hsl(var(--wine-deep))] transition-colors hover:bg-[hsl(var(--wine-deep)/0.14)]"
           >
             <Plus className="h-4 w-4" strokeWidth={2} />
             新增对话
@@ -2651,14 +2651,14 @@ export default function ConversationCenter() {
                             conversation.id === newlyAddedConversationId &&
                               "animate-in fade-in slide-in-from-top-1 duration-200",
                             active
-                              ? "border-primary/30 bg-primary/[0.08]"
+                              ? "border-[hsl(var(--wine-deep)/0.32)] bg-[hsl(var(--wine-deep)/0.08)]"
                               : "border-transparent bg-white/70 hover:border-border/80 hover:bg-white",
                           )}
                         >
                           {active ? (
                             <span
                               aria-hidden
-                              className="absolute bottom-1.5 right-0 top-1.5 w-[3px] rounded-full bg-primary/90"
+                              className="absolute bottom-1.5 right-0 top-1.5 w-[3px] rounded-full bg-[hsl(var(--wine-deep)/0.9)]"
                             />
                           ) : null}
                           <div className="flex items-start gap-1">
@@ -2675,7 +2675,7 @@ export default function ConversationCenter() {
                                   className={cn(
                                     "line-clamp-2 pr-1 text-[12px] leading-snug",
                                     active
-                                      ? "font-semibold text-primary"
+                                      ? "font-semibold text-[hsl(var(--wine-deep))]"
                                       : "text-foreground",
                                   )}
                                 >
@@ -2710,7 +2710,7 @@ export default function ConversationCenter() {
           <div>
             <Link
               to="/"
-              className="mb-1 inline-block text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-primary"
+              className="mb-1 inline-block text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-[hsl(var(--wine-deep))]"
             >
               合域
             </Link>
@@ -2725,7 +2725,7 @@ export default function ConversationCenter() {
             <button
               type="button"
               onClick={() => setShowHistoryMenu((v) => !v)}
-              className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/85 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-primary/25 hover:text-foreground"
+              className="inline-flex items-center gap-1 rounded-full border border-border/70 bg-white/85 px-3 py-1.5 text-xs font-semibold text-muted-foreground transition-colors hover:border-[hsl(var(--wine-deep)/0.25)] hover:text-foreground"
             >
               <MoreHorizontal className="h-4 w-4" />
               本对话文件
@@ -2753,7 +2753,7 @@ export default function ConversationCenter() {
                             className="rounded-lg border border-border/50 bg-white/80 px-2 py-1.5"
                           >
                             <div className="flex items-start gap-1.5 text-[11px] text-foreground">
-                              <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary/80" />
+                              <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[hsl(var(--wine-deep)/0.8)]" />
                               <span className="min-w-0 flex-1 leading-snug">{item.name}</span>
                               {item.canDelete && item.documentId ? (
                                 <button
@@ -2815,7 +2815,7 @@ export default function ConversationCenter() {
           ) : isLiveAiMode ? (
             <>
               <AiShell>
-                <p className="text-sm font-semibold text-primary">
+                <p className="text-sm font-semibold text-[hsl(var(--wine-deep))]">
                   AI 助手已接入
                 </p>
                 <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
@@ -2857,7 +2857,7 @@ export default function ConversationCenter() {
                     <AiShell key={m.id} time={m.time}>
                       {m.isStreaming ? (
                         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
+                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
                           <span className="text-sm font-medium text-muted-foreground">
                             思考中…
                           </span>
@@ -2884,7 +2884,7 @@ export default function ConversationCenter() {
                       {m.pendingJobId ? (
                         <div className="mt-3 flex flex-col gap-1.5">
                           <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
+                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
                             <span className="text-sm font-medium text-muted-foreground">
                               {m.jobProgressLabel?.trim() || "深度分析中，请稍候…"}
                             </span>
@@ -2917,7 +2917,7 @@ export default function ConversationCenter() {
               {isCurrentConversationSending && !hasStreamingAssistantInThread ? (
                 <AiShell>
                   <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
                     <span className="text-sm font-medium text-muted-foreground">
                       思考中...
                     </span>
@@ -2954,7 +2954,7 @@ export default function ConversationCenter() {
               {playbackThinking ? (
                 <AiShell>
                   <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-primary/70" />
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
                     <span className="text-sm font-medium text-muted-foreground">思考中...</span>
                   </div>
                   <p className="mt-2 whitespace-nowrap text-[11px] text-muted-foreground">
@@ -2967,7 +2967,7 @@ export default function ConversationCenter() {
             <>
           {projectRole === "admin" ? (
             <AiShell>
-              <p className="text-sm font-semibold text-primary">
+              <p className="text-sm font-semibold text-[hsl(var(--wine-deep))]">
                 Admin 控制台
               </p>
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
@@ -3089,7 +3089,7 @@ export default function ConversationCenter() {
             ) : null}
             <Link
               to="/"
-              className="flex items-center gap-1 rounded-full px-1 py-1 text-[11px] font-semibold text-muted-foreground hover:text-primary"
+              className="flex items-center gap-1 rounded-full px-1 py-1 text-[11px] font-semibold text-muted-foreground hover:text-[hsl(var(--wine-deep))]"
             >
               <ArrowLeft className="h-3 w-3" />
               返回官网
@@ -3110,7 +3110,7 @@ export default function ConversationCenter() {
             }}
           />
           {showUploadPanel || selectedFiles.length > 0 ? (
-            <div className="absolute bottom-full left-4 right-4 z-30 mb-3 rounded-2xl border border-dashed border-primary/45 bg-white/95 p-3 shadow-[0_-8px_30px_-12px_rgba(15,23,42,0.12)] backdrop-blur-md md:left-6 md:right-6">
+            <div className="absolute bottom-full left-4 right-4 z-30 mb-3 rounded-2xl border border-dashed border-[hsl(var(--wine-deep)/0.45)] bg-white/95 p-3 shadow-[0_-8px_30px_-12px_rgba(15,23,42,0.12)] backdrop-blur-md md:left-6 md:right-6">
               <div
                 className="rounded-2xl border border-dashed border-border/70 bg-background/40 px-4 py-4"
                 onDragOver={(e) => e.preventDefault()}
@@ -3123,12 +3123,12 @@ export default function ConversationCenter() {
                   <>
                     <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
                       <div className="flex min-h-9 items-center gap-2 text-sm font-semibold text-foreground">
-                        <FileUp className="h-4 w-4 text-primary" strokeWidth={2} />
+                        <FileUp className="h-4 w-4 text-[hsl(var(--wine-deep))]" strokeWidth={2} />
                         拖拽文件到此处上传
                       </div>
                       <label
                         htmlFor="jfo-chat-file-input"
-                        className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-primary px-4 text-sm font-semibold text-primary transition-colors hover:bg-primary/8"
+                        className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-[hsl(var(--wine-deep))] px-4 text-sm font-semibold text-[hsl(var(--wine-deep))] transition-colors hover:bg-[hsl(var(--wine-deep)/0.08)]"
                       >
                         选择文件
                       </label>
@@ -3145,7 +3145,7 @@ export default function ConversationCenter() {
                     <button
                       type="button"
                       onClick={() => setShowUploadPanel(true)}
-                      className="text-[11px] font-semibold text-primary underline-offset-2 hover:underline"
+                      className="text-[11px] font-semibold text-[hsl(var(--wine-deep))] underline-offset-2 hover:underline"
                     >
                       添加更多
                     </button>
@@ -3160,10 +3160,10 @@ export default function ConversationCenter() {
                     <ul className="max-h-48 space-y-2 overflow-y-auto pr-0.5">
                       {selectedFiles.map((f, idx) => (
                         <li key={`${f.name}-${f.size}-${f.lastModified}`}>
-                          <div className="flex items-center gap-3 rounded-xl border border-primary/15 bg-white px-3 py-2.5 text-xs shadow-sm">
+                          <div className="flex items-center gap-3 rounded-xl border border-[hsl(var(--wine-deep)/0.15)] bg-white px-3 py-2.5 text-xs shadow-sm">
                             <UploadSelectedFileIcon name={f.name} />
                             <span className="min-w-0 flex-1 truncate font-medium text-foreground">{f.name}</span>
-                            <span className="shrink-0 text-[10px] font-semibold text-primary">待发送</span>
+                            <span className="shrink-0 text-[10px] font-semibold text-[hsl(var(--wine-deep))]">待发送</span>
                             <button
                               type="button"
                               onClick={() => removeFile(idx)}
@@ -3195,7 +3195,7 @@ export default function ConversationCenter() {
                   type="button"
                   disabled={isCurrentConversationSending || playbackThinking}
                   onClick={() => setDraftMessage(item.message)}
-                  className="rounded-full border border-border/80 bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-primary/30 hover:bg-primary/5 hover:text-foreground disabled:opacity-50"
+                  className="rounded-full border border-border/80 bg-white px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-[hsl(var(--wine-deep)/0.3)] hover:bg-[hsl(var(--wine-deep)/0.05)] hover:text-foreground disabled:opacity-50"
                 >
                   {item.label}
                 </button>
@@ -3239,7 +3239,7 @@ export default function ConversationCenter() {
                       : "可直接输入；演示项目请按空格填入预设问题"
               }
               className={cn(
-                "h-12 min-h-[48px] flex-1 rounded-full border border-input bg-white px-5 text-sm font-medium shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/25 focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "h-12 min-h-[48px] flex-1 rounded-full border border-input bg-white px-5 text-sm font-medium shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wine-deep)/0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 draftMessage ? "text-foreground" : "text-muted-foreground",
                 (isCurrentConversationSending || playbackThinking) && "opacity-70",
               )}
@@ -3250,7 +3250,7 @@ export default function ConversationCenter() {
               className={cn(
                 "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full border text-muted-foreground transition-colors",
                 showUploadPanel || selectedFiles.length > 0
-                  ? "border-primary/35 bg-primary/10 text-primary"
+                  ? "border-[hsl(var(--wine-deep)/0.35)] bg-[hsl(var(--wine-deep)/0.1)] text-[hsl(var(--wine-deep))]"
                   : "border-input bg-white hover:bg-muted hover:text-foreground",
               )}
               aria-label="选择并上传文件"
@@ -3272,7 +3272,7 @@ export default function ConversationCenter() {
                   draftMessage.trim().length === 0 &&
                   selectedFiles.length === 0)
               }
-              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full bg-primary px-8 text-sm font-semibold text-primary-foreground shadow-[0_2px_12px_-2px_rgba(37,99,235,0.28)] transition-all hover:bg-primary/92 active:scale-[0.98]"
+              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full border border-[hsl(var(--wine-deep))] bg-[hsl(var(--wine-deep))] px-8 text-sm font-semibold text-[hsl(var(--wine-deep-foreground))] shadow-[0_8px_22px_-10px_hsl(var(--wine-deep)/0.55)] transition-all hover:bg-[hsl(353_42%_28%)] active:scale-[0.98]"
             >
               <Plane className="h-4 w-4" strokeWidth={2} />
               {isCurrentConversationSending ? "发送中…" : "发送"}

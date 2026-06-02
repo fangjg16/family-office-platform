@@ -18,8 +18,8 @@ const linkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
     "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all md:text-[0.8rem]",
     isActive
-      ? "bg-primary/12 text-primary shadow-inner shadow-primary/5"
-      : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+      ? "border border-[hsl(var(--wine)/0.3)] bg-[hsl(var(--wine-muted)/0.45)] text-[hsl(var(--wine))] shadow-inner shadow-[hsl(var(--wine)/0.08)]"
+      : "border border-transparent text-[hsl(var(--warm-charcoal-muted))] hover:border-[hsl(var(--sand))] hover:bg-white/85 hover:text-[hsl(var(--warm-charcoal))]"
   );
 
 function initialsFromDisplayName(name: string | null | undefined): string {
@@ -64,23 +64,23 @@ export function WorkspaceTopNav() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-border/60 bg-background/75 px-3 py-3 backdrop-blur-xl sm:px-5 md:px-8">
+      <header className="sticky top-0 z-30 border-b border-[hsl(var(--sand)/0.82)] bg-white/96 px-3 py-2.5 shadow-[0_4px_16px_-12px_rgba(70,44,40,0.22)] backdrop-blur-md sm:px-5 md:px-8">
         <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 md:flex-nowrap">
           <div className="flex items-center gap-3">
             <Link
               to="/"
-              className="text-gradient-landing font-display text-sm font-semibold tracking-tight md:text-base"
+              className="font-display text-sm font-semibold tracking-[0.04em] text-[hsl(var(--warm-charcoal))] transition-colors hover:text-[hsl(var(--wine))] md:text-base"
             >
               合域
             </Link>
             <div className="hidden items-center md:flex">
               {projectsActive ? (
-                <div className="flex w-[340px] items-center rounded-full border border-border/70 bg-white/85 px-4 py-2 shadow-sm">
-                  <Search className="mr-2 h-4 w-4 text-muted-foreground" strokeWidth={2} />
+                <div className="flex w-[340px] items-center rounded-full border border-[hsl(var(--wine-deep)/0.16)] bg-white px-4 py-2 shadow-[0_8px_20px_-18px_rgba(72,46,42,0.24)]">
+                  <Search className="mr-2 h-4 w-4 text-[hsl(var(--warm-charcoal-muted)/0.8)]" strokeWidth={1.9} />
                   <input
                     type="text"
                     placeholder="搜索项目"
-                    className="w-full bg-transparent text-sm text-foreground placeholder:text-muted-foreground/70 focus:outline-none"
+                    className="w-full bg-transparent text-sm text-[hsl(var(--warm-charcoal))] placeholder:text-[hsl(var(--warm-charcoal-muted)/0.68)] focus:outline-none"
                     aria-label="搜索项目"
                   />
                 </div>
@@ -88,20 +88,20 @@ export function WorkspaceTopNav() {
             </div>
           </div>
           <nav
-            className="flex shrink-0 items-center justify-center gap-1 rounded-full border border-border/70 bg-white/70 p-1 shadow-sm backdrop-blur-md sm:gap-2 md:justify-end md:bg-white/85"
+            className="flex shrink-0 items-center justify-center gap-1 rounded-full border border-[hsl(var(--wine-deep)/0.14)] bg-white p-1 shadow-[0_12px_24px_-20px_rgba(72,46,42,0.3)] backdrop-blur-md sm:gap-2 md:justify-end"
             aria-label="工作台主导航"
           >
             {user ? (
               <>
                 <div className="hidden items-center gap-2 px-2 md:flex">
-                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-primary/20 bg-primary/10 text-[10px] font-bold text-primary">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-full border border-[hsl(var(--wine)/0.26)] bg-[hsl(var(--wine-muted)/0.52)] text-[10px] font-bold text-[hsl(var(--wine))]">
                     {userInitial}
                   </span>
-                  <span className="text-xs font-medium text-muted-foreground">
+                  <span className="text-xs font-medium text-[hsl(var(--warm-charcoal-muted))]">
                     {user.displayName}
                   </span>
                 </div>
-                <div className="mx-1 hidden h-4 w-px bg-border/80 md:block" />
+                <div className="mx-1 hidden h-4 w-px bg-[hsl(var(--sand)/0.95)] md:block" />
               </>
             ) : null}
             <NavLink to="/app/projects" className={linkClass} end>
@@ -115,8 +115,8 @@ export function WorkspaceTopNav() {
                 className={cn(
                   "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all md:text-[0.8rem]",
                   chatActive
-                    ? "bg-primary/12 text-primary shadow-inner shadow-primary/5"
-                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                    ? "border border-[hsl(var(--wine-deep)/0.32)] bg-[hsl(var(--wine-deep)/0.08)] text-[hsl(var(--wine-deep))] shadow-inner shadow-[hsl(var(--wine-deep)/0.08)]"
+                    : "border border-transparent text-[hsl(var(--warm-charcoal-muted))] hover:border-[hsl(var(--sand))] hover:bg-white/85 hover:text-[hsl(var(--warm-charcoal))]"
                 )}
               >
                 <MessageSquare className="h-4 w-4 opacity-80" strokeWidth={2} />
@@ -128,8 +128,8 @@ export function WorkspaceTopNav() {
                 className={cn(
                   "inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs font-semibold transition-all md:text-[0.8rem]",
                   chatActive
-                    ? "bg-primary/12 text-primary shadow-inner shadow-primary/5"
-                    : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
+                    ? "border border-[hsl(var(--wine-deep)/0.32)] bg-[hsl(var(--wine-deep)/0.08)] text-[hsl(var(--wine-deep))] shadow-inner shadow-[hsl(var(--wine-deep)/0.08)]"
+                    : "border border-transparent text-[hsl(var(--warm-charcoal-muted))] hover:border-[hsl(var(--sand))] hover:bg-white/85 hover:text-[hsl(var(--warm-charcoal))]"
                 )}
               >
                 <MessageSquare className="h-4 w-4 opacity-80" strokeWidth={2} />
@@ -148,7 +148,7 @@ export function WorkspaceTopNav() {
             <button
               type="button"
               onClick={logout}
-              className="inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:px-4 md:text-[0.8rem]"
+              className="inline-flex items-center gap-1.5 rounded-full border border-transparent px-3 py-2 text-xs font-semibold text-[hsl(var(--warm-charcoal-muted))] transition-colors hover:border-[hsl(var(--sand))] hover:bg-white/85 hover:text-[hsl(var(--warm-charcoal))] md:px-4 md:text-[0.8rem]"
             >
               <LogOut className="h-4 w-4" strokeWidth={2} />
               退出登录
