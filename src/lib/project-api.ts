@@ -254,9 +254,18 @@ export type ProjectKnowledgeNetworkMeta = {
   version: number;
   updatedAt: string;
   updatedBy: string;
+  updatedByDisplayName?: string;
   lastJobId: string | null;
   changelog: string | null;
   r2Key: string;
+};
+
+export type ProjectKnowledgeNetworkVersionSummary = {
+  version: number;
+  updatedAt: string;
+  updatedBy: string;
+  updatedByDisplayName?: string;
+  changelog: string | null;
 };
 
 export type ProjectKnowledgeNetworkResponse = {
@@ -265,17 +274,20 @@ export type ProjectKnowledgeNetworkResponse = {
   hasKnowledgeNetwork: boolean;
   meta: ProjectKnowledgeNetworkMeta | null;
   html: string | null;
+  versions?: ProjectKnowledgeNetworkVersionSummary[];
   warning?: string;
 };
 
 export async function fetchProjectKnowledgeNetwork(
   projectId: string,
   userId: string,
+  options?: { includeHtml?: boolean },
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<ProjectKnowledgeNetworkResponse> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
   if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
   const q = new URLSearchParams({ userId });
+  if (options?.includeHtml === false) q.set("html", "0");
   const res = await fetch(
     `${base}/api/projects/${encodeURIComponent(projectId)}/knowledge-network?${q}`,
   );
@@ -290,6 +302,24 @@ export async function fetchProjectKnowledgeNetwork(
     throw new Error(data.error || `知识网络加载失败（${res.status}）`);
   }
   return data;
+}
+
+export async function fetchProjectKnowledgeNetworkVersionHtml(
+  projectId: string,
+  version: number,
+  userId: string,
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<string> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
+  const q = new URLSearchParams({ userId });
+  const res = await fetch(
+    `${base}/api/projects/${encodeURIComponent(projectId)}/knowledge-network/versions/${version}?${q}`,
+  );
+  const data = (await res.json().catch(() => ({}))) as { html?: string; error?: string };
+  if (!res.ok) throw new Error(data.error || `版本加载失败（${res.status}）`);
+  if (!data.html) throw new Error("未返回 HTML");
+  return data.html;
 }
 
 export async function deleteProjectFile(

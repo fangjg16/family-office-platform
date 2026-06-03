@@ -84,7 +84,8 @@ After all texts are in context:
 
 1. **Prioritize session attachments** when the user asks about files they just sent in the dialogue.
 2. Run **project-intake** (if no KB yet) or **knowledge-base-generation** (update).
-3. Do **not** claim you cannot access files — you already loaded them via this bridge.
+3. For **knowledge base HTML**, use the Worker file loop in task instructions: `GET/PUT .../knowledge-network/current?format=raw` — do **not** paste full HTML in chat.
+4. Do **not** claim you cannot access files — you already loaded them via this bridge.
 4. Do **not** read PDFs only from `~/Projects/...` unless user explicitly added local copies.
 
 ## Optional: curl one-liner (terminal tool)

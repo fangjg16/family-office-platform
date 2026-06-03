@@ -3,6 +3,10 @@ import {
   isPackageScope,
   type DocumentRow,
 } from "./documents-access";
+import {
+  handleHermesGetKnowledgeNetworkCurrent,
+  handleHermesPutKnowledgeNetworkCurrent,
+} from "./hermes-knowledge-network";
 import { isPlaceholderChunkText } from "./search";
 
 export type HermesBridgeEnv = {
@@ -365,6 +369,19 @@ export async function tryHandleHermesRoutes(
       downloadMatch[2],
       userId,
     );
+  }
+
+  const knCurrentMatch =
+    /^\/api\/hermes\/projects\/([^/]+)\/knowledge-network\/current$/u.exec(path);
+  if (knCurrentMatch) {
+    const projectId = knCurrentMatch[1];
+    if (request.method === "GET") {
+      return handleHermesGetKnowledgeNetworkCurrent(request, env, projectId);
+    }
+    if (request.method === "PUT") {
+      return handleHermesPutKnowledgeNetworkCurrent(request, env, projectId);
+    }
+    return json({ error: "Method Not Allowed" }, 405);
   }
 
   return json({ error: "Not Found" }, 404);

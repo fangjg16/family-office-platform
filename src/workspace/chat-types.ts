@@ -8,6 +8,8 @@ export type LiveChatMessage = {
   sortIndex?: number;
   /** Worker 解析出的合域风格知识网络 HTML（可预览/下载） */
   knowledgeNetworkHtml?: string | null;
+  /** 写入项目 R2+D1 后的版本号（用于「已同步」标注） */
+  projectKnowledgeNetworkVersion?: number;
   /** Hermes 异步任务 ID，轮询完成后清除 */
   pendingJobId?: string;
   /** 轮询接口返回的实时进度文案 */

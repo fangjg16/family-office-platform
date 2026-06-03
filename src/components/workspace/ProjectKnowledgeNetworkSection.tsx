@@ -1,14 +1,23 @@
 import { useCallback, useEffect, useState } from "react";
-import { Link } from "react-router-dom";
-import { Loader2, Network } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { History, Loader2, Network, RotateCcw, Sparkles } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ENABLE_LIVE_CHAT,
   AI_CHAT_ENDPOINT,
   fetchProjectKnowledgeNetwork,
+  fetchProjectKnowledgeNetworkVersionHtml,
   type ProjectKnowledgeNetworkResponse,
 } from "@/lib/project-api";
+import {
+  KNOWLEDGE_NETWORK_FULL_REGENERATE_PROMPT,
+  KNOWLEDGE_NETWORK_INCREMENTAL_PROMPT,
+  KNOWLEDGE_NETWORK_INITIAL_PROMPT,
+  type KnowledgeNetworkChatEntryState,
+} from "@/lib/knowledge-network-prompts";
 import { KnowledgeNetworkPreview } from "@/components/workspace/KnowledgeNetworkPreview";
+import { getUserById } from "@/workspace/workspace-users";
+import { Button } from "@/components/ui/button";
 
 type ProjectKnowledgeNetworkSectionProps = {
   projectId: string;
@@ -31,13 +40,25 @@ function formatKnDate(iso: string): string {
   }
 }
 
+function updaterLabel(meta: { updatedBy: string; updatedByDisplayName?: string }): string {
+  return (
+    meta.updatedByDisplayName?.trim() ||
+    getUserById(meta.updatedBy)?.displayName ||
+    meta.updatedBy
+  );
+}
+
 export function ProjectKnowledgeNetworkSection({
   projectId,
   userId,
 }: ProjectKnowledgeNetworkSectionProps) {
+  const navigate = useNavigate();
   const [data, setData] = useState<ProjectKnowledgeNetworkResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [viewVersion, setViewVersion] = useState<number | "current">("current");
+  const [viewHtml, setViewHtml] = useState<string | null>(null);
+  const [loadingVersion, setLoadingVersion] = useState(false);
 
   const useLive = ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT);
 
@@ -50,10 +71,13 @@ export function ProjectKnowledgeNetworkSection({
     setLoading(true);
     setError(null);
     try {
-      const res = await fetchProjectKnowledgeNetwork(projectId, userId);
+      const res = await fetchProjectKnowledgeNetwork(projectId, userId, { includeHtml: true });
       setData(res);
+      setViewVersion("current");
+      setViewHtml(res.html);
     } catch (e) {
       setData(null);
+      setViewHtml(null);
       setError(e instanceof Error ? e.message : "知识网络加载失败");
     } finally {
       setLoading(false);
@@ -63,6 +87,49 @@ export function ProjectKnowledgeNetworkSection({
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const goChat = (draftMessage: string) => {
+    navigate(`/app/chat/${projectId}`, {
+      state: { draftMessage } satisfies KnowledgeNetworkChatEntryState,
+    });
+  };
+
+  const onSelectVersion = async (v: string) => {
+    if (v === "current") {
+      setViewVersion("current");
+      setViewHtml(data?.html ?? null);
+      return;
+    }
+    const num = Number(v);
+    if (!Number.isFinite(num)) return;
+    if (data?.meta?.version === num) {
+      setViewVersion("current");
+      setViewHtml(data.html);
+      return;
+    }
+    setViewVersion(num);
+    setLoadingVersion(true);
+    try {
+      const html = await fetchProjectKnowledgeNetworkVersionHtml(projectId, num, userId);
+      setViewHtml(html);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "历史版本加载失败");
+    } finally {
+      setLoadingVersion(false);
+    }
+  };
+
+  const versionOptions = [
+    ...(data?.meta
+      ? [{ version: data.meta.version, label: `当前 v${data.meta.version}` }]
+      : []),
+    ...(data?.versions ?? [])
+      .filter((v) => v.version !== data?.meta?.version)
+      .map((v) => ({
+        version: v.version,
+        label: `归档 v${v.version} · ${formatKnDate(v.updatedAt)}`,
+      })),
+  ];
 
   if (!useLive) {
     return (
@@ -87,15 +154,48 @@ export function ProjectKnowledgeNetworkSection({
             项目知识网络
           </h3>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            全员可见（同项目权限）；在对话中生成或更新后自动同步到此。
+            全员可见。更新时请在对话里写明要改/删的 section；「全量重做」将整页重建。
           </p>
         </div>
-        <Link
-          to={`/app/chat/${projectId}`}
-          className="text-[11px] font-semibold text-primary underline-offset-2 hover:underline"
-        >
-          在对话中更新 →
-        </Link>
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        {data?.hasKnowledgeNetwork ? (
+          <>
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-8 text-xs"
+              title="进入对话并预填模板，请写明要改或删除的 section"
+              onClick={() => goChat(KNOWLEDGE_NETWORK_INCREMENTAL_PROMPT)}
+            >
+              <Sparkles className="mr-1 h-3.5 w-3.5" />
+              按板块更新
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              onClick={() => goChat(KNOWLEDGE_NETWORK_FULL_REGENERATE_PROMPT)}
+            >
+              <RotateCcw className="mr-1 h-3.5 w-3.5" />
+              全量重做
+            </Button>
+          </>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="h-8 text-xs"
+            onClick={() => goChat(KNOWLEDGE_NETWORK_INITIAL_PROMPT)}
+          >
+            <Sparkles className="mr-1 h-3.5 w-3.5" />
+            生成知识网络
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -105,17 +205,24 @@ export function ProjectKnowledgeNetworkSection({
         </p>
       ) : error ? (
         <p className="mt-4 text-sm text-rose-600">{error}</p>
-      ) : data?.hasKnowledgeNetwork && data.html ? (
+      ) : data?.hasKnowledgeNetwork && viewHtml ? (
         <>
           {data.meta ? (
             <dl className="mt-3 grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
               <div>
                 <span className="font-semibold text-foreground/80">版本 </span>
                 v{data.meta.version}
+                {viewVersion !== "current" && viewVersion !== data.meta.version ? (
+                  <span className="text-amber-700"> · 正在查看 v{viewVersion}</span>
+                ) : null}
               </div>
               <div>
                 <span className="font-semibold text-foreground/80">更新 </span>
                 {formatKnDate(data.meta.updatedAt)}
+              </div>
+              <div>
+                <span className="font-semibold text-foreground/80">更新人 </span>
+                {updaterLabel(data.meta)}
               </div>
               {data.meta.changelog ? (
                 <div className="sm:col-span-2">
@@ -125,9 +232,35 @@ export function ProjectKnowledgeNetworkSection({
               ) : null}
             </dl>
           ) : null}
+
+          {versionOptions.length > 1 ? (
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <History className="h-3.5 w-3.5 text-muted-foreground" />
+              <label className="sr-only" htmlFor="kn-version-select">
+                选择历史版本
+              </label>
+              <select
+                id="kn-version-select"
+                className="rounded-lg border border-border bg-white px-2 py-1.5 text-xs font-medium text-foreground"
+                value={viewVersion === "current" ? String(data.meta?.version ?? "") : String(viewVersion)}
+                disabled={loadingVersion}
+                onChange={(e) => void onSelectVersion(e.target.value)}
+              >
+                {versionOptions.map((o) => (
+                  <option key={o.version} value={o.version}>
+                    {o.label}
+                  </option>
+                ))}
+              </select>
+              {loadingVersion ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              ) : null}
+            </div>
+          ) : null}
+
           <KnowledgeNetworkPreview
-            html={data.html}
-            filename={`[AI]_${projectId}_知识网络.html`}
+            html={viewHtml}
+            filename={`[AI]_${projectId}_知识网络_v${viewVersion === "current" ? data.meta?.version : viewVersion}.html`}
           />
         </>
       ) : (
@@ -138,7 +271,7 @@ export function ProjectKnowledgeNetworkSection({
           )}
         >
           {data?.warning ??
-            "尚未生成项目知识网络。进入对话后发送「生成/更新知识网络」即可创建。"}
+            "尚未生成项目知识网络。点击上方按钮进入对话并预填提示语。"}
         </p>
       )}
     </section>

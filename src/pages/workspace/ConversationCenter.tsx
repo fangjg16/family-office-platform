@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
   Check,
@@ -43,6 +43,7 @@ import {
   filterConversationSessionFiles,
   type ProjectFileRecord,
 } from "@/lib/project-api";
+import type { KnowledgeNetworkChatEntryState } from "@/lib/knowledge-network-prompts";
 import { upsertApiProject } from "@/workspace/project-registry";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import { consumeChatSse } from "@/lib/chat-stream-client";
@@ -561,6 +562,7 @@ type AgentJobPollPayload = {
   status?: string;
   answer?: string | null;
   knowledgeNetworkHtml?: string | null;
+  projectKnowledgeNetworkVersion?: number;
   error?: string | null;
   progressLabel?: string;
   hermesStatus?: string | null;
@@ -617,9 +619,14 @@ async function pollAgentJobUntilDone(params: {
             ? data.knowledgeNetworkHtml.trim()
             : "";
         const prepared = prepareKnowledgeNetworkMessageDisplay(answer, knFromApi || null);
+        const knVersion =
+          typeof data.projectKnowledgeNetworkVersion === "number"
+            ? data.projectKnowledgeNetworkVersion
+            : undefined;
         onUpdate(conversationKey, assistantMsgId, {
           content: prepared.displayContent,
           knowledgeNetworkHtml: prepared.html || undefined,
+          projectKnowledgeNetworkVersion: knVersion,
           pendingJobId: undefined,
           jobProgressLabel: undefined,
         });
@@ -1463,6 +1470,7 @@ function permissionLineSidebar(role: WorkspaceRole): string {
 
 export default function ConversationCenter() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { projectId, conversationId } = useParams<{
     projectId: string;
     conversationId?: string;
@@ -1521,6 +1529,15 @@ export default function ConversationCenter() {
   useLayoutEffect(() => {
     resizeChatComposer(chatInputRef.current);
   }, [draftMessage]);
+
+  useEffect(() => {
+    const state = location.state as KnowledgeNetworkChatEntryState | null;
+    const draft = state?.draftMessage?.trim();
+    if (!draft) return;
+    setDraftMessage(draft);
+    navigate(location.pathname + location.search, { replace: true, state: null });
+    requestAnimationFrame(() => chatInputRef.current?.focus());
+  }, [location.pathname, location.search, location.state, navigate]);
 
   useEffect(() => {
     const id = loadSessionUserId();
@@ -2645,9 +2662,18 @@ export default function ConversationCenter() {
             ? payload.knowledgeNetworkHtml
             : null;
         const prepared = prepareKnowledgeNetworkMessageDisplay(answer, knFromApi);
+        const knVerStream =
+          payload &&
+          typeof payload === "object" &&
+          typeof (payload as { projectKnowledgeNetworkVersion?: unknown })
+            .projectKnowledgeNetworkVersion === "number"
+            ? (payload as { projectKnowledgeNetworkVersion: number })
+                .projectKnowledgeNetworkVersion
+            : undefined;
         updateLiveMessage(effectiveConversationId, assistantId, {
           content: prepared.displayContent,
           knowledgeNetworkHtml: prepared.html || undefined,
+          projectKnowledgeNetworkVersion: knVerStream,
           isStreaming: false,
           streamStatusLabel: undefined,
         });
@@ -2750,11 +2776,20 @@ export default function ConversationCenter() {
           ? (payload as { knowledgeNetworkHtml: string }).knowledgeNetworkHtml
           : null;
       const prepared = prepareKnowledgeNetworkMessageDisplay(answer, knFromApi);
+      const knVerJson =
+        payload &&
+        typeof payload === "object" &&
+        typeof (payload as { projectKnowledgeNetworkVersion?: unknown })
+          .projectKnowledgeNetworkVersion === "number"
+          ? (payload as { projectKnowledgeNetworkVersion: number })
+              .projectKnowledgeNetworkVersion
+          : undefined;
       setLiveError(null);
       if (streamAssistantId) {
         updateLiveMessage(effectiveConversationId, streamAssistantId, {
           content: prepared.displayContent,
           knowledgeNetworkHtml: prepared.html || undefined,
+          projectKnowledgeNetworkVersion: knVerJson,
           isStreaming: false,
           streamStatusLabel: undefined,
         });
@@ -2765,6 +2800,7 @@ export default function ConversationCenter() {
           content: prepared.displayContent,
           time: getCurrentDateTimeLabel(),
           knowledgeNetworkHtml: prepared.html || undefined,
+          projectKnowledgeNetworkVersion: knVerJson,
         });
       }
       flushChatPersist();
@@ -3243,7 +3279,14 @@ export default function ConversationCenter() {
                         </div>
                       ) : null}
                       {knPrepared?.html ? (
-                        <KnowledgeNetworkPreview html={knPrepared.html} />
+                        <>
+                          <KnowledgeNetworkPreview html={knPrepared.html} />
+                          {typeof m.projectKnowledgeNetworkVersion === "number" ? (
+                            <p className="mt-2 text-[11px] font-medium text-primary">
+                              已同步至项目知识网络 v{m.projectKnowledgeNetworkVersion}
+                            </p>
+                          ) : null}
+                        </>
                       ) : /知识网络|\.html|文件位置/u.test(m.content) ? (
                         <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
                           本次回复未附带可预览的 HTML 代码块（可能只写了 Hermes

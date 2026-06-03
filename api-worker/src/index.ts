@@ -1,5 +1,6 @@
 import { citationMapFromSlots, getCitationSlots } from "./citations";
 import { handleGetChatAudit } from "./chat-audit-admin";
+import { handleBackfillProjectKnowledgeNetworks } from "./project-knowledge-network-admin";
 import {
   handleGetActiveAgentJobs,
   handleGetChatState,
@@ -10,7 +11,6 @@ import { extractSpreadsheetPlainText } from "./spreadsheet-text";
 import { buildHermesMaterialsDigest } from "./hermes-materials-digest";
 import {
   detectSkillIntent,
-  extractKnowledgeNetworkHtml,
   shouldRouteToHermes,
   usesFullPackageCorpus,
   type SkillIntent,
@@ -60,11 +60,18 @@ import {
   handleListProjects,
   handleUpdateProject,
 } from "./projects-routes";
-import { handleGetProjectKnowledgeNetwork } from "./project-knowledge-network-routes";
 import {
-  maybePersistProjectKnowledgeNetwork,
-  readProjectKnowledgeNetworkHtml,
+  handleGetProjectKnowledgeNetwork,
+  handleGetProjectKnowledgeNetworkVersion,
+} from "./project-knowledge-network-routes";
+import {
+  getProjectKnowledgeNetworkMeta,
 } from "./project-knowledge-network";
+import {
+  buildKnowledgeNetworkModeInstructions,
+  detectKnowledgeNetworkUpdateMode,
+} from "./knowledge-network-mode";
+import { checkKnowledgeNetworkPipelineReady } from "./knowledge-network-guards";
 import { decodePathProjectId } from "./projects-resolve";
 import {
   assertValidHermesBaseUrl,
@@ -671,6 +678,24 @@ async function handleChatViaHermes(
     files?: string[];
   },
 ): Promise<Response> {
+  if (params.chatMode === "knowledge_network") {
+    const gate = checkKnowledgeNetworkPipelineReady(env);
+    if (!gate.ok) {
+      return json(
+        {
+          error: gate.error,
+          answer: gate.error,
+          citationMap: params.citationMap,
+          projectId: params.projectId,
+          async: false,
+          chatMode: params.chatMode,
+          skillIntent: params.chatMode,
+        },
+        503,
+      );
+    }
+  }
+
   const jobId = crypto.randomUUID();
   try {
     await createAgentJob(env, {
@@ -705,28 +730,24 @@ async function handleChatViaHermes(
     params.chatMode,
     params.projectId,
     params.projectTitleHint,
-    { userId: params.userId, conversationId: params.conversationId },
+    {
+      userId: params.userId,
+      conversationId: params.conversationId,
+      jobId,
+      userMessage: params.message,
+    },
   );
 
   if (params.chatMode === "knowledge_network") {
     try {
-      const existingKn = await readProjectKnowledgeNetworkHtml(env, params.projectId);
-      if (existingKn) {
-        const cap = 72_000;
-        const body =
-          existingKn.length > cap
-            ? `${existingKn.slice(0, cap)}\n<!-- truncated for prompt -->`
-            : existingKn;
-        instructions += `
-
-【项目当前知识网络 HTML — 增量更新基线】
-以下为该项目已发布版本（R2）。默认在现有 section 上增量修订；仅当用户明确要求「重新生成 / 全量重做」时才整页重写。
-\`\`\`html
-${body}
-\`\`\``;
-      }
+      const knMode = detectKnowledgeNetworkUpdateMode(params.message);
+      const existingMeta = await getProjectKnowledgeNetworkMeta(env, params.projectId);
+      instructions += buildKnowledgeNetworkModeInstructions(
+        knMode,
+        Boolean(existingMeta),
+      );
     } catch {
-      /* 无表或 R2 未就绪时跳过 */
+      /* 无表时仍依赖 Hermes 文件回路说明 */
     }
   }
 
@@ -906,11 +927,26 @@ async function handleAgentJobPoll(
         ? "失败"
         : buildAgentJobProgressLabel(row, hermesStatus);
 
+  let projectKnowledgeNetworkVersion: number | undefined;
+  if (
+    row.status === "completed" &&
+    row.skill_intent === "knowledge_network" &&
+    row.knowledge_network_html
+  ) {
+    try {
+      const knMeta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+      if (knMeta) projectKnowledgeNetworkVersion = knMeta.version;
+    } catch {
+      /* 忽略 */
+    }
+  }
+
   return json({
     jobId: row.id,
     status: row.status,
     answer: row.answer,
     knowledgeNetworkHtml: row.knowledge_network_html,
+    projectKnowledgeNetworkVersion,
     error: row.error,
     skillIntent: row.skill_intent,
     projectId: row.project_id,
@@ -1056,21 +1092,6 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
       callLlm(env, prepared.messages),
     ]);
     const { answer, llmBackend } = llmResult;
-    const knowledgeNetworkHtml =
-      chatMode === "knowledge_network" ? extractKnowledgeNetworkHtml(answer) : null;
-    if (knowledgeNetworkHtml && userId) {
-      try {
-        await maybePersistProjectKnowledgeNetwork(env, {
-          projectId,
-          userId,
-          skillIntent: chatMode,
-          html: knowledgeNetworkHtml,
-          answerSummary: answer,
-        });
-      } catch (e) {
-        console.error("project_knowledge_network persist failed", e);
-      }
-    }
     scheduleMemoryRefresh(answer);
     return json({
       answer,
@@ -1079,9 +1100,14 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
       externalSearch: prepared.usedExternalSearch,
       chatMode,
       skillIntent: chatMode,
-      knowledgeNetworkHtml,
       llmBackend,
       ...(conversationTopic ? { conversationTopic } : {}),
+      ...(chatMode === "knowledge_network"
+        ? {
+            knowledgeNetworkHtml: null,
+            note: "知识网络须走 Hermes 深度任务与 PUT 文件回路，轻问路径不写入项目 KB。",
+          }
+        : {}),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -1135,16 +1161,32 @@ export default {
           response = json({ error: "Method Not Allowed" }, 405);
         }
       } else if (
+        /^\/api\/projects\/[^/]+\/knowledge-network\/versions\/(\d+)$/u.test(path) &&
+        request.method === "GET"
+      ) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        const version = Number(path.split("/")[5] ?? "0");
+        response = await handleGetProjectKnowledgeNetworkVersion(
+          env,
+          projectId,
+          version,
+          url.searchParams.get("userId"),
+        );
+      } else if (
         /^\/api\/projects\/[^/]+\/knowledge-network$/u.test(path) &&
         request.method === "GET"
       ) {
         const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        const htmlParam = (url.searchParams.get("html") ?? "1").trim();
+        const includeHtml = htmlParam !== "0" && htmlParam !== "false";
         response = await handleGetProjectKnowledgeNetwork(
           env,
           projectId,
           url.searchParams.get("userId"),
-          true,
+          includeHtml,
         );
+      } else if (path === "/api/admin/project-knowledge-network/backfill" && request.method === "POST") {
+        response = await handleBackfillProjectKnowledgeNetworks(request, env, url);
       } else if (
         /^\/api\/projects\/[^/]+\/citations$/u.test(path) &&
         request.method === "GET"
