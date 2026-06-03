@@ -5,6 +5,7 @@ import {
   handlePutChatState,
 } from "./chat-sync";
 import { extractPdfPlainText } from "./pdf-text";
+import { extractSpreadsheetPlainText } from "./spreadsheet-text";
 import { buildHermesMaterialsDigest } from "./hermes-materials-digest";
 import {
   detectSkillIntent,
@@ -264,10 +265,15 @@ async function handleUpload(
     safeName.endsWith(".html") ||
     safeName.endsWith(".htm");
   const isPdf = mime === "application/pdf" || safeName.endsWith(".pdf");
+  const isSpreadsheet =
+    mime.includes("spreadsheet") ||
+    mime === "application/vnd.ms-excel" ||
+    safeName.endsWith(".xlsx") ||
+    safeName.endsWith(".xls");
 
   let text = "";
   let pdfWarning: string | undefined;
-  let parsed = isText || isPdf;
+  let parsed = isText || isPdf || isSpreadsheet;
 
   if (isText) {
     text = new TextDecoder().decode(bytes);
@@ -279,6 +285,15 @@ async function handleUpload(
     } else {
       parsed = false;
       text = `（已上传 PDF：${file.name}。${extracted.warning ?? "未能提取正文"}）`;
+    }
+  } else if (isSpreadsheet) {
+    const extracted = await extractSpreadsheetPlainText(bytes, file.name);
+    pdfWarning = extracted.warning;
+    if (extracted.parsed && extracted.text) {
+      text = extracted.text;
+    } else {
+      parsed = false;
+      text = `（已上传 Excel：${file.name}。${extracted.warning ?? "未能提取表格正文"}）`;
     }
   } else {
     parsed = false;

@@ -145,7 +145,7 @@ function extractSearchTerms(query: string): string[] {
 }
 
 export function isPlaceholderChunkText(text: string): boolean {
-  return /（已上传 PDF|暂未解析|未能提取|未在云端解析/u.test(text);
+  return /（已上传 PDF|已上传 Excel|暂未解析|未能提取|未在云端解析/u.test(text);
 }
 
 /** 无向量：按关键词在 chunk 文本里计分 */
