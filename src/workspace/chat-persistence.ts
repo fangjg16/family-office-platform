@@ -39,16 +39,26 @@ export async function loadChatStateForUser(
     const remote = await fetchRemoteChatState(userId);
     if (!remote) return null;
 
-    const withJobs = await attachActiveAgentJobsToMessages(
-      userId,
-      remote.messagesByConversation,
-    );
-
-    return {
-      conversations: remote.conversations,
-      messagesByConversation: sortMessagesByConversation(withJobs),
-      syncedAt: remote.syncedAt,
-    };
+    try {
+      const withJobs = await attachActiveAgentJobsToMessages(
+        userId,
+        remote.messagesByConversation,
+      );
+      return {
+        conversations: remote.conversations,
+        messagesByConversation: sortMessagesByConversation(withJobs),
+        syncedAt: remote.syncedAt,
+      };
+    } catch {
+      // 恢复深度任务失败时仍返回 D1 正文，避免整页当作「无云端数据」
+      return {
+        conversations: remote.conversations,
+        messagesByConversation: sortMessagesByConversation(
+          remote.messagesByConversation,
+        ),
+        syncedAt: remote.syncedAt,
+      };
+    }
   } catch {
     return null;
   }

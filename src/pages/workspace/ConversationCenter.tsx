@@ -107,6 +107,7 @@ type SessionConversation = {
 
 type SessionConversationState = {
   conversations: SessionConversation[];
+  messagesByConversation: Record<string, LiveChatMessage[]>;
 };
 
 function conversationHasMessages(
@@ -1397,6 +1398,7 @@ export default function ConversationCenter() {
   const [playbackMsgs, setPlaybackMsgs] = useState<DemoPlaybackTimelineMsg[]>([]);
   const [playbackRoundIndex, setPlaybackRoundIndex] = useState(0);
   const [playbackThinking, setPlaybackThinking] = useState(false);
+  const [chatSyncError, setChatSyncError] = useState<string | null>(null);
 
   useLayoutEffect(() => {
     resizeChatComposer(chatInputRef.current);
@@ -1641,51 +1643,65 @@ export default function ConversationCenter() {
       const cacheKey = userId;
 
       skipNextAutoPersistRef.current = true;
+      setChatSyncError(null);
 
       const remote = await loadChatStateForUser(userId);
       if (cancelled) return;
 
-      const messagesByConversation = sortMessagesByConversation(
-        remote?.messagesByConversation ?? {},
-      );
-      setLiveMessagesByConversation(messagesByConversation);
-
-      const persistedConvs = remote?.conversations ?? [];
-      const hasPersistedData =
-        persistedConvs.length > 0 || Object.keys(messagesByConversation).length > 0;
-
-      if (hasPersistedData) {
-        const next = mergeConversationsForBootstrap(
-          persistedConvs,
-          messagesByConversation,
-          isLiveAiMode,
-        );
-        setConversations(next);
-        SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
-        setChatSyncReady(true);
-        return;
-      }
-
       const cached = SESSION_CONVERSATION_CACHE[cacheKey];
-      if (!cached || cached.conversations.length === 0) {
+
+      if (remote) {
+        const messagesByConversation = sortMessagesByConversation(
+          remote.messagesByConversation,
+        );
+        setLiveMessagesByConversation(messagesByConversation);
         const next = mergeConversationsForBootstrap(
-          [],
+          remote.conversations,
           messagesByConversation,
           isLiveAiMode,
         );
         setConversations(next);
-        SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
+        SESSION_CONVERSATION_CACHE[cacheKey] = {
+          conversations: next,
+          messagesByConversation,
+        };
         setChatSyncReady(true);
         return;
       }
 
-      const next = mergeConversationsForBootstrap(
-        cached.conversations,
-        messagesByConversation,
-        isLiveAiMode,
+      const cachedMsgs = sortMessagesByConversation(
+        cached?.messagesByConversation ?? {},
       );
+      const cachedMsgCount = Object.values(cachedMsgs).reduce(
+        (n, arr) => n + (arr?.length ?? 0),
+        0,
+      );
+
+      if (cached && (cached.conversations.length > 0 || cachedMsgCount > 0)) {
+        setLiveMessagesByConversation(cachedMsgs);
+        const next = mergeConversationsForBootstrap(
+          cached.conversations,
+          cachedMsgs,
+          isLiveAiMode,
+        );
+        setConversations(next);
+        setChatSyncError(
+          "云端对话暂未能加载，已用本页会话缓存展示。请检查网络后刷新；勿在多标签同时编辑以免覆盖。",
+        );
+        setChatSyncReady(true);
+        return;
+      }
+
+      setLiveMessagesByConversation({});
+      const next = mergeConversationsForBootstrap([], {}, isLiveAiMode);
       setConversations(next);
-      SESSION_CONVERSATION_CACHE[cacheKey] = { conversations: next };
+      SESSION_CONVERSATION_CACHE[cacheKey] = {
+        conversations: next,
+        messagesByConversation: {},
+      };
+      if (isLiveAiMode) {
+        setChatSyncError("云端对话加载失败，请稍后刷新页面。");
+      }
       setChatSyncReady(true);
     };
 
@@ -1721,7 +1737,10 @@ export default function ConversationCenter() {
 
   useEffect(() => {
     if (!userId || !chatSyncReady) return;
-    SESSION_CONVERSATION_CACHE[userId] = { conversations };
+    SESSION_CONVERSATION_CACHE[userId] = {
+      conversations,
+      messagesByConversation: liveMessagesByConversation,
+    };
     scheduleChatPersist();
     return () => {
       if (chatPersistTimerRef.current) {
@@ -2074,7 +2093,10 @@ export default function ConversationCenter() {
     const nextConversations = conversations.filter((c) => c.id !== target.id);
 
     skipNextAutoPersistRef.current = true;
-    SESSION_CONVERSATION_CACHE[userId] = { conversations: nextConversations };
+    SESSION_CONVERSATION_CACHE[userId] = {
+      conversations: nextConversations,
+      messagesByConversation: nextMessages,
+    };
     setConversations(nextConversations);
     setLiveMessagesByConversation(nextMessages);
 
@@ -3310,6 +3332,11 @@ export default function ConversationCenter() {
                   </div>
                 ) : null}
               </div>
+            </div>
+          ) : null}
+          {chatSyncError ? (
+            <div className="mb-2 rounded-xl border border-amber-200/90 bg-amber-50/90 px-3 py-2 text-xs leading-relaxed text-amber-900">
+              {chatSyncError}
             </div>
           ) : null}
           {liveError ? (
