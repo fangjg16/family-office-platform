@@ -89,7 +89,8 @@ function buildExcerptFromHits(
       const slot = matchCitationSlot(slots, h.filename ?? "");
       if (slot) usedSlotIds.add(slot.id);
       const slotHint = slot ? `[ID:${slot.id}]` : "";
-      return `${slotHint} 文件：${h.filename ?? "资料"}\n${h.text}`;
+      const scopeHint = h.scope === "session" ? "（本对话附件）" : "";
+      return `${slotHint} 文件：${h.filename ?? "资料"}${scopeHint}\n${h.text}`;
     })
     .join("\n\n---\n\n");
 
@@ -125,6 +126,7 @@ export async function prepareStandardChatContext(
   const usedSlotIds = new Set<string>();
 
   const fileHint = (params.files ?? []).join(" ");
+  const prioritizeFilenames = (params.files ?? []).filter(Boolean);
   const searchQuery = fileHint ? `${message} ${fileHint}` : message;
   const needsExternal = wantsExternalSearch(message) || shouldForceExternalSearch(chatMode);
   const willUseVectors =
@@ -171,6 +173,7 @@ export async function prepareStandardChatContext(
         : DEEP_EXCERPT_MAX_CHARS
       : 8_000,
     topK: overviewQuestion ? 24 : 5,
+    prioritizeFilenames,
   };
 
   let hits = await selectChunksForChatWithVectors(
@@ -190,7 +193,12 @@ export async function prepareStandardChatContext(
       env,
       allChunks,
       searchQuery,
-      { deep: true, maxChars: OVERVIEW_EXCERPT_MAX_CHARS, topK: 24 },
+      {
+        deep: true,
+        maxChars: OVERVIEW_EXCERPT_MAX_CHARS,
+        topK: 24,
+        prioritizeFilenames,
+      },
       queryEmbedding,
     );
   }
@@ -213,9 +221,11 @@ export async function prepareStandardChatContext(
     "你是联合家办平台项目助手，服务机会型投资尽调场景。回答须综合三类依据：（1）【资料摘录】中的项目内事实；（2）若有【外部检索】则纳入公开网页信息；（3）为衔接上下文的行业/流程推论——须标明「推论」或「待核实」，不得冒充已核实事实。",
     "你不是「只能读上传 PDF」的机器人：项目内问题以摘录为主；公开信息、政策、市场动态在触发联网或摘录不足时，应结合外部检索或明确说明缺口与下一步（如建议用户说「查外部资料：…」）。",
     "用户可能使用项目简称（如「南宁生鲜港」「南宁生鲜智慧港」）；与摘录中「南宁东盟生鲜食品智慧港」等明显同一项目时，应正常作答，勿因简称不同而拒绝。",
-    ...(overviewQuestion || hadPackageChunks
+    ...(overviewQuestion || hadPackageChunks || prioritizeFilenames.length > 0
       ? [
-          "若【资料摘录】或【项目登记信息】中已有本项目资料包内容，必须基于其介绍项目背景与要点；禁止声称「没有看到任何项目资料」。",
+          prioritizeFilenames.length > 0
+            ? "若用户刚在本对话上传附件（【资料摘录】中含 scope=session 或文件名匹配），必须优先阅读并引用这些附件，勿仅列项目资料包 manifest。"
+            : "若【资料摘录】或【项目登记信息】中已有本项目资料包内容，必须基于其介绍项目背景与要点；禁止声称「没有看到任何项目资料」。",
         ]
       : []),
     "引用规范：上传资料用 [ID:n]（仅可引用摘录中实际出现且下列存在的编号）；网页用 [WEB:n] 并附 URL；勿混用。",

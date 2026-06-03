@@ -181,8 +181,11 @@ export function buildHermesAgentInstructions(
   intent: SkillIntent,
   projectId: string,
   projectTitleHint: string,
+  ctx?: { userId?: string; conversationId?: string },
 ): string {
   const jfoBase = (env.JFO_API_PUBLIC_BASE || "https://jfo-api.jfo-api.workers.dev").trim();
+  const userId = (ctx?.userId ?? "").trim();
+  const conversationId = (ctx?.conversationId ?? "").trim();
   const intentSkillMap: Record<Exclude<SkillIntent, "standard">, string> = {
     project_intake: "project-intake",
     knowledge_network: "knowledge-base-generation",
@@ -210,8 +213,14 @@ export function buildHermesAgentInstructions(
     `当前项目 projectId=${projectId}（${projectTitleHint}）。`,
     "",
     "【必须执行的工作顺序】",
-    `1. 先执行 skill「jfo-r2-materials」：用 bash/curl 拉取网站项目资料包 manifest 与全文（scope=package）。`,
-    `   GET ${jfoBase}/api/hermes/projects/${projectId}/manifest?scope=package`,
+    `1. 先执行 skill「jfo-r2-materials」：用 bash/curl 拉取网站资料 manifest 与全文。`,
+    `   a) 项目资料包（全项目共享）：GET ${jfoBase}/api/hermes/projects/${projectId}/manifest?scope=package`,
+    ...(userId && conversationId
+      ? [
+          `   b) 本对话内上传的附件（须纳入，勿忽略）：GET ${jfoBase}/api/hermes/projects/${projectId}/manifest?scope=session&userId=${encodeURIComponent(userId)}&conversationId=${encodeURIComponent(conversationId)}`,
+          `   或一次拉取资料包+本对话附件：GET ${jfoBase}/api/hermes/projects/${projectId}/manifest?scope=all&userId=${encodeURIComponent(userId)}&conversationId=${encodeURIComponent(conversationId)}`,
+        ]
+      : []),
     "   Header: Authorization: Bearer $JFO_INTERNAL_KEY",
     "   对每个 parsed=true 的文件 GET textUrl 拉正文。",
     `2. 再执行 skill「${primarySkill}」完成用户任务。`,
@@ -228,7 +237,7 @@ export function buildHermesAgentInstructions(
       "",
       "【知识网络 HTML — 硬性要求】",
       "执行 knowledge-base-generation；**先读 skill 目录 kb-template.html**，将其中 `<style>`、panel-switcher 脚本与 HTML 壳 **原样带入** `<head>`/`<body>`，再按 STYLE_GUIDE 填内容（Portable 米色）。禁止手写一套「看起来像」的简化 CSS。",
-      "若上方有【Worker 预注入 · 项目资料包摘录】：摘录只供**事实与细节**（时间轴节点、商业模式、财务数字）；**不得**为塞摘录而破坏模板结构或省略 kb-template 已有组件。",
+      "若上方有【Worker 预注入 · 项目资料摘录】：「本对话上传附件」优先于资料包；摘录只供**事实与细节**（时间轴节点、商业模式、财务数字）；**不得**为塞摘录而破坏模板结构或省略 kb-template 已有组件。",
       "有资料时必须体现（非纯段落糊弄）：项目快照含 .kb-summary；业务模式有流程时用 Journey Map；有术语则维护附录 B。",
       "时间轴 slot（#timeline）必须同时输出 <h3>8.1</h3>、<h3>8.2</h3>、<h3>8.3</h3> 三个子块；8.2 无推进中事项时写 Stub/缺乏资料 callout，禁止从 8.1 直跳 8.3。",
       "8.1 已发生事件：多条或 >4 条日级事件时用 .tl-tree（年→月→日嵌套 details），勿仅用「年份 + badge」扁平列表；结构对照 knowledge-base-generation/assets/components.html Section D。",

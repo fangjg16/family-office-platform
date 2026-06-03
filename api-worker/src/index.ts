@@ -256,7 +256,9 @@ async function handleUpload(
   const isText =
     mime.startsWith("text/") ||
     safeName.endsWith(".txt") ||
-    safeName.endsWith(".md");
+    safeName.endsWith(".md") ||
+    safeName.endsWith(".html") ||
+    safeName.endsWith(".htm");
   const isPdf = mime === "application/pdf" || safeName.endsWith(".pdf");
 
   let text = "";
@@ -641,6 +643,7 @@ async function handleChatViaHermes(
     chatMode: SkillIntent;
     citationMap: Record<string, string>;
     projectTitleHint: string;
+    files?: string[];
   },
 ): Promise<Response> {
   const jobId = crypto.randomUUID();
@@ -677,6 +680,7 @@ async function handleChatViaHermes(
     params.chatMode,
     params.projectId,
     params.projectTitleHint,
+    { userId: params.userId, conversationId: params.conversationId },
   );
 
   if (usesFullPackageCorpus(params.chatMode)) {
@@ -687,6 +691,7 @@ async function handleChatViaHermes(
         params.userId,
         params.conversationId,
         params.message,
+        params.files,
       );
       if (digest) instructions += digest;
     } catch {
@@ -915,6 +920,7 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
       chatMode,
       citationMap,
       projectTitleHint,
+      files: body.files,
     });
   }
 

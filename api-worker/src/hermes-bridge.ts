@@ -157,8 +157,13 @@ export async function handleHermesManifest(
       binds.push(conversationId);
     }
   } else {
-    sql += ` AND (d.scope = 'package' OR (d.scope = 'session' AND d.uploaded_by = ?))`;
-    binds.push(userId);
+    if (conversationId) {
+      sql += ` AND (d.scope = 'package' OR (d.scope = 'session' AND d.uploaded_by = ? AND d.conversation_id = ?))`;
+      binds.push(userId, conversationId);
+    } else {
+      sql += ` AND (d.scope = 'package' OR (d.scope = 'session' AND d.uploaded_by = ?))`;
+      binds.push(userId);
+    }
   }
 
   sql += ` ORDER BY d.created_at DESC LIMIT 200`;
@@ -201,7 +206,7 @@ export async function handleHermesManifest(
     syncedAt: new Date().toISOString(),
     files,
     instructions:
-      "Hermes：scope=package 为项目共享资料，无需 userId；对每个 parsed=true 的文件 GET textUrl 阅读全文。",
+      "Hermes：scope=package 为项目共享资料；scope=session 为本对话附件（须带 userId+conversationId）；scope=all 为二者合并。对每个 parsed=true 的文件 GET textUrl 阅读全文。",
   });
 }
 

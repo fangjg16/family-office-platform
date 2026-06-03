@@ -20,17 +20,78 @@ function sortChunksInDocOrder(a: ChunkRow, b: ChunkRow): number {
   return a.chunk_index - b.chunk_index;
 }
 
-/** 深度模式：优先注入项目资料包全部 chunk，再补 session；受 maxChars 限制 */
+export type ChunkSelectOptions = {
+  deep: boolean;
+  maxChars: number;
+  topK?: number;
+  /** 本轮用户刚上传或点名的附件，优先纳入摘录 */
+  prioritizeFilenames?: string[];
+};
+
+function filenameMatchesPriority(filename: string, priorities: string[]): boolean {
+  const fn = filename.toLowerCase();
+  return priorities.some((p) => {
+    const needle = p.trim().toLowerCase();
+    if (!needle) return false;
+    return fn.includes(needle) || needle.includes(fn);
+  });
+}
+
+function appendChunksWithinBudget(
+  selected: ChunkRow[],
+  total: { n: number },
+  maxChars: number,
+  list: ChunkRow[],
+): void {
+  for (const c of list) {
+    if (selected.some((x) => x.id === c.id)) continue;
+    const len = c.text.length;
+    if (total.n > 0 && total.n + len > maxChars) break;
+    selected.push(c);
+    total.n += len;
+  }
+}
+
+/** 深度模式：先本对话 session（含刚上传），再资料包；受 maxChars 限制 */
 export function selectChunksForChat(
   chunks: ChunkRow[],
   query: string,
-  options: { deep: boolean; maxChars: number; topK?: number },
+  options: ChunkSelectOptions,
 ): ChunkRow[] {
   const usable = chunks.filter((c) => !isPlaceholderChunkText(c.text));
   const pool = usable.length > 0 ? usable : chunks;
   const topK = options.topK ?? 8;
+  const priorities = (options.prioritizeFilenames ?? []).filter(Boolean);
 
   if (!options.deep) {
+    const sessionChunks = pool.filter((c) => c.scope === "session");
+    const packagePool = pool.filter((c) => (c.scope ?? PACKAGE_SCOPE) !== "session");
+    if (sessionChunks.length === 0 && priorities.length === 0) {
+      return scoreChunks(pool, query, topK);
+    }
+
+    const selected: ChunkRow[] = [];
+    const total = { n: 0 };
+
+    if (priorities.length > 0) {
+      appendChunksWithinBudget(
+        selected,
+        total,
+        options.maxChars,
+        sessionChunks.filter((c) => filenameMatchesPriority(c.filename ?? "", priorities)),
+      );
+    }
+    appendChunksWithinBudget(
+      selected,
+      total,
+      options.maxChars,
+      scoreChunks(sessionChunks, query, Math.min(12, sessionChunks.length)),
+    );
+
+    const rankedPackage = scoreChunks(packagePool, query, topK);
+    appendChunksWithinBudget(selected, total, options.maxChars, rankedPackage);
+
+    if (selected.length > 0) return selected;
     return scoreChunks(pool, query, topK);
   }
 
@@ -38,22 +99,26 @@ export function selectChunksForChat(
     .filter((c) => (c.scope ?? PACKAGE_SCOPE) !== "session")
     .sort(sortChunksInDocOrder);
   const sessionChunks = pool.filter((c) => c.scope === "session").sort(sortChunksInDocOrder);
-  const sessionHits =
-    sessionChunks.length > 0 ? scoreChunks(sessionChunks, query, Math.min(16, sessionChunks.length)) : [];
-
-  const ordered = [...packageChunks];
-  for (const c of sessionHits) {
-    if (!ordered.some((x) => x.id === c.id)) ordered.push(c);
-  }
 
   const selected: ChunkRow[] = [];
-  let total = 0;
-  for (const c of ordered) {
-    const len = c.text.length;
-    if (total > 0 && total + len > options.maxChars) break;
-    selected.push(c);
-    total += len;
+  const total = { n: 0 };
+
+  if (priorities.length > 0) {
+    appendChunksWithinBudget(
+      selected,
+      total,
+      options.maxChars,
+      sessionChunks.filter((c) => filenameMatchesPriority(c.filename ?? "", priorities)),
+    );
   }
+  appendChunksWithinBudget(selected, total, options.maxChars, sessionChunks);
+
+  const packageHits = scoreChunks(packageChunks, query, Math.min(32, packageChunks.length));
+  const orderedPackage = [
+    ...packageHits,
+    ...packageChunks.filter((c) => !packageHits.some((h) => h.id === c.id)),
+  ];
+  appendChunksWithinBudget(selected, total, options.maxChars, orderedPackage);
 
   if (selected.length > 0) return selected;
   return scoreChunks(pool, query, topK);
@@ -126,10 +191,14 @@ export async function selectChunksForChatWithVectors(
   env: EmbedEnv,
   chunks: ChunkRow[],
   query: string,
-  options: { deep: boolean; maxChars: number; topK?: number },
+  options: ChunkSelectOptions,
   queryEmbedding?: number[] | null,
 ): Promise<ChunkRow[]> {
   const topK = options.topK ?? 8;
+  const priorities = (options.prioritizeFilenames ?? []).filter(Boolean);
+  const sessionChunks = chunks.filter((c) => c.scope === "session");
+  const forceSessionFirst = priorities.length > 0 || sessionChunks.length > 0;
+
   const embedded = chunks.filter((c) => c.embedding && c.embedding.length > 0);
   if (!options.deep && embedded.length >= 3 && (env.DASHSCOPE_API_KEY || "").trim()) {
     try {
@@ -145,13 +214,25 @@ export async function selectChunksForChatWithVectors(
           topK,
         );
         if (ranked.length > 0) {
-          let total = 0;
           const selected: ChunkRow[] = [];
-          for (const c of ranked) {
-            if (total > 0 && total + c.text.length > options.maxChars) break;
-            selected.push(c);
-            total += c.text.length;
+          const total = { n: 0 };
+          if (forceSessionFirst) {
+            if (priorities.length > 0) {
+              appendChunksWithinBudget(
+                selected,
+                total,
+                options.maxChars,
+                sessionChunks.filter((c) => filenameMatchesPriority(c.filename ?? "", priorities)),
+              );
+            }
+            appendChunksWithinBudget(
+              selected,
+              total,
+              options.maxChars,
+              scoreChunks(sessionChunks, query, Math.min(12, sessionChunks.length)),
+            );
           }
+          appendChunksWithinBudget(selected, total, options.maxChars, ranked);
           if (selected.length > 0) return selected;
         }
       }

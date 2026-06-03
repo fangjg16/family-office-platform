@@ -3103,7 +3103,7 @@ export default function ConversationCenter() {
             multiple
             tabIndex={-1}
             className="pointer-events-none fixed left-0 top-0 h-px w-px opacity-0"
-            accept=".pdf,.txt,.md,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg"
+            accept=".pdf,.txt,.md,.html,.htm,.doc,.docx,.xlsx,.xls,.png,.jpg,.jpeg,text/html"
             onChange={(e) => {
               addFiles(e.target.files);
               e.currentTarget.value = "";
