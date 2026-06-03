@@ -628,6 +628,20 @@ function ragflowChatLooksLikeDirectService(url: string): boolean {
   }
 }
 
+const STREAM_TRUNCATED_FOOTER =
+  "\n\n---\n\n*（生成过程中连接中断，以上为已返回内容。可缩短问题后重试，或刷新页面再发。）*";
+
+function isStreamDisconnectError(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("network connection lost") ||
+    m.includes("failed to fetch") ||
+    m.includes("networkerror") ||
+    m.includes("load failed") ||
+    m.includes("aborted")
+  );
+}
+
 function formatRagflowRequestError(message: string, endpoint: string): string {
   const base = `请求失败：${message}`;
   if (!message.toLowerCase().includes("failed to fetch")) return base;
@@ -887,7 +901,8 @@ function UserBubble({ children, time }: { children: ReactNode; time?: string }) 
           className={cn(
             "inline-block max-w-[32ch] sm:max-w-[42ch] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50 break-words whitespace-pre-line",
             "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]",
-            "transition-transform duration-300 hover:scale-[1.005]"
+            "transition-transform duration-300 hover:scale-[1.005]",
+            "selection:bg-amber-100 selection:text-slate-900"
           )}
         >
           {children}
@@ -910,7 +925,8 @@ function AiShell({ children, time }: { children: ReactNode; time?: string }) {
         <div
           className={cn(
             "max-w-[92%] rounded-3xl rounded-bl-lg border border-border/80 bg-white px-5 py-4 text-sm leading-relaxed text-foreground",
-            "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.08)]"
+            "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.08)]",
+            "selection:bg-[hsl(var(--wine-deep)/0.14)] selection:text-foreground"
           )}
         >
           {children}
@@ -2191,6 +2207,11 @@ export default function ConversationCenter() {
 
     const sendConversationId = effectiveConversationId;
     let streamAssistantId: string | null = null;
+    let streamAccumulated = "";
+    let mergedCitationMap: Record<string, string> = {
+      ...NANNING_CITATION_MAP,
+      ...liveCitationMap,
+    };
     setSendingConversationId(sendConversationId);
     try {
       let uploadNotes = "";
@@ -2283,7 +2304,7 @@ export default function ConversationCenter() {
         body: JSON.stringify(requestBody),
       });
 
-      let mergedCitationMap = {
+      mergedCitationMap = {
         ...NANNING_CITATION_MAP,
         ...liveCitationMap,
       };
@@ -2295,8 +2316,14 @@ export default function ConversationCenter() {
       ) {
         const assistantId = streamAssistantId;
 
-        let streamPayload: { async?: boolean; jobId?: string; assistantMessageId?: string; answer?: string } | null =
-          null;
+        let streamPayload: {
+          async?: boolean;
+          jobId?: string;
+          assistantMessageId?: string;
+          answer?: string;
+          truncated?: boolean;
+        } | null = null;
+        streamAccumulated = "";
 
         await consumeChatSse(res, {
           onMeta: (meta) => {
@@ -2311,6 +2338,7 @@ export default function ConversationCenter() {
             });
           },
           onDelta: (text) => {
+            streamAccumulated += text;
             setLiveMessagesByConversation((prev) => ({
               ...prev,
               [effectiveConversationId]: (prev[effectiveConversationId] ?? []).map((m) =>
@@ -2321,6 +2349,7 @@ export default function ConversationCenter() {
           onDone: (done) => {
             streamPayload = {
               answer: done.answer,
+              truncated: done.truncated,
               ...(done.knowledgeNetworkHtml ? { knowledgeNetworkHtml: done.knowledgeNetworkHtml } : {}),
             };
           },
@@ -2367,9 +2396,13 @@ export default function ConversationCenter() {
           return;
         }
 
-        const rawAnswer =
+        let rawAnswer =
           (payload && typeof payload.answer === "string" ? payload.answer : "") ||
           "已收到消息，但未返回可展示答案。";
+        if (payload?.truncated === true) {
+          rawAnswer += STREAM_TRUNCATED_FOOTER;
+          setLiveError("模型输出因上游超时提前结束，已保留上文内容。");
+        }
         const answer = formatCitationMarkers(rawAnswer + uploadNotes, mergedCitationMap);
         const knFromApi =
           payload && typeof payload.knowledgeNetworkHtml === "string"
@@ -2497,20 +2530,37 @@ export default function ConversationCenter() {
       const raw =
         error instanceof Error ? error.message : "未知错误";
       const errMsg = formatRagflowRequestError(raw, AI_CHAT_ENDPOINT);
-      setLiveError(errMsg);
-      if (streamAssistantId) {
-        updateLiveMessage(effectiveConversationId, streamAssistantId, {
-          content: errMsg,
+      const partialStream =
+        streamAssistantId &&
+        streamAccumulated.trim().length > 80 &&
+        isStreamDisconnectError(raw);
+      if (partialStream) {
+        setLiveError("生成过程中网络中断，已保留上文内容。");
+        updateLiveMessage(effectiveConversationId, streamAssistantId!, {
+          content: formatCitationMarkers(
+            streamAccumulated + STREAM_TRUNCATED_FOOTER,
+            mergedCitationMap,
+          ),
           isStreaming: false,
           streamStatusLabel: undefined,
         });
+        flushChatPersist();
       } else {
-        appendLiveMessage(effectiveConversationId, {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          content: errMsg,
-          time: getCurrentDateTimeLabel(),
-        });
+        setLiveError(errMsg);
+        if (streamAssistantId) {
+          updateLiveMessage(effectiveConversationId, streamAssistantId, {
+            content: errMsg,
+            isStreaming: false,
+            streamStatusLabel: undefined,
+          });
+        } else {
+          appendLiveMessage(effectiveConversationId, {
+            id: `assistant-${Date.now()}`,
+            role: "assistant",
+            content: errMsg,
+            time: getCurrentDateTimeLabel(),
+          });
+        }
       }
     } finally {
       setSendingConversationId((cur) =>

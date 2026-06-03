@@ -7,6 +7,8 @@ export type ChatStreamMeta = {
 export type ChatStreamDone = {
   answer: string;
   knowledgeNetworkHtml?: string | null;
+  /** Worker 侧上游流提前结束，answer 为已生成部分 */
+  truncated?: boolean;
 };
 
 /** 消费 Worker SSE（event: meta | delta | done | error） */
@@ -79,6 +81,7 @@ export async function consumeChatSse(
           typeof parsed.knowledgeNetworkHtml === "string"
             ? parsed.knowledgeNetworkHtml
             : null,
+        truncated: parsed.truncated === true,
       });
     } else if (eventName === "error") {
       handlers.onError?.(typeof parsed.message === "string" ? parsed.message : "流式错误");
@@ -94,6 +97,9 @@ export async function consumeChatSse(
     buffer = lines.pop() ?? "";
 
     for (const line of lines) {
+      if (line.startsWith(":")) {
+        continue;
+      }
       if (line.startsWith("event:")) {
         flushEvent();
         eventName = line.slice(6).trim();

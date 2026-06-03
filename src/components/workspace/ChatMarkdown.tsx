@@ -374,7 +374,9 @@ export function ChatMarkdown({ text, variant }: ChatMarkdownProps) {
     <div
       className={cn(
         "chat-markdown min-w-0 max-w-full break-words text-sm leading-relaxed",
-        u ? "text-slate-50" : "text-foreground",
+        u
+          ? "text-slate-50 selection:bg-amber-100 selection:text-slate-900"
+          : "text-foreground selection:bg-[hsl(var(--wine-deep)/0.14)] selection:text-foreground",
       )}
     >
       <ReactMarkdown remarkPlugins={remarkPlugins} components={components}>

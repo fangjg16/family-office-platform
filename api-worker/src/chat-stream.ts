@@ -4,6 +4,23 @@ function sseLine(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
 
+/** 防止长时间检索/生成无字节导致浏览器或代理判定连接空闲而断开 */
+function scheduleSseKeepalive(
+  controller: ReadableStreamDefaultController<Uint8Array>,
+  intervalMs = 12_000,
+): () => void {
+  const enc = new TextEncoder();
+  const ping = () => {
+    try {
+      controller.enqueue(enc.encode(": keepalive\n\n"));
+    } catch {
+      /* stream already closed */
+    }
+  };
+  const id = setInterval(ping, intervalMs);
+  return () => clearInterval(id);
+}
+
 export function jfoSseError(message: string): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
   return new ReadableStream({
@@ -67,8 +84,23 @@ export function transformOpenAiStreamToJfo(
         controller.close();
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        controller.enqueue(enc.encode(sseLine("error", { message: msg })));
-        controller.close();
+        if (full.trim().length > 0) {
+          onDone?.(full);
+          controller.enqueue(
+            enc.encode(
+              sseLine("done", {
+                answer: full,
+                knowledgeNetworkHtml: null,
+                truncated: true,
+                truncateReason: msg,
+              }),
+            ),
+          );
+          controller.close();
+        } else {
+          controller.enqueue(enc.encode(sseLine("error", { message: msg })));
+          controller.close();
+        }
       } finally {
         reader.releaseLock();
       }
@@ -124,6 +156,7 @@ export function buildChatPipelineStream(
   const enc = new TextEncoder();
   return new ReadableStream({
     async start(controller) {
+      const stopKeepalive = scheduleSseKeepalive(controller);
       const emitStatus = (label: string) => {
         controller.enqueue(enc.encode(sseLine("status", { label })));
       };
@@ -143,6 +176,8 @@ export function buildChatPipelineStream(
         const msg = e instanceof Error ? e.message : String(e);
         controller.enqueue(enc.encode(sseLine("error", { message: msg })));
         controller.close();
+      } finally {
+        stopKeepalive();
       }
     },
   });
