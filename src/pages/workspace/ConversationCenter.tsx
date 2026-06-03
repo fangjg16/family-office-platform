@@ -138,8 +138,7 @@ function inferProjectIdFromConversationId(
 function previewFromMessages(msgs: LiveChatMessage[]): string {
   const last = [...msgs].reverse().find((m) => m.content.trim());
   if (!last) return "对话记录";
-  const text = last.content.trim().replace(/\s+/gu, " ");
-  return text.length > 48 ? `${text.slice(0, 48)}…` : text;
+  return last.content.trim().replace(/\s+/gu, " ");
 }
 
 /** 用该会话最后一条消息的时间/摘要修正侧栏（避免全部显示「刚打开页面」的时间） */
@@ -902,7 +901,7 @@ function UserBubble({ children, time }: { children: ReactNode; time?: string }) 
             "inline-block max-w-[32ch] sm:max-w-[42ch] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50 break-words whitespace-pre-line",
             "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]",
             "transition-transform duration-300 hover:scale-[1.005]",
-            "selection:bg-amber-100 selection:text-slate-900"
+            "selection:bg-[hsl(var(--wine-muted))] selection:text-[hsl(var(--warm-charcoal))]"
           )}
         >
           {children}
@@ -2120,7 +2119,7 @@ export default function ConversationCenter() {
           time: userTime,
         },
       ]);
-      updateConversationPreview(round.userLine.length > 42 ? `${round.userLine.slice(0, 42)}…` : round.userLine);
+      updateConversationPreview(round.userLine.trim());
       setDraftMessage("");
       setSelectedFiles([]);
       setShowUploadPanel(false);
@@ -2681,7 +2680,7 @@ export default function ConversationCenter() {
                   ) : (
                     <ChevronDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   )}
-                  <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-foreground">
+                  <span className="min-w-0 flex-1 text-[12px] font-semibold leading-snug text-foreground">
                     {group.projectName}
                   </span>
                   <span className="shrink-0 text-[10px] text-muted-foreground">
@@ -2723,7 +2722,7 @@ export default function ConversationCenter() {
                               <div className="flex items-start justify-between gap-2">
                                 <p
                                   className={cn(
-                                    "line-clamp-2 pr-1 text-[12px] leading-snug",
+                                    "line-clamp-3 break-words pr-1 text-[12px] leading-snug",
                                     active
                                       ? "font-semibold text-[hsl(var(--wine-deep))]"
                                       : "text-foreground",

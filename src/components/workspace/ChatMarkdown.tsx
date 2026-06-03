@@ -375,7 +375,7 @@ export function ChatMarkdown({ text, variant }: ChatMarkdownProps) {
       className={cn(
         "chat-markdown min-w-0 max-w-full break-words text-sm leading-relaxed",
         u
-          ? "text-slate-50 selection:bg-amber-100 selection:text-slate-900"
+          ? "text-slate-50 selection:bg-[hsl(var(--wine-muted))] selection:text-[hsl(var(--warm-charcoal))]"
           : "text-foreground selection:bg-[hsl(var(--wine-deep)/0.14)] selection:text-foreground",
       )}
     >
