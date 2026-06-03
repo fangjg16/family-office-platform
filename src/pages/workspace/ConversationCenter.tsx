@@ -127,8 +127,10 @@ function pruneEmptyLiveConversations(
   );
 }
 
+/** 输入框：单行起，随内容增高，超过上限后框内滚动 */
 const CHAT_INPUT_MIN_PX = 48;
-const CHAT_INPUT_MAX_PX = 168;
+/** 约 3 行正文 + 内边距，再高则框内滚动 */
+const CHAT_INPUT_MAX_PX = 88;
 
 function resizeChatComposer(el: HTMLTextAreaElement | null) {
   if (!el) return;
@@ -2830,6 +2832,20 @@ export default function ConversationCenter() {
             );
           })}
         </nav>
+        <div className="shrink-0 border-t border-border/60 px-4 py-3 md:rounded-bl-[1.65rem]">
+          {permissionSidebarHint ? (
+            <p className="mb-2 text-[10px] font-medium leading-snug text-muted-foreground">
+              当前权限：{permissionSidebarHint}
+            </p>
+          ) : null}
+          <Link
+            to="/"
+            className="flex items-center gap-1 rounded-full px-1 py-1 text-[11px] font-semibold text-muted-foreground hover:text-[hsl(var(--wine-deep))]"
+          >
+            <ArrowLeft className="h-3 w-3" />
+            返回官网
+          </Link>
+        </div>
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-gradient-to-b from-background/30 to-background/5 md:rounded-tr-[1.75rem]">
@@ -3207,22 +3223,7 @@ export default function ConversationCenter() {
       </div>
         </div>
 
-        <div className="flex shrink-0 flex-col border-t border-border/50 bg-white/70 backdrop-blur-md md:flex-row">
-          <div className="py-3 pl-6 pr-3 md:w-[17rem] md:shrink-0 md:rounded-bl-[1.65rem] md:border-r md:border-border/50">
-            {permissionSidebarHint ? (
-              <p className="mb-2.5 text-[10px] font-medium leading-snug text-muted-foreground">
-                当前权限：{permissionSidebarHint}
-              </p>
-            ) : null}
-            <Link
-              to="/"
-              className="flex items-center gap-1 rounded-full px-1 py-1 text-[11px] font-semibold text-muted-foreground hover:text-[hsl(var(--wine-deep))]"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              返回官网
-            </Link>
-          </div>
-          <footer className="relative flex-1 px-4 py-4 md:rounded-br-[1.65rem] md:px-6">
+        <footer className="relative shrink-0 border-t border-border/50 bg-white/70 px-4 py-4 backdrop-blur-md md:rounded-br-[1.65rem] md:px-6">
           <input
             id="jfo-chat-file-input"
             ref={fileInputRef}
@@ -3383,7 +3384,7 @@ export default function ConversationCenter() {
                       : "可直接输入；演示项目请按空格填入预设问题"
               }
               className={cn(
-                "min-h-12 max-h-[168px] min-w-0 flex-1 resize-none overflow-x-hidden overflow-y-auto rounded-2xl border border-input bg-white px-5 py-3 text-sm font-medium leading-relaxed break-words whitespace-pre-wrap shadow-inner [overflow-wrap:anywhere] placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wine-deep)/0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "min-h-12 max-h-[88px] min-w-0 flex-1 resize-none overflow-x-hidden overflow-y-auto rounded-2xl border border-input bg-white px-5 py-2.5 text-sm font-medium leading-relaxed break-words whitespace-pre-wrap shadow-inner [overflow-wrap:anywhere] placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wine-deep)/0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 draftMessage ? "text-foreground" : "text-muted-foreground",
                 (isCurrentConversationSending || playbackThinking) && "opacity-70",
               )}
