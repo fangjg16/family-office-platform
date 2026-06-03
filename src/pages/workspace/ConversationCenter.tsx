@@ -3248,23 +3248,28 @@ export default function ConversationCenter() {
                 }}
               >
                 {showUploadPanel ? (
-                  <>
-                    <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3">
-                      <div className="flex min-h-9 items-center gap-2 text-sm font-semibold text-foreground">
-                        <FileUp className="h-4 w-4 text-[hsl(var(--wine-deep))]" strokeWidth={2} />
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <FileUp
+                          className="h-4 w-4 shrink-0 text-[hsl(var(--wine-deep))]"
+                          strokeWidth={2}
+                          aria-hidden
+                        />
                         拖拽文件到此处上传
                       </div>
-                      <label
-                        htmlFor="jfo-chat-file-input"
-                        className="inline-flex h-9 cursor-pointer items-center justify-center rounded-full border border-[hsl(var(--wine-deep))] px-4 text-sm font-semibold text-[hsl(var(--wine-deep))] transition-colors hover:bg-[hsl(var(--wine-deep)/0.08)]"
-                      >
-                        选择文件
-                      </label>
+                      <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+                        AI 检索优先支持 .txt / .md；亦可上传 .htm / .html、PDF、Word、Excel、图片（PDF 等暂仅入库摘要）
+                      </p>
                     </div>
-                    <p className="mt-2 text-xs text-muted-foreground">
-                      AI 检索优先支持 .txt / .md；亦可上传 .htm / .html、PDF、Word、Excel、图片（PDF 等暂仅入库摘要）
-                    </p>
-                  </>
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex h-9 shrink-0 cursor-pointer items-center justify-center rounded-full border border-[hsl(var(--wine-deep))] px-4 text-sm font-semibold text-[hsl(var(--wine-deep))] transition-colors hover:bg-[hsl(var(--wine-deep)/0.08)]"
+                    >
+                      选择文件
+                    </button>
+                  </div>
                 ) : (
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 pb-3">
                     <p className="text-[11px] font-semibold text-muted-foreground">
@@ -3389,19 +3394,20 @@ export default function ConversationCenter() {
                 (isCurrentConversationSending || playbackThinking) && "opacity-70",
               )}
             />
-            <label
-              htmlFor="jfo-chat-file-input"
-              onClick={() => setShowUploadPanel(true)}
+            <button
+              type="button"
+              onClick={() => setShowUploadPanel((open) => !open)}
               className={cn(
                 "inline-flex h-12 w-12 shrink-0 cursor-pointer items-center justify-center rounded-full border text-muted-foreground transition-colors",
                 showUploadPanel || selectedFiles.length > 0
                   ? "border-[hsl(var(--wine-deep)/0.35)] bg-[hsl(var(--wine-deep)/0.1)] text-[hsl(var(--wine-deep))]"
                   : "border-input bg-white hover:bg-muted hover:text-foreground",
               )}
-              aria-label="选择并上传文件"
+              aria-label="展开或收起文件上传区"
+              aria-expanded={showUploadPanel}
             >
-              <Paperclip className="h-4 w-4" strokeWidth={2} />
-            </label>
+              <Paperclip className="h-4 w-4" strokeWidth={2} aria-hidden />
+            </button>
             <button
               type="button"
               onClick={() => void handleSend()}
