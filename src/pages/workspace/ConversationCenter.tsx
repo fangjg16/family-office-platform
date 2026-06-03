@@ -3134,7 +3134,7 @@ export default function ConversationCenter() {
                       </label>
                     </div>
                     <p className="mt-2 text-xs text-muted-foreground">
-                      AI 检索优先支持 .txt / .md；亦可上传 PDF、Word、Excel、图片（PDF 等暂仅入库摘要）
+                      AI 检索优先支持 .txt / .md；亦可上传 .htm / .html、PDF、Word、Excel、图片（PDF 等暂仅入库摘要）
                     </p>
                   </>
                 ) : (
