@@ -1,4 +1,5 @@
 import { citationMapFromSlots, getCitationSlots } from "./citations";
+import { handleGetChatAudit } from "./chat-audit-admin";
 import {
   handleGetActiveAgentJobs,
   handleGetChatState,
@@ -1141,6 +1142,8 @@ export default {
         } else {
           response = await handleGetActiveAgentJobs(env, routeUserId);
         }
+      } else if (path === "/api/admin/chat-audit" && request.method === "GET") {
+        response = await handleGetChatAudit(request, env, url);
       } else if (/^\/api\/users\/[^/]+\/chat-state$/u.test(path)) {
         const routeUserId = normalizeUserId(path.split("/")[3]);
         if (!routeUserId) {

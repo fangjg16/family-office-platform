@@ -2,21 +2,21 @@ import type { LiveChatMessage } from "@/workspace/chat-types";
 import type { PersistedConversation } from "@/workspace/chat-persistence";
 import { AI_CHAT_ENDPOINT, apiBaseFromChatEndpoint } from "@/lib/project-api";
 
+export type DeletedMessageRef = {
+  conversationId: string;
+  messageId: string;
+};
+
 export type RemoteChatState = {
   conversations: PersistedConversation[];
   messagesByConversation: Record<string, LiveChatMessage[]>;
   syncedAt?: string;
 };
 
-export type DeletedMessageRef = {
-  conversationId: string;
-  messageId: string;
-};
-
 export type ChatStatePatch = RemoteChatState & {
   /** 显式删除会话（级联删该会话全部消息） */
   deletedConversationIds?: string[];
-  /** 显式删除单条消息 */
+  /** 从 user_chat_messages 物理删除（删前写入审计表） */
   deletedMessageIds?: DeletedMessageRef[];
 };
 

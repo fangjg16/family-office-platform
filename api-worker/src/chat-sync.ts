@@ -1,4 +1,11 @@
 import type { AgentJobRow } from "./agent-jobs";
+import {
+  auditAllMessagesInConversationDeleted,
+  auditDeletedBeforeUserDelete,
+  auditDeletedFromChatRow,
+  auditMessageCreated,
+  listConversationMessageRows,
+} from "./chat-audit";
 
 type ChatSyncEnv = { DB: D1Database };
 
@@ -33,7 +40,7 @@ export type ChatStatePatchBody = {
   messagesByConversation?: Record<string, SyncChatMessage[]>;
   /** 显式删除会话（会级联删除该会话下所有消息） */
   deletedConversationIds?: string[];
-  /** 显式删除单条消息（删会话请用上项） */
+  /** 显式删除单条消息（删前写入审计；从 user_chat_messages 物理删除） */
   deletedMessageIds?: DeletedMessageRef[];
 };
 
@@ -83,6 +90,31 @@ async function upsertConversation(
     .run();
 }
 
+async function auditCreatedFromSyncMessage(
+  env: ChatSyncEnv,
+  userId: string,
+  conversationId: string,
+  m: SyncChatMessage,
+  sortIndex: number,
+  source: "chat_sync" | "agent_job",
+): Promise<void> {
+  if (!m.id) return;
+  const knHtml =
+    typeof m.knowledgeNetworkHtml === "string" ? m.knowledgeNetworkHtml : null;
+  await auditMessageCreated(env, {
+    userId,
+    conversationId,
+    messageId: m.id,
+    role: m.role === "assistant" ? "assistant" : "user",
+    content: m.content ?? "",
+    filesJson: m.files?.length ? JSON.stringify(m.files) : null,
+    knowledgeNetworkHtml: knHtml,
+    timeLabel: m.time ?? nowIso(),
+    sortIndex,
+    source,
+  });
+}
+
 async function replaceConversationMessages(
   env: ChatSyncEnv,
   userId: string,
@@ -90,6 +122,14 @@ async function replaceConversationMessages(
   msgs: SyncChatMessage[],
   now: string,
 ): Promise<number> {
+  const existing = await listConversationMessageRows(env, userId, conversationId);
+  const incomingIds = new Set(msgs.map((m) => m.id).filter(Boolean));
+  for (const row of existing) {
+    if (!incomingIds.has(row.id)) {
+      await auditDeletedFromChatRow(env, userId, row, "chat_sync");
+    }
+  }
+
   await env.DB.prepare(
     `DELETE FROM user_chat_messages WHERE user_id = ? AND conversation_id = ?`,
   )
@@ -126,6 +166,7 @@ async function replaceConversationMessages(
         now,
       )
       .run();
+    await auditCreatedFromSyncMessage(env, userId, conversationId, m, sortIndex, "chat_sync");
     idx = Math.max(idx, sortIndex + 1);
     count += 1;
   }
@@ -196,6 +237,12 @@ export async function applyChatStatePatch(
 
   let deletedConversations = 0;
   for (const convId of deletedConversationIds) {
+    await auditAllMessagesInConversationDeleted(
+      env,
+      userId,
+      convId,
+      "conversation_delete",
+    );
     await env.DB.prepare(
       `DELETE FROM user_chat_messages WHERE user_id = ? AND conversation_id = ?`,
     )
@@ -212,6 +259,12 @@ export async function applyChatStatePatch(
   let deletedMessages = 0;
   for (const ref of deletedMessageIds) {
     if (!ref.conversationId || !ref.messageId) continue;
+    await auditDeletedBeforeUserDelete(
+      env,
+      userId,
+      ref.conversationId,
+      ref.messageId,
+    );
     const r = await env.DB.prepare(
       `DELETE FROM user_chat_messages WHERE user_id = ? AND conversation_id = ? AND id = ?`,
     )
@@ -297,20 +350,23 @@ export async function syncCompletedAgentJobToChat(
     .first<{ max_idx: number | null }>();
   const sortIndex = (maxRow?.max_idx ?? -1) + 1;
 
-  await upsertChatMessage(
+  const msg: SyncChatMessage = {
+    id: messageId,
+    role: "assistant",
+    content: result.answer,
+    time: now,
+    sortIndex,
+    knowledgeNetworkHtml: result.knowledgeNetworkHtml,
+    pendingJobId: null,
+  };
+  await upsertChatMessage(env, userId, conversationId, msg, now);
+  await auditCreatedFromSyncMessage(
     env,
     userId,
     conversationId,
-    {
-      id: messageId,
-      role: "assistant",
-      content: result.answer,
-      time: now,
-      sortIndex,
-      knowledgeNetworkHtml: result.knowledgeNetworkHtml,
-      pendingJobId: null,
-    },
-    now,
+    msg,
+    sortIndex,
+    "agent_job",
   );
 }
 

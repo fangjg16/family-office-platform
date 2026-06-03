@@ -1,3 +1,5 @@
+import { auditAllMessagesInConversationDeleted } from "./chat-audit";
+
 export type ProjectPhase =
   | "Active（资源筹备中）"
   | "Completed（已签约）"
@@ -198,6 +200,12 @@ export async function deleteProjectCascade(
     .all<{ user_id: string; id: string }>();
 
   for (const c of convs ?? []) {
+    await auditAllMessagesInConversationDeleted(
+      env,
+      c.user_id,
+      c.id,
+      "conversation_delete",
+    );
     await env.DB.prepare(
       `DELETE FROM user_chat_messages WHERE user_id = ? AND conversation_id = ?`,
     )

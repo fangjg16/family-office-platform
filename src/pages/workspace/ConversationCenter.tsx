@@ -920,20 +920,41 @@ function conversationPath(c: SessionConversation): string {
   return `/app/chat/${c.projectId}/${c.id}`;
 }
 
-function UserBubble({ children, time }: { children: ReactNode; time?: string }) {
+function UserBubble({
+  children,
+  time,
+  onDeleteMessage,
+}: {
+  children: ReactNode;
+  time?: string;
+  onDeleteMessage?: () => void;
+}) {
   const displayTime = formatBubbleTimeLabel(time);
   return (
     <div className="flex justify-end">
       <div className="group inline-flex flex-col items-end">
-        <div
-          className={cn(
-            "inline-block max-w-[32ch] sm:max-w-[42ch] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50 break-words whitespace-pre-line",
-            "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]",
-            "transition-transform duration-300 hover:scale-[1.005]",
-            "selection:bg-[hsl(var(--wine-muted))] selection:text-[hsl(var(--warm-charcoal))]"
-          )}
-        >
-          {children}
+        <div className="flex items-start gap-1.5">
+          {onDeleteMessage ? (
+            <button
+              type="button"
+              onClick={onDeleteMessage}
+              className="mt-2 shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+              title="删除本条消息"
+              aria-label="删除本条消息"
+            >
+              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
+          ) : null}
+          <div
+            className={cn(
+              "inline-block max-w-[32ch] sm:max-w-[42ch] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50 break-words whitespace-pre-line",
+              "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]",
+              "transition-transform duration-300 hover:scale-[1.005]",
+              "selection:bg-[hsl(var(--wine-muted))] selection:text-[hsl(var(--warm-charcoal))]",
+            )}
+          >
+            {children}
+          </div>
         </div>
         {displayTime ? (
           <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
@@ -945,19 +966,40 @@ function UserBubble({ children, time }: { children: ReactNode; time?: string }) 
   );
 }
 
-function AiShell({ children, time }: { children: ReactNode; time?: string }) {
+function AiShell({
+  children,
+  time,
+  onDeleteMessage,
+}: {
+  children: ReactNode;
+  time?: string;
+  onDeleteMessage?: () => void;
+}) {
   const displayTime = formatBubbleTimeLabel(time);
   return (
     <div className="flex justify-start">
       <div className="group inline-flex flex-col items-start">
-        <div
-          className={cn(
-            "max-w-[92%] rounded-3xl rounded-bl-lg border border-border/80 bg-white px-5 py-4 text-sm leading-relaxed text-foreground",
-            "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.08)]",
-            "selection:bg-[hsl(var(--wine-deep)/0.14)] selection:text-foreground"
-          )}
-        >
-          {children}
+        <div className="flex items-start gap-1.5">
+          <div
+            className={cn(
+              "max-w-[92%] rounded-3xl rounded-bl-lg border border-border/80 bg-white px-5 py-4 text-sm leading-relaxed text-foreground",
+              "shadow-[0_8px_30px_-12px_rgba(15,23,42,0.08)]",
+              "selection:bg-[hsl(var(--wine-deep)/0.14)] selection:text-foreground",
+            )}
+          >
+            {children}
+          </div>
+          {onDeleteMessage ? (
+            <button
+              type="button"
+              onClick={onDeleteMessage}
+              className="mt-2 shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+              title="删除本条消息"
+              aria-label="删除本条消息"
+            >
+              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+            </button>
+          ) : null}
         </div>
         {displayTime ? (
           <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
@@ -1784,6 +1826,43 @@ export default function ConversationCenter() {
     setSelectedFiles([]);
     setShowUploadPanel(false);
   }, [effectiveConversationId]);
+
+  const deleteLiveMessage = useCallback(
+    (messageId: string) => {
+      if (!userId || !effectiveConversationId) return;
+      if (
+        !window.confirm(
+          "确定删除本条消息？所有设备将不再显示；运维审计日志仍会保留全文（含 AI 回复）。",
+        )
+      ) {
+        return;
+      }
+      const convId = effectiveConversationId;
+      const nextList = (liveMessagesByConversation[convId] ?? []).filter(
+        (m) => m.id !== messageId,
+      );
+      const nextMessages = {
+        ...liveMessagesByConversation,
+        [convId]: nextList,
+      };
+      skipNextAutoPersistRef.current = true;
+      setLiveMessagesByConversation(nextMessages);
+      SESSION_CONVERSATION_CACHE[userId] = {
+        conversations,
+        messagesByConversation: nextMessages,
+      };
+      flushChatPersist({
+        deletedMessageIds: [{ conversationId: convId, messageId }],
+      });
+    },
+    [
+      userId,
+      effectiveConversationId,
+      liveMessagesByConversation,
+      conversations,
+      flushChatPersist,
+    ],
+  );
 
   const liveMessages = useMemo(() => {
     if (!effectiveConversationId) return EMPTY_LIVE_CHAT_MESSAGES;
@@ -3007,19 +3086,37 @@ export default function ConversationCenter() {
                           streaming ? null : m.knowledgeNetworkHtml,
                         )
                       : null;
+                  const canDeleteMessage = !streaming;
+                  const deleteThisMessage = canDeleteMessage
+                    ? () => deleteLiveMessage(m.id)
+                    : undefined;
                   return m.role === "user" ? (
                     <div key={m.id} className="flex flex-col items-end gap-3">
                       {m.files && m.files.length > 0 ? (
                         <ChatSentFilesPanel files={m.files} />
                       ) : null}
                       {m.content.trim() && !isGenericFileOnlyUserText(m.content) ? (
-                        <UserBubble time={m.time}>
+                        <UserBubble time={m.time} onDeleteMessage={deleteThisMessage}>
                           <ChatMarkdown text={m.content} variant="user" />
                         </UserBubble>
+                      ) : canDeleteMessage &&
+                        (m.files?.length ?? 0) > 0 &&
+                        (!m.content.trim() || isGenericFileOnlyUserText(m.content)) ? (
+                        <div className="group flex justify-end">
+                          <button
+                            type="button"
+                            onClick={deleteThisMessage}
+                            className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
+                            title="删除本条消息"
+                            aria-label="删除本条消息"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+                          </button>
+                        </div>
                       ) : null}
                     </div>
                   ) : (
-                    <AiShell key={m.id} time={m.time}>
+                    <AiShell key={m.id} time={m.time} onDeleteMessage={deleteThisMessage}>
                       {m.isStreaming ? (
                         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
                           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />

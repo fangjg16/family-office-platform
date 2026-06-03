@@ -66,7 +66,8 @@ DashScope 千问
    - `conversations`：upsert 会话元数据
    - `messagesByConversation`：**按会话**替换该会话下全部消息（不影响其它会话）
    - `deletedConversationIds`：显式删会话（级联删消息）
-   - `deletedMessageIds`：`[{ conversationId, messageId }]` 显式删单条
+   - `deletedMessageIds`：`[{ conversationId, messageId }]` 显式删单条（删前写入 `chat_message_audit_log`）
+   - 运维查询见 `docs/CHAT-AUDIT.md`（`GET /api/admin/chat-audit`）
 2. 深度任务完成：Worker 直接 upsert `assistant-job-{jobId}` 到 D1，不依赖浏览器
 
 ### 深度（知识网络/尽调等）

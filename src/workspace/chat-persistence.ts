@@ -50,7 +50,6 @@ export async function loadChatStateForUser(
         syncedAt: remote.syncedAt,
       };
     } catch {
-      // 恢复深度任务失败时仍返回 D1 正文，避免整页当作「无云端数据」
       return {
         conversations: remote.conversations,
         messagesByConversation: sortMessagesByConversation(
@@ -93,15 +92,30 @@ function mergeMessagesByConversation(
   remote: Record<string, LiveChatMessage[]>,
   incoming: Record<string, LiveChatMessage[]>,
   deletedConversationIds: string[] = [],
+  deletedMessageIds: DeletedMessageRef[] = [],
 ): Record<string, LiveChatMessage[]> {
-  const deleted = new Set(deletedConversationIds);
+  const deletedConvs = new Set(deletedConversationIds);
+  const deletedMsgByConv = new Map<string, Set<string>>();
+  for (const ref of deletedMessageIds) {
+    if (!ref.conversationId || !ref.messageId) continue;
+    const set = deletedMsgByConv.get(ref.conversationId) ?? new Set<string>();
+    set.add(ref.messageId);
+    deletedMsgByConv.set(ref.conversationId, set);
+  }
   const keys = new Set([...Object.keys(remote), ...Object.keys(incoming)]);
   const merged: Record<string, LiveChatMessage[]> = {};
   for (const key of keys) {
-    if (deleted.has(key)) continue;
+    if (deletedConvs.has(key)) continue;
+    const dropIds = deletedMsgByConv.get(key);
     const byId = new Map<string, LiveChatMessage>();
-    for (const m of remote[key] ?? []) byId.set(m.id, m);
-    for (const m of incoming[key] ?? []) byId.set(m.id, m);
+    for (const m of remote[key] ?? []) {
+      if (dropIds?.has(m.id)) continue;
+      byId.set(m.id, m);
+    }
+    for (const m of incoming[key] ?? []) {
+      if (dropIds?.has(m.id)) continue;
+      byId.set(m.id, m);
+    }
     const list = Array.from(byId.values());
     if (list.length > 0) merged[key] = list;
   }
@@ -135,6 +149,7 @@ export async function persistChatStateForUser(
   };
 
   const deletedConversationIds = options.deletedConversationIds ?? [];
+  const deletedMessageIds = options.deletedMessageIds ?? [];
 
   if (!options.skipMerge) {
     try {
@@ -150,9 +165,10 @@ export async function persistChatStateForUser(
             remote.messagesByConversation,
             incoming.messagesByConversation,
             deletedConversationIds,
+            deletedMessageIds,
           ),
           deletedConversationIds,
-          deletedMessageIds: options.deletedMessageIds ?? [],
+          deletedMessageIds,
         };
       } else {
         return false;
