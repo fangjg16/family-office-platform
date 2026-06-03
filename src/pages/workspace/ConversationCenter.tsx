@@ -1000,6 +1000,13 @@ function MessageBubbleToolbar({
   );
 }
 
+/** 用户发出内容（文字 / 附件）共用 brand kit 酒红气泡 */
+const USER_MESSAGE_SHELL = cn(
+  "border border-[hsl(var(--wine-deep)/0.32)]",
+  "bg-gradient-to-br from-[hsl(var(--wine-deep))] to-[hsl(353_42%_28%)]",
+  "shadow-[0_8px_22px_-12px_hsl(var(--wine-deep)/0.42)]",
+);
+
 function UserBubble({
   children,
   time,
@@ -1019,8 +1026,8 @@ function UserBubble({
           <MessageBubbleToolbar copyText={copyText} onDeleteMessage={onDeleteMessage} />
           <div
             className={cn(
-              "inline-block max-w-[32ch] sm:max-w-[42ch] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50 break-words whitespace-pre-line",
-              "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]",
+              "inline-block max-w-[32ch] sm:max-w-[42ch] rounded-3xl rounded-br-lg px-5 py-3 text-sm font-medium leading-relaxed text-wine-deep-foreground break-words whitespace-pre-line",
+              USER_MESSAGE_SHELL,
               "transition-transform duration-300 hover:scale-[1.005]",
               "selection:bg-[hsl(var(--wine-muted))] selection:text-[hsl(var(--warm-charcoal))]",
             )}
@@ -1086,20 +1093,23 @@ function UploadSelectedFileIcon({ name }: { name: string }) {
   return <FileUp className="h-4 w-4 shrink-0 text-[hsl(var(--wine-deep))]" strokeWidth={2} aria-hidden />;
 }
 
-/** 对话内「已发送附件」：与用户气泡同色系，仅展示文件名（非上传引导） */
+/** 对话内「已发送附件」：与用户气泡同色系（brand kit 酒红），仅展示文件名 */
 function ChatSentFilesPanel({ files }: { files: readonly { name: string }[] }) {
   if (files.length === 0) return null;
   return (
     <div
       className={cn(
-        "w-full max-w-[min(100%,28rem)] rounded-2xl rounded-br-lg border border-slate-700/25",
-        "bg-gradient-to-br from-slate-800 to-slate-900 px-4 py-3",
-        "shadow-[0_2px_12px_-2px_rgba(15,23,42,0.12)]"
+        "w-full max-w-[min(100%,28rem)] rounded-2xl rounded-br-lg px-4 py-3",
+        USER_MESSAGE_SHELL,
       )}
     >
-      <div className="mb-2.5 flex items-center gap-2 border-b border-white/10 pb-2">
-        <Paperclip className="h-3.5 w-3.5 text-slate-400" strokeWidth={2} />
-        <span className="text-[11px] font-semibold tracking-wide text-slate-400">
+      <div className="mb-2.5 flex items-center gap-2 border-b border-wine-deep-foreground/15 pb-2">
+        <Paperclip
+          className="h-3.5 w-3.5 text-wine-deep-foreground/75"
+          strokeWidth={2}
+          aria-hidden
+        />
+        <span className="text-[11px] font-semibold tracking-wide text-wine-deep-foreground/80">
           已发送 {files.length} 个文件
         </span>
       </div>
@@ -1107,10 +1117,12 @@ function ChatSentFilesPanel({ files }: { files: readonly { name: string }[] }) {
         {files.map((f) => (
           <div
             key={f.name}
-            className="flex items-center justify-between gap-2 rounded-xl border border-white/[0.08] bg-white/[0.06] px-3 py-2.5"
+            className="flex items-center justify-between gap-2 rounded-xl border border-wine-deep-foreground/12 bg-black/[0.12] px-3 py-2.5"
           >
-            <span className="truncate text-xs font-medium text-slate-100">{f.name}</span>
-            <span className="shrink-0 text-[10px] font-semibold text-sky-400">已送达</span>
+            <span className="truncate text-xs font-medium text-wine-deep-foreground">
+              {f.name}
+            </span>
+            <span className="shrink-0 text-[10px] font-semibold text-wine-muted">已送达</span>
           </div>
         ))}
       </div>

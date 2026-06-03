@@ -199,12 +199,20 @@ export function ChatMarkdown({ text, variant }: ChatMarkdownProps) {
       </p>
     ),
     strong: ({ children }) => (
-      <strong className={u ? "font-bold text-white" : "font-semibold text-foreground"}>
+      <strong
+        className={u ? "font-bold text-wine-deep-foreground" : "font-semibold text-foreground"}
+      >
         {children}
       </strong>
     ),
     em: ({ children }) => (
-      <em className={u ? "text-slate-100 italic" : "text-foreground/90 italic"}>{children}</em>
+      <em
+        className={
+          u ? "text-wine-deep-foreground/90 italic" : "text-foreground/90 italic"
+        }
+      >
+        {children}
+      </em>
     ),
     del: ({ children }) => <del className="opacity-75">{children}</del>,
     ul: ({ children }) => <ul className="my-2 list-outside list-disc space-y-1 pl-5">{children}</ul>,
@@ -214,7 +222,10 @@ export function ChatMarkdown({ text, variant }: ChatMarkdownProps) {
     li: ({ children }) => <li className="leading-relaxed">{children}</li>,
     h1: ({ children }) => (
       <h1
-        className={cn("mb-2 mt-1 text-base font-bold", u ? "text-white" : "text-foreground")}
+        className={cn(
+          "mb-2 mt-1 text-base font-bold",
+          u ? "text-wine-deep-foreground" : "text-foreground",
+        )}
       >
         {children}
       </h1>
@@ -223,7 +234,7 @@ export function ChatMarkdown({ text, variant }: ChatMarkdownProps) {
       <h2
         className={cn(
           "mb-3 mt-5 border-b pb-2 text-[15px] font-bold tracking-tight first:mt-0",
-          u ? "border-white/20 text-white" : "border-border/70 text-foreground",
+          u ? "border-wine-deep-foreground/20 text-wine-deep-foreground" : "border-border/70 text-foreground",
         )}
       >
         {children}
@@ -231,14 +242,20 @@ export function ChatMarkdown({ text, variant }: ChatMarkdownProps) {
     ),
     h3: ({ children }) => (
       <h3
-        className={cn("mb-1.5 mt-1 text-sm font-semibold", u ? "text-slate-100" : "text-foreground")}
+        className={cn(
+          "mb-1.5 mt-1 text-sm font-semibold",
+          u ? "text-wine-deep-foreground" : "text-foreground",
+        )}
       >
         {children}
       </h3>
     ),
     h4: ({ children }) => (
       <h4
-        className={cn("mb-1.5 mt-1 text-sm font-semibold", u ? "text-slate-100" : "text-foreground")}
+        className={cn(
+          "mb-1.5 mt-1 text-sm font-semibold",
+          u ? "text-wine-deep-foreground" : "text-foreground",
+        )}
       >
         {children}
       </h4>
@@ -248,7 +265,7 @@ export function ChatMarkdown({ text, variant }: ChatMarkdownProps) {
         className={cn(
           "my-3 rounded-lg border px-3 py-2.5 text-[13px] leading-relaxed",
           u
-            ? "border-white/20 bg-white/5 text-slate-200"
+            ? "border-wine-deep-foreground/20 bg-black/10 text-wine-deep-foreground/90"
             : "border-primary/15 bg-primary/[0.04] text-foreground/85",
         )}
       >
@@ -375,7 +392,7 @@ export function ChatMarkdown({ text, variant }: ChatMarkdownProps) {
       className={cn(
         "chat-markdown min-w-0 max-w-full break-words text-sm leading-relaxed",
         u
-          ? "text-slate-50 selection:bg-[hsl(var(--wine-muted))] selection:text-[hsl(var(--warm-charcoal))]"
+          ? "text-wine-deep-foreground selection:bg-[hsl(var(--wine-muted))] selection:text-[hsl(var(--warm-charcoal))]"
           : "text-foreground selection:bg-[hsl(var(--wine-deep)/0.14)] selection:text-foreground",
       )}
     >
