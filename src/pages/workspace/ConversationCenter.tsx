@@ -1368,6 +1368,8 @@ export default function ConversationCenter() {
   const chatPersistTimerRef = useRef<number | null>(null);
   /** 云端 hydrate 后跳过首次自动 PUT，避免用未稳定 state 覆盖 D1 */
   const skipNextAutoPersistRef = useRef(false);
+  /** 中文输入法组词中：Enter 仅确认上屏，不触发发送 */
+  const chatImeComposingRef = useRef(false);
   const persistSnapshotRef = useRef({
     conversations: [] as SessionConversation[],
     liveMessagesByConversation: {} as Record<string, LiveChatMessage[]>,
@@ -3317,6 +3319,12 @@ export default function ConversationCenter() {
               type="text"
               value={draftMessage}
               onChange={(e) => setDraftMessage(e.target.value)}
+              onCompositionStart={() => {
+                chatImeComposingRef.current = true;
+              }}
+              onCompositionEnd={() => {
+                chatImeComposingRef.current = false;
+              }}
               onKeyDown={(e) => {
                 if (
                   playbackActive &&
@@ -3330,6 +3338,13 @@ export default function ConversationCenter() {
                   return;
                 }
                 if (e.key === "Enter") {
+                  if (
+                    e.nativeEvent.isComposing ||
+                    chatImeComposingRef.current ||
+                    e.keyCode === 229
+                  ) {
+                    return;
+                  }
                   e.preventDefault();
                   void handleSend();
                 }
