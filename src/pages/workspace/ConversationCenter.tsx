@@ -121,7 +121,26 @@ function pruneEmptyLiveConversations(
   convs: SessionConversation[],
   messagesByConversation: Record<string, LiveChatMessage[]>,
 ): SessionConversation[] {
-  return convs.filter((c) => conversationHasMessages(c, messagesByConversation));
+  return convs.filter(
+    (c) =>
+      c.variant === "blank" || conversationHasMessages(c, messagesByConversation),
+  );
+}
+
+function buildBlankSessionConversation(
+  projectId: string,
+  conversationId: string,
+  projectName: string,
+): SessionConversation {
+  return {
+    id: conversationId,
+    projectId,
+    title: `${projectName} · 全局分析`,
+    preview: "尚未发送消息",
+    updatedAt: getCurrentDateTimeLabel(),
+    files: [],
+    variant: "blank",
+  };
 }
 
 function inferProjectIdFromConversationId(
@@ -2179,6 +2198,15 @@ export default function ConversationCenter() {
     ).filter((m) => m.role === "user").length;
     const isFirstUserTurn = priorUserCount === 0;
 
+    if (isLiveAiMode && project && !conversations.some((c) => c.id === effectiveConversationId)) {
+      const blankConv = buildBlankSessionConversation(
+        projectId,
+        effectiveConversationId,
+        project.name,
+      );
+      setConversations((prev) => [blankConv, ...prev.filter((c) => c.id !== effectiveConversationId)]);
+    }
+
     appendLiveMessage(effectiveConversationId, {
       id: `user-${Date.now()}`,
       role: "user",
@@ -2663,8 +2691,22 @@ export default function ConversationCenter() {
           <button
             type="button"
             onClick={() => {
-              if (!projectId || !project) return;
+              if (!projectId || !project || !userId) return;
               const newId = `${projectId}-blank-${userId}-${Date.now()}`;
+              const newConv = buildBlankSessionConversation(
+                projectId,
+                newId,
+                project.name,
+              );
+              skipNextAutoPersistRef.current = true;
+              setConversations((prev) => [
+                newConv,
+                ...prev.filter((c) => c.id !== newId),
+              ]);
+              setLiveMessagesByConversation((prev) => ({
+                ...prev,
+                [newId]: prev[newId] ?? [],
+              }));
               setNewlyAddedConversationId(newId);
               if (newConversationTimerRef.current !== null) {
                 window.clearTimeout(newConversationTimerRef.current);

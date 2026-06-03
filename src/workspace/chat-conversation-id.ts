@@ -19,8 +19,14 @@ function conversationBelongsToProject(conversationId: string, projectId: string)
   );
 }
 
+/** 用户点击「新增对话」生成的空白线程 id */
+export function isBlankConversationId(projectId: string, conversationId: string): boolean {
+  return conversationId.startsWith(`${projectId}-blank-`);
+}
+
 /**
- * URL 未带 conversationId 时，选中该项目下「有消息」的会话（避免刷新后落到空的 -main）
+ * URL 未带 conversationId 时，选中该项目下「有消息」的会话（避免刷新后落到空的 -main）。
+ * 若 URL 为显式 blank 线程（可无消息），尊重用户选择，不抢跳回旧对话。
  */
 export function pickConversationIdForProject(
   projectId: string,
@@ -29,7 +35,8 @@ export function pickConversationIdForProject(
 ): string {
   const mainId = `${projectId}-main`;
   const urlId = conversationIdFromUrl?.trim();
-  if (urlId) {
+  if (urlId && conversationBelongsToProject(urlId, projectId)) {
+    if (isBlankConversationId(projectId, urlId)) return urlId;
     const urlMsgs = messagesByConversation[urlId];
     if (Array.isArray(urlMsgs) && urlMsgs.length > 0) return urlId;
   }
