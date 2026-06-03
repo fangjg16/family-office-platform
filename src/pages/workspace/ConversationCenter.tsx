@@ -127,6 +127,17 @@ function pruneEmptyLiveConversations(
   );
 }
 
+const CHAT_INPUT_MIN_PX = 48;
+const CHAT_INPUT_MAX_PX = 168;
+
+function resizeChatComposer(el: HTMLTextAreaElement | null) {
+  if (!el) return;
+  el.style.height = "auto";
+  const next = Math.min(Math.max(el.scrollHeight, CHAT_INPUT_MIN_PX), CHAT_INPUT_MAX_PX);
+  el.style.height = `${next}px`;
+  el.style.overflowY = el.scrollHeight > CHAT_INPUT_MAX_PX ? "auto" : "hidden";
+}
+
 function buildBlankSessionConversation(
   projectId: string,
   conversationId: string,
@@ -1370,6 +1381,7 @@ export default function ConversationCenter() {
   const skipNextAutoPersistRef = useRef(false);
   /** 中文输入法组词中：Enter 仅确认上屏，不触发发送 */
   const chatImeComposingRef = useRef(false);
+  const chatInputRef = useRef<HTMLTextAreaElement | null>(null);
   const persistSnapshotRef = useRef({
     conversations: [] as SessionConversation[],
     liveMessagesByConversation: {} as Record<string, LiveChatMessage[]>,
@@ -1383,6 +1395,10 @@ export default function ConversationCenter() {
   const [playbackMsgs, setPlaybackMsgs] = useState<DemoPlaybackTimelineMsg[]>([]);
   const [playbackRoundIndex, setPlaybackRoundIndex] = useState(0);
   const [playbackThinking, setPlaybackThinking] = useState(false);
+
+  useLayoutEffect(() => {
+    resizeChatComposer(chatInputRef.current);
+  }, [draftMessage]);
 
   useEffect(() => {
     const id = loadSessionUserId();
@@ -3314,11 +3330,15 @@ export default function ConversationCenter() {
             </div>
           ) : null}
 
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-            <input
-              type="text"
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <textarea
+              ref={chatInputRef}
+              rows={1}
               value={draftMessage}
-              onChange={(e) => setDraftMessage(e.target.value)}
+              onChange={(e) => {
+                setDraftMessage(e.target.value);
+                resizeChatComposer(e.target);
+              }}
               onCompositionStart={() => {
                 chatImeComposingRef.current = true;
               }}
@@ -3337,7 +3357,7 @@ export default function ConversationCenter() {
                   setDraftMessage(playbackRounds[playbackRoundIndex].userLine);
                   return;
                 }
-                if (e.key === "Enter") {
+                if (e.key === "Enter" && !e.shiftKey) {
                   if (
                     e.nativeEvent.isComposing ||
                     chatImeComposingRef.current ||
@@ -3355,15 +3375,15 @@ export default function ConversationCenter() {
               aria-label="对话输入"
               placeholder={
                 isLiveAiMode
-                  ? "输入消息；可说「查外部资料」等触发 Tavily 联网搜索"
+                  ? "输入消息；Shift+Enter 换行，Enter 发送；可说「查外部资料」触发联网"
                   : playbackActive
-                    ? "按空格填入下一句演示问题，Enter 发送"
+                    ? "按空格填入下一句演示问题；Shift+Enter 换行，Enter 发送"
                     : isBlankThread
                       ? "输入消息（需开启 Live 后才能真正发送）"
                       : "可直接输入；演示项目请按空格填入预设问题"
               }
               className={cn(
-                "h-12 min-h-[48px] flex-1 rounded-full border border-input bg-white px-5 text-sm font-medium shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wine-deep)/0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "min-h-12 max-h-[168px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-input bg-white px-5 py-3 text-sm font-medium leading-relaxed shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wine-deep)/0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 draftMessage ? "text-foreground" : "text-muted-foreground",
                 (isCurrentConversationSending || playbackThinking) && "opacity-70",
               )}
