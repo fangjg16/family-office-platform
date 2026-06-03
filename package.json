@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
+    "brand-kit:bundle": "node scripts/bundle-brand-kit.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

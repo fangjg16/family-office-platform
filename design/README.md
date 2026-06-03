@@ -9,7 +9,15 @@
 - 双击 `design/brand-kit.html`，或
 - 双击 `design/打开品牌规范.bat`
 
-`brand-kit.html` 与 `brand-tokens.css` 在同一目录，用 `file://` 即可。仅需联网加载 Google 字体（Noto Serif / Sans SC）。
+`brand-kit.html` 已**内联** `brand-tokens.css`（毛玻璃、色板变量、`.glass-bohemian*`），可**只下载这一个 HTML 文件**离线打开，效果与整包一致。仅需联网加载 Google 字体（Noto Serif / Sans SC）。
+
+修改 `brand-tokens.css` 后请运行：
+
+```bash
+pnpm brand-kit:bundle
+```
+
+会同步更新 `design/brand-kit.html` 与 `public/design/brand-kit.html`。
 
 **可选**：若已在跑 `npm run dev`，也可访问  
 `http://localhost:5173/family-office-platform/design/brand-kit.html`  
