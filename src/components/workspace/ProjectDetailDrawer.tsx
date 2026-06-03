@@ -10,6 +10,7 @@ import {
   type ProjectDetailTier,
 } from "@/workspace/project-details";
 import { ProjectMaterialsSection } from "@/components/workspace/ProjectMaterialsSection";
+import { ProjectKnowledgeNetworkSection } from "@/components/workspace/ProjectKnowledgeNetworkSection";
 import {
   canUserManageProjectMetadata,
   formatProjectCreatedAt,
@@ -238,6 +239,9 @@ export function ProjectDetailDrawer({
                 userId={userId}
                 canManage={chatOk && detailTier !== "guest"}
               />
+              {detailTier !== "guest" ? (
+                <ProjectKnowledgeNetworkSection projectId={project.id} userId={userId} />
+              ) : null}
             </>
           ) : userCreated ? (
             <>
@@ -271,6 +275,9 @@ export function ProjectDetailDrawer({
                 userId={userId}
                 canManage={chatOk && detailTier !== "guest"}
               />
+              {detailTier !== "guest" ? (
+                <ProjectKnowledgeNetworkSection projectId={project.id} userId={userId} />
+              ) : null}
             </>
           ) : (
             <>

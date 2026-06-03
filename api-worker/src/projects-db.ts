@@ -1,4 +1,5 @@
 import { auditAllMessagesInConversationDeleted } from "./chat-audit";
+import { deleteProjectKnowledgeNetwork } from "./project-knowledge-network";
 
 export type ProjectPhase =
   | "Active（资源筹备中）"
@@ -215,6 +216,11 @@ export async function deleteProjectCascade(
   await env.DB.prepare(`DELETE FROM user_conversations WHERE project_id = ?`)
     .bind(projectId)
     .run();
+  try {
+    await deleteProjectKnowledgeNetwork(env, projectId);
+  } catch {
+    /* R2/D1 缺失时仍删除项目行 */
+  }
   await env.DB.prepare(`DELETE FROM projects WHERE id = ?`).bind(projectId).run();
   return true;
 }

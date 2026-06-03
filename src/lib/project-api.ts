@@ -250,6 +250,48 @@ export async function uploadProjectPackageFile(
   }
 }
 
+export type ProjectKnowledgeNetworkMeta = {
+  version: number;
+  updatedAt: string;
+  updatedBy: string;
+  lastJobId: string | null;
+  changelog: string | null;
+  r2Key: string;
+};
+
+export type ProjectKnowledgeNetworkResponse = {
+  ok: boolean;
+  projectId: string;
+  hasKnowledgeNetwork: boolean;
+  meta: ProjectKnowledgeNetworkMeta | null;
+  html: string | null;
+  warning?: string;
+};
+
+export async function fetchProjectKnowledgeNetwork(
+  projectId: string,
+  userId: string,
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<ProjectKnowledgeNetworkResponse> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
+  const q = new URLSearchParams({ userId });
+  const res = await fetch(
+    `${base}/api/projects/${encodeURIComponent(projectId)}/knowledge-network?${q}`,
+  );
+  const data = (await res.json().catch(() => ({}))) as ProjectKnowledgeNetworkResponse & {
+    error?: string;
+    code?: string;
+  };
+  if (res.status === 403) {
+    throw new Error(data.error || "无权查看项目知识网络");
+  }
+  if (!res.ok) {
+    throw new Error(data.error || `知识网络加载失败（${res.status}）`);
+  }
+  return data;
+}
+
 export async function deleteProjectFile(
   projectId: string,
   documentId: string,

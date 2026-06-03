@@ -1,7 +1,8 @@
 import type { SkillIntent } from "./chat-modes";
 import { syncCompletedAgentJobToChat } from "./chat-sync";
+import { maybePersistProjectKnowledgeNetwork } from "./project-knowledge-network";
 
-export type AgentJobEnv = { DB: D1Database };
+export type AgentJobEnv = { DB: D1Database; FILES: R2Bucket };
 
 export type AgentJobStatus = "pending" | "running" | "completed" | "failed";
 
@@ -85,6 +86,18 @@ export async function completeAgentJob(
     .first<AgentJobRow>();
   if (row) {
     await syncCompletedAgentJobToChat(env, row, result);
+    try {
+      await maybePersistProjectKnowledgeNetwork(env, {
+        projectId: row.project_id,
+        userId: row.user_id,
+        skillIntent: row.skill_intent,
+        html: result.knowledgeNetworkHtml,
+        lastJobId: row.id,
+        answerSummary: result.answer,
+      });
+    } catch (e) {
+      console.error("project_knowledge_network persist failed", e);
+    }
   }
 }
 

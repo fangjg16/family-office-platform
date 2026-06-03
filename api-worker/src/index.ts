@@ -60,6 +60,11 @@ import {
   handleListProjects,
   handleUpdateProject,
 } from "./projects-routes";
+import { handleGetProjectKnowledgeNetwork } from "./project-knowledge-network-routes";
+import {
+  maybePersistProjectKnowledgeNetwork,
+  readProjectKnowledgeNetworkHtml,
+} from "./project-knowledge-network";
 import { decodePathProjectId } from "./projects-resolve";
 import {
   assertValidHermesBaseUrl,
@@ -703,6 +708,28 @@ async function handleChatViaHermes(
     { userId: params.userId, conversationId: params.conversationId },
   );
 
+  if (params.chatMode === "knowledge_network") {
+    try {
+      const existingKn = await readProjectKnowledgeNetworkHtml(env, params.projectId);
+      if (existingKn) {
+        const cap = 72_000;
+        const body =
+          existingKn.length > cap
+            ? `${existingKn.slice(0, cap)}\n<!-- truncated for prompt -->`
+            : existingKn;
+        instructions += `
+
+【项目当前知识网络 HTML — 增量更新基线】
+以下为该项目已发布版本（R2）。默认在现有 section 上增量修订；仅当用户明确要求「重新生成 / 全量重做」时才整页重写。
+\`\`\`html
+${body}
+\`\`\``;
+      }
+    } catch {
+      /* 无表或 R2 未就绪时跳过 */
+    }
+  }
+
   if (usesFullPackageCorpus(params.chatMode)) {
     try {
       const digest = await buildHermesMaterialsDigest(
@@ -1031,6 +1058,19 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     const { answer, llmBackend } = llmResult;
     const knowledgeNetworkHtml =
       chatMode === "knowledge_network" ? extractKnowledgeNetworkHtml(answer) : null;
+    if (knowledgeNetworkHtml && userId) {
+      try {
+        await maybePersistProjectKnowledgeNetwork(env, {
+          projectId,
+          userId,
+          skillIntent: chatMode,
+          html: knowledgeNetworkHtml,
+          answerSummary: answer,
+        });
+      } catch (e) {
+        console.error("project_knowledge_network persist failed", e);
+      }
+    }
     scheduleMemoryRefresh(answer);
     return json({
       answer,
@@ -1094,6 +1134,17 @@ export default {
         } else {
           response = json({ error: "Method Not Allowed" }, 405);
         }
+      } else if (
+        /^\/api\/projects\/[^/]+\/knowledge-network$/u.test(path) &&
+        request.method === "GET"
+      ) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        response = await handleGetProjectKnowledgeNetwork(
+          env,
+          projectId,
+          url.searchParams.get("userId"),
+          true,
+        );
       } else if (
         /^\/api\/projects\/[^/]+\/citations$/u.test(path) &&
         request.method === "GET"
