@@ -10,8 +10,10 @@ import {
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
+  Check,
   ChevronDown,
   ChevronRight,
+  Copy,
   FileSpreadsheet,
   FileUp,
   FileText,
@@ -920,13 +922,93 @@ function conversationPath(c: SessionConversation): string {
   return `/app/chat/${c.projectId}/${c.id}`;
 }
 
+async function copyPlainTextToClipboard(text: string): Promise<boolean> {
+  const trimmed = text.trim();
+  if (!trimmed) return false;
+  try {
+    await navigator.clipboard.writeText(trimmed);
+    return true;
+  } catch {
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = trimmed;
+      ta.setAttribute("readonly", "");
+      ta.style.position = "fixed";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.select();
+      const ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+      return ok;
+    } catch {
+      return false;
+    }
+  }
+}
+
+function MessageBubbleToolbar({
+  copyText,
+  onDeleteMessage,
+}: {
+  copyText?: string;
+  onDeleteMessage?: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  const canCopy = Boolean(copyText?.trim());
+  if (!canCopy && !onDeleteMessage) return null;
+
+  const handleCopy = () => {
+    void copyPlainTextToClipboard(copyText ?? "").then((ok) => {
+      if (!ok) return;
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  const actionBtnClass =
+    "rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100";
+
+  return (
+    <div className="mt-2 flex shrink-0 flex-col gap-0.5">
+      {canCopy ? (
+        <button
+          type="button"
+          onClick={handleCopy}
+          className={cn(actionBtnClass, "hover:bg-muted/80 hover:text-foreground")}
+          title={copied ? "已复制" : "复制本条内容"}
+          aria-label={copied ? "已复制" : "复制本条内容"}
+        >
+          {copied ? (
+            <Check className="h-3.5 w-3.5 text-emerald-600" strokeWidth={2} />
+          ) : (
+            <Copy className="h-3.5 w-3.5" strokeWidth={2} />
+          )}
+        </button>
+      ) : null}
+      {onDeleteMessage ? (
+        <button
+          type="button"
+          onClick={onDeleteMessage}
+          className={cn(actionBtnClass, "hover:bg-destructive/10 hover:text-destructive")}
+          title="删除本条消息"
+          aria-label="删除本条消息"
+        >
+          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 function UserBubble({
   children,
   time,
+  copyText,
   onDeleteMessage,
 }: {
   children: ReactNode;
   time?: string;
+  copyText?: string;
   onDeleteMessage?: () => void;
 }) {
   const displayTime = formatBubbleTimeLabel(time);
@@ -934,17 +1016,7 @@ function UserBubble({
     <div className="flex justify-end">
       <div className="group inline-flex flex-col items-end">
         <div className="flex items-start gap-1.5">
-          {onDeleteMessage ? (
-            <button
-              type="button"
-              onClick={onDeleteMessage}
-              className="mt-2 shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-              title="删除本条消息"
-              aria-label="删除本条消息"
-            >
-              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-          ) : null}
+          <MessageBubbleToolbar copyText={copyText} onDeleteMessage={onDeleteMessage} />
           <div
             className={cn(
               "inline-block max-w-[32ch] sm:max-w-[42ch] rounded-3xl rounded-br-lg border border-slate-700/10 bg-gradient-to-br from-slate-800 to-slate-900 px-5 py-3 text-sm font-medium leading-relaxed text-slate-50 break-words whitespace-pre-line",
@@ -969,10 +1041,12 @@ function UserBubble({
 function AiShell({
   children,
   time,
+  copyText,
   onDeleteMessage,
 }: {
   children: ReactNode;
   time?: string;
+  copyText?: string;
   onDeleteMessage?: () => void;
 }) {
   const displayTime = formatBubbleTimeLabel(time);
@@ -989,17 +1063,7 @@ function AiShell({
           >
             {children}
           </div>
-          {onDeleteMessage ? (
-            <button
-              type="button"
-              onClick={onDeleteMessage}
-              className="mt-2 shrink-0 rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-              title="删除本条消息"
-              aria-label="删除本条消息"
-            >
-              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-            </button>
-          ) : null}
+          <MessageBubbleToolbar copyText={copyText} onDeleteMessage={onDeleteMessage} />
         </div>
         {displayTime ? (
           <span className="mt-1 text-[10px] text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100">
@@ -3090,33 +3154,43 @@ export default function ConversationCenter() {
                   const deleteThisMessage = canDeleteMessage
                     ? () => deleteLiveMessage(m.id)
                     : undefined;
+                  const userCopyText =
+                    m.content.trim() && !isGenericFileOnlyUserText(m.content)
+                      ? m.content
+                      : (m.files?.length ?? 0) > 0
+                        ? m.files!.map((f) => f.name).join("\n")
+                        : "";
+                  const assistantCopyText = (knPrepared?.displayContent ?? rawAssistantText).trim();
                   return m.role === "user" ? (
                     <div key={m.id} className="flex flex-col items-end gap-3">
                       {m.files && m.files.length > 0 ? (
                         <ChatSentFilesPanel files={m.files} />
                       ) : null}
                       {m.content.trim() && !isGenericFileOnlyUserText(m.content) ? (
-                        <UserBubble time={m.time} onDeleteMessage={deleteThisMessage}>
+                        <UserBubble
+                          time={m.time}
+                          copyText={userCopyText}
+                          onDeleteMessage={deleteThisMessage}
+                        >
                           <ChatMarkdown text={m.content} variant="user" />
                         </UserBubble>
-                      ) : canDeleteMessage &&
-                        (m.files?.length ?? 0) > 0 &&
+                      ) : (m.files?.length ?? 0) > 0 &&
                         (!m.content.trim() || isGenericFileOnlyUserText(m.content)) ? (
                         <div className="group flex justify-end">
-                          <button
-                            type="button"
-                            onClick={deleteThisMessage}
-                            className="rounded-md p-1.5 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover:opacity-100"
-                            title="删除本条消息"
-                            aria-label="删除本条消息"
-                          >
-                            <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                          </button>
+                          <MessageBubbleToolbar
+                            copyText={userCopyText}
+                            onDeleteMessage={deleteThisMessage}
+                          />
                         </div>
                       ) : null}
                     </div>
                   ) : (
-                    <AiShell key={m.id} time={m.time} onDeleteMessage={deleteThisMessage}>
+                    <AiShell
+                      key={m.id}
+                      time={m.time}
+                      copyText={assistantCopyText}
+                      onDeleteMessage={deleteThisMessage}
+                    >
                       {m.isStreaming ? (
                         <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
                           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
