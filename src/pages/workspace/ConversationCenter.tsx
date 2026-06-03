@@ -3220,8 +3220,6 @@ export default function ConversationCenter() {
             </>
           )}
         </div>
-      </div>
-        </div>
 
         <footer className="relative shrink-0 border-t border-border/50 bg-white/70 px-4 py-4 backdrop-blur-md md:rounded-br-[1.65rem] md:px-6">
           <input
@@ -3430,8 +3428,9 @@ export default function ConversationCenter() {
             </button>
           </div>
         </footer>
+      </div>
         </div>
-    </div>
+      </div>
     </WorkspaceShell>
   );
 }
