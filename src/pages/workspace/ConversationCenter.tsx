@@ -3383,7 +3383,7 @@ export default function ConversationCenter() {
                       : "可直接输入；演示项目请按空格填入预设问题"
               }
               className={cn(
-                "min-h-12 max-h-[168px] min-w-0 flex-1 resize-none overflow-y-auto rounded-2xl border border-input bg-white px-5 py-3 text-sm font-medium leading-relaxed shadow-inner placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wine-deep)/0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
+                "min-h-12 max-h-[168px] min-w-0 flex-1 resize-none overflow-x-hidden overflow-y-auto rounded-2xl border border-input bg-white px-5 py-3 text-sm font-medium leading-relaxed break-words whitespace-pre-wrap shadow-inner [overflow-wrap:anywhere] placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wine-deep)/0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 draftMessage ? "text-foreground" : "text-muted-foreground",
                 (isCurrentConversationSending || playbackThinking) && "opacity-70",
               )}
