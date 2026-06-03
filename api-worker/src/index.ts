@@ -1136,8 +1136,18 @@ export default {
     try {
       let response: Response;
 
-      if (path === "/api/health" && request.method === "GET") {
+      if (
+        (path === "/api/health" || path === "/health") &&
+        request.method === "GET"
+      ) {
         response = await handleHealth(env);
+      } else if (path === "/" && request.method === "GET") {
+        response = json({
+          ok: true,
+          service: "jfo-api",
+          health: "/api/health",
+          hint: "家办 API 运行中；健康检查请访问 GET /api/health",
+        });
       } else if (path.startsWith("/api/hermes")) {
         const hermesRes = await tryHandleHermesRoutes(request, env, path);
         response = hermesRes ?? json({ error: "Not Found" }, 404);

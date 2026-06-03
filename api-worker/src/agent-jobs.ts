@@ -1,8 +1,10 @@
 import type { SkillIntent } from "./chat-modes";
+import { extractKnowledgeNetworkHtml } from "./chat-modes";
 import { syncCompletedAgentJobToChat } from "./chat-sync";
 import {
   getProjectKnowledgeNetworkMeta,
   readProjectKnowledgeNetworkHtml,
+  upsertProjectKnowledgeNetwork,
 } from "./project-knowledge-network";
 
 export type AgentJobEnv = { DB: D1Database; FILES: R2Bucket };
@@ -43,6 +45,37 @@ type JobFinalizeResult =
       answer: string;
     };
 
+async function trySalvageKnowledgeNetworkFromAnswer(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+  result: { answer: string; knowledgeNetworkHtml: string | null },
+): Promise<JobFinalizeResult | null> {
+  const salvaged =
+    (result.knowledgeNetworkHtml?.trim() || "") ||
+    extractKnowledgeNetworkHtml(result.answer) ||
+    "";
+  if (!salvaged) return null;
+
+  await upsertProjectKnowledgeNetwork(env, {
+    projectId: row.project_id,
+    userId: row.user_id,
+    html: salvaged,
+    lastJobId: row.id,
+    answerSummary: "Hermes 未 PUT，Worker 从回复提取 HTML 写入",
+  });
+
+  const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+  const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+  if (!meta || !html) return null;
+
+  const salvageNote = `\n\n已写入**项目知识网络 v${meta.version}**（Hermes 未执行 curl PUT，系统从回复中提取 HTML）。建议在 Railway 配置 \`JFO_INTERNAL_KEY\` 与 \`JFO_API_PUBLIC_BASE\`，下次走文件回传更稳。`;
+  const answer = result.answer.includes("项目知识网络 v")
+    ? result.answer
+    : `${result.answer}${salvageNote}`;
+
+  return { status: "ok", answer, knowledgeNetworkHtml: html };
+}
+
 async function finalizeKnowledgeNetworkJobResult(
   env: AgentJobEnv,
   row: AgentJobRow,
@@ -50,12 +83,18 @@ async function finalizeKnowledgeNetworkJobResult(
 ): Promise<JobFinalizeResult> {
   const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
   if (meta?.lastJobId !== row.id) {
+    const salvaged = await trySalvageKnowledgeNetworkFromAnswer(env, row, result);
+    if (salvaged) return salvaged;
+
+    const viaChatFallback = (row.hermes_run_id ?? "").startsWith("chat-fallback-");
     return {
       status: "failed",
       error: KN_PUT_FAIL_ERROR,
       answer:
         (result.answer.trim() || "Hermes 已结束，但未检测到与本任务绑定的 PUT 回传。") +
-        "\n\n请确认 Hermes 已执行 curl PUT，且 Worker 已部署知识网络文件回路。",
+        (viaChatFallback
+          ? "\n\n当前为**聊天兼容模式**（Runs 不可用），无法在容器内 curl PUT。请确认 Railway 已开放 POST /v1/runs，或让 Hermes 在回复中包含完整 ```html 代码块以便系统提取。"
+          : "\n\n请确认 Railway Hermes 已配置 JFO_INTERNAL_KEY、JFO_API_PUBLIC_BASE，且任务说明中的 curl PUT 已执行成功。"),
     };
   }
 

@@ -17,3 +17,5 @@ database_id = "8dc29473-1d34-4c72-90ea-bf720d073daa"
 [vars]
 ALLOWED_ORIGIN = "https://fangjg16.github.io"
 HERMES_MODEL = "qwen-plus"
+# Hermes / 知识网络文件回路拼 URL（与 Railway JFO_API_PUBLIC_BASE 一致）
+JFO_API_PUBLIC_BASE = "https://jfo-api.jfo-api.workers.dev"

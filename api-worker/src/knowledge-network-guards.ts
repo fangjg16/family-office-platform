@@ -21,7 +21,9 @@ export function checkKnowledgeNetworkPipelineReady(
         "知识网络文件回路未配置：Worker 缺少 JFO_INTERNAL_KEY（Hermes 无法 GET/PUT 回传 HTML）。",
     };
   }
-  const base = (env.JFO_API_PUBLIC_BASE ?? "").trim();
+  const base = (
+    env.JFO_API_PUBLIC_BASE ?? "https://jfo-api.jfo-api.workers.dev"
+  ).trim();
   if (!base) {
     return {
       ok: false,

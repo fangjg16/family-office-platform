@@ -3287,13 +3287,20 @@ export default function ConversationCenter() {
                             </p>
                           ) : null}
                         </>
+                      ) : /知识网络未通过 API 回传|knowledge-network\/current/i.test(
+                          m.content,
+                        ) ? (
+                        <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm leading-relaxed text-amber-950">
+                          Hermes 未执行 curl PUT 回传。请确认 Railway 已配置{" "}
+                          <span className="font-medium">JFO_INTERNAL_KEY</span> 与{" "}
+                          <span className="font-medium">JFO_API_PUBLIC_BASE</span>
+                          ，且 Runs 可用。若仍为聊天兼容模式，请让模型在回复末尾附完整{" "}
+                          <span className="font-medium">```html</span> 代码块，系统可自动提取写入。
+                        </p>
                       ) : /知识网络|\.html|文件位置/u.test(m.content) ? (
                         <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
-                          本次回复未附带可预览的 HTML 代码块（可能只写了 Hermes
-                          服务器上的文件名）。请再发：
-                          <span className="font-medium">
-                            「请把完整知识网络 HTML 放在 ```html 代码块里返回，不要只写文件路径。」
-                          </span>
+                          本次回复未附带可预览 HTML。请再发一句，要求把完整知识网络放在{" "}
+                          <span className="font-medium">```html</span> 代码块中返回。
                         </p>
                       ) : null}
                       <p className="mt-2 text-[11px] text-muted-foreground">
