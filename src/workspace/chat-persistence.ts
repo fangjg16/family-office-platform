@@ -57,10 +57,18 @@ export async function loadChatStateForUser(
 function mergeConversations(
   remote: PersistedConversation[],
   incoming: PersistedConversation[],
+  deletedConversationIds: string[] = [],
 ): PersistedConversation[] {
+  const deleted = new Set(deletedConversationIds);
   const byId = new Map<string, PersistedConversation>();
-  for (const c of remote) byId.set(c.id, c);
+  for (const c of remote) {
+    if (!deleted.has(c.id)) byId.set(c.id, c);
+  }
   for (const c of incoming) {
+    if (deleted.has(c.id)) {
+      byId.delete(c.id);
+      continue;
+    }
     const prev = byId.get(c.id);
     if (!prev || c.updatedAt.localeCompare(prev.updatedAt) >= 0) {
       byId.set(c.id, c);
@@ -74,10 +82,13 @@ function mergeConversations(
 function mergeMessagesByConversation(
   remote: Record<string, LiveChatMessage[]>,
   incoming: Record<string, LiveChatMessage[]>,
+  deletedConversationIds: string[] = [],
 ): Record<string, LiveChatMessage[]> {
+  const deleted = new Set(deletedConversationIds);
   const keys = new Set([...Object.keys(remote), ...Object.keys(incoming)]);
   const merged: Record<string, LiveChatMessage[]> = {};
   for (const key of keys) {
+    if (deleted.has(key)) continue;
     const byId = new Map<string, LiveChatMessage>();
     for (const m of remote[key] ?? []) byId.set(m.id, m);
     for (const m of incoming[key] ?? []) byId.set(m.id, m);
@@ -113,17 +124,24 @@ export async function persistChatStateForUser(
     deletedMessageIds: options.deletedMessageIds ?? [],
   };
 
+  const deletedConversationIds = options.deletedConversationIds ?? [];
+
   if (!options.skipMerge) {
     try {
       const remote = await fetchRemoteChatState(userId);
       if (remote) {
         patch = {
-          conversations: mergeConversations(remote.conversations, incoming.conversations),
+          conversations: mergeConversations(
+            remote.conversations,
+            incoming.conversations,
+            deletedConversationIds,
+          ),
           messagesByConversation: mergeMessagesByConversation(
             remote.messagesByConversation,
             incoming.messagesByConversation,
+            deletedConversationIds,
           ),
-          deletedConversationIds: options.deletedConversationIds ?? [],
+          deletedConversationIds,
           deletedMessageIds: options.deletedMessageIds ?? [],
         };
       } else {
@@ -132,6 +150,20 @@ export async function persistChatStateForUser(
     } catch {
       return false;
     }
+  } else if (deletedConversationIds.length > 0) {
+    patch = {
+      ...incoming,
+      conversations: incoming.conversations.filter(
+        (c) => !deletedConversationIds.includes(c.id),
+      ),
+      messagesByConversation: Object.fromEntries(
+        Object.entries(incoming.messagesByConversation).filter(
+          ([id]) => !deletedConversationIds.includes(id),
+        ),
+      ),
+      deletedConversationIds,
+      deletedMessageIds: options.deletedMessageIds ?? [],
+    };
   }
 
   return saveRemoteChatState(userId, patch);

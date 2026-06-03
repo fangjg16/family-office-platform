@@ -2034,6 +2034,8 @@ export default function ConversationCenter() {
     delete nextMessages[target.id];
     const nextConversations = conversations.filter((c) => c.id !== target.id);
 
+    skipNextAutoPersistRef.current = true;
+    SESSION_CONVERSATION_CACHE[userId] = { conversations: nextConversations };
     setConversations(nextConversations);
     setLiveMessagesByConversation(nextMessages);
 
@@ -2043,7 +2045,7 @@ export default function ConversationCenter() {
         conversations: nextConversations,
         messagesByConversation: nextMessages,
       },
-      { deletedConversationIds: [target.id] },
+      { deletedConversationIds: [target.id], skipMerge: true },
     );
 
     if (
