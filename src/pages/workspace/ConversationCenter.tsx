@@ -44,6 +44,11 @@ import {
 import { upsertApiProject } from "@/workspace/project-registry";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import { consumeChatSse } from "@/lib/chat-stream-client";
+import {
+  deriveConversationTopicHeuristic,
+  isSidebarTopicPreview,
+  topicFromFirstUserMessage,
+} from "@/lib/conversation-topic";
 import { isDeepSkillMessage, streamingAssistantDisplayText } from "@/lib/chat-intent";
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import {
@@ -135,13 +140,7 @@ function inferProjectIdFromConversationId(
   return null;
 }
 
-function previewFromMessages(msgs: LiveChatMessage[]): string {
-  const last = [...msgs].reverse().find((m) => m.content.trim());
-  if (!last) return "对话记录";
-  return last.content.trim().replace(/\s+/gu, " ");
-}
-
-/** 用该会话最后一条消息的时间/摘要修正侧栏（避免全部显示「刚打开页面」的时间） */
+/** 用该会话最后一条消息的时间修正侧栏；预览仅首条用户提问主题，不跟随后续消息 */
 function applyConversationMetadataFromMessages(
   convs: SessionConversation[],
   messagesByConversation: Record<string, LiveChatMessage[]>,
@@ -150,15 +149,12 @@ function applyConversationMetadataFromMessages(
     const msgs = messagesByConversation[c.id];
     if (!msgs?.length) return c;
     const lastTime = latestMessageTimeLabel(msgs);
-    const autoPreview = previewFromMessages(msgs);
-    const keepPreview =
-      c.preview.trim() &&
-      c.preview !== "尚未发送消息" &&
-      c.preview !== "对话进行中" &&
-      c.preview !== "对话记录";
+    const topicPreview = topicFromFirstUserMessage(msgs);
+    const looksLikeTopic =
+      isSidebarTopicPreview(c.preview) && c.preview.trim().length <= 20;
     return {
       ...c,
-      preview: keepPreview ? c.preview : autoPreview,
+      preview: looksLikeTopic ? c.preview : topicPreview,
       updatedAt: lastTime || c.updatedAt,
     };
   });
@@ -180,7 +176,7 @@ function reconcileConversationsWithMessages(
     byId.set(conversationId, {
       ...built,
       id: conversationId,
-      preview: previewFromMessages(msgs),
+      preview: topicFromFirstUserMessage(msgs),
       updatedAt: latestMessageTimeLabel(msgs) || getCurrentDateTimeLabel(),
       variant: "blank",
     });
@@ -2002,7 +1998,7 @@ export default function ConversationCenter() {
     });
   };
 
-  const updateConversationPreview = (preview: string, fileNames: string[] = []) => {
+  const updateConversationPreview = (preview?: string, fileNames: string[] = []) => {
     setConversations((prev) =>
       prev.map((t) =>
         t.id === effectiveConversationId
@@ -2012,7 +2008,7 @@ export default function ConversationCenter() {
                 fileNames.length > 0
                   ? Array.from(new Set([...t.files, ...fileNames]))
                   : t.files,
-              preview,
+              ...(preview !== undefined ? { preview } : {}),
               updatedAt:
                 latestMessageTimeLabel(
                   liveMessagesByConversation[effectiveConversationId],
@@ -2119,7 +2115,7 @@ export default function ConversationCenter() {
           time: userTime,
         },
       ]);
-      updateConversationPreview(round.userLine.trim());
+      updateConversationPreview(deriveConversationTopicHeuristic(round.userLine));
       setDraftMessage("");
       setSelectedFiles([]);
       setShowUploadPanel(false);
@@ -2176,6 +2172,11 @@ export default function ConversationCenter() {
     const apiMessage =
       trimmed || (fileNames.length > 0 ? buildFileUploadApiMessage(fileNames) : "");
 
+    const priorUserCount = (
+      liveMessagesByConversation[effectiveConversationId] ?? []
+    ).filter((m) => m.role === "user").length;
+    const isFirstUserTurn = priorUserCount === 0;
+
     appendLiveMessage(effectiveConversationId, {
       id: `user-${Date.now()}`,
       role: "user",
@@ -2184,7 +2185,14 @@ export default function ConversationCenter() {
       time: getCurrentDateTimeLabel(),
     });
     flushChatPersist();
-    updateConversationPreview(displayText || `已发送 ${fileNames.length} 个文件`, fileNames);
+    if (isFirstUserTurn) {
+      updateConversationPreview(
+        deriveConversationTopicHeuristic(apiMessage || displayText),
+        fileNames,
+      );
+    } else {
+      updateConversationPreview(undefined, fileNames);
+    }
     setDraftMessage("");
     setSelectedFiles([]);
     setShowUploadPanel(false);
@@ -2330,6 +2338,8 @@ export default function ConversationCenter() {
               mergedCitationMap = { ...mergedCitationMap, ...meta.citationMap };
               setLiveCitationMap((prev) => ({ ...prev, ...meta.citationMap! }));
             }
+            const topic = meta.conversationTopic?.trim();
+            if (topic) updateConversationPreview(topic);
           },
           onStatus: (label) => {
             updateLiveMessage(effectiveConversationId, assistantId, {
@@ -2443,6 +2453,12 @@ export default function ConversationCenter() {
       if (citationFromApi && Object.keys(citationFromApi).length > 0) {
         setLiveCitationMap((prev) => ({ ...prev, ...citationFromApi }));
       }
+
+      const topicFromApi =
+        payload && typeof payload === "object" && "conversationTopic" in payload
+          ? String((payload as { conversationTopic?: string }).conversationTopic ?? "").trim()
+          : "";
+      if (topicFromApi) updateConversationPreview(topicFromApi);
 
       const isAsyncJob =
         payload &&
@@ -2722,7 +2738,7 @@ export default function ConversationCenter() {
                               <div className="flex items-start justify-between gap-2">
                                 <p
                                   className={cn(
-                                    "line-clamp-3 break-words pr-1 text-[12px] leading-snug",
+                                    "line-clamp-1 break-words pr-1 text-[12px] leading-snug",
                                     active
                                       ? "font-semibold text-[hsl(var(--wine-deep))]"
                                       : "text-foreground",

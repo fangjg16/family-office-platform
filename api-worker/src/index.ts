@@ -40,6 +40,10 @@ import {
   transformOpenAiStreamToJfo,
 } from "./chat-stream";
 import { CHAT_STATUS, prepareStandardChatContext } from "./chat-context";
+import {
+  generateConversationTopic,
+  isFirstUserTurnInHistory,
+} from "./conversation-topic";
 import { invalidateChunkCache } from "./chunk-cache";
 import { embedDocumentChunks } from "./embeddings";
 import { chunkPlainText, isGenericProjectQuestion } from "./search";
@@ -931,6 +935,7 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
   const tavilyConfigured = Boolean((env.TAVILY_API_KEY || "").trim());
   const conversationKey = (body.conversationId ?? "").trim();
   const wantStream = body.stream !== false;
+  const firstUserTurn = isFirstUserTurnInHistory(history);
 
   const contextParams = {
     env,
@@ -970,14 +975,25 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
   try {
     if (wantStream) {
       const stream = buildChatPipelineStream(async (emitStatus) => {
+        const topicPromise = firstUserTurn
+          ? generateConversationTopic(env, message)
+          : null;
         const prepared = await prepareStandardChatContext({
           ...contextParams,
           onStatus: emitStatus,
         });
         emitStatus(CHAT_STATUS.generating);
-        const { upstream, llmBackend } = await fetchLlmUpstream(env, prepared.messages);
+        const [conversationTopic, llm] = await Promise.all([
+          topicPromise,
+          fetchLlmUpstream(env, prepared.messages),
+        ]);
+        const { upstream, llmBackend } = llm;
         return {
-          meta: { ...prepared.streamMeta, llmBackend },
+          meta: {
+            ...prepared.streamMeta,
+            llmBackend,
+            ...(conversationTopic ? { conversationTopic } : {}),
+          },
           upstream,
           onDone: (answer) => scheduleMemoryRefresh(answer),
         };
@@ -992,7 +1008,11 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     }
 
     const prepared = await prepareStandardChatContext(contextParams);
-    const { answer, llmBackend } = await callLlm(env, prepared.messages);
+    const [conversationTopic, llmResult] = await Promise.all([
+      firstUserTurn ? generateConversationTopic(env, message) : Promise.resolve(undefined),
+      callLlm(env, prepared.messages),
+    ]);
+    const { answer, llmBackend } = llmResult;
     const knowledgeNetworkHtml =
       chatMode === "knowledge_network" ? extractKnowledgeNetworkHtml(answer) : null;
     scheduleMemoryRefresh(answer);
@@ -1005,6 +1025,7 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
       skillIntent: chatMode,
       knowledgeNetworkHtml,
       llmBackend,
+      ...(conversationTopic ? { conversationTopic } : {}),
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

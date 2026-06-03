@@ -2,6 +2,8 @@ export type ChatStreamMeta = {
   citationMap?: Record<string, string>;
   projectId?: string;
   llmBackend?: string;
+  /** 首条用户提问生成的侧栏主题词 */
+  conversationTopic?: string;
 };
 
 export type ChatStreamDone = {
