@@ -1,3 +1,5 @@
+import { isKnowledgeNetworkMetaQuery } from "./knowledge-network-meta-query";
+
 /**
  * 网站对话 ↔ Hermes 16 skills 意图映射（内部用，用户不可见 skill 名）
  *
@@ -54,6 +56,7 @@ const INTENT_RULES: IntentRule[] = [
 
 export function detectSkillIntent(message: string): SkillIntent {
   const m = message.trim();
+  if (isKnowledgeNetworkMetaQuery(m)) return "standard";
   for (const { intent, re } of INTENT_RULES) {
     if (re.test(m)) return intent;
   }

@@ -1,3 +1,5 @@
+import { isKnowledgeNetworkMetaQuery } from "@/lib/knowledge-network-meta-query";
+
 /**
  * 与 api-worker chat-modes INTENT_RULES 对齐：非 standard 即深度/专项交付。
  * 前端用于：深度任务不走轻问 SSE 气泡、避免误报「流式响应异常」。
@@ -23,7 +25,7 @@ const DEEP_SKILL_PATTERNS: RegExp[] = [
 
 export function isDeepSkillMessage(message: string): boolean {
   const m = message.trim();
-  if (!m) return false;
+  if (!m || isKnowledgeNetworkMetaQuery(m)) return false;
   return DEEP_SKILL_PATTERNS.some((re) => re.test(m));
 }
 

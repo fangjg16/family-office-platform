@@ -72,7 +72,12 @@ import {
   buildKnowledgeNetworkModeInstructions,
   detectKnowledgeNetworkUpdateMode,
 } from "./knowledge-network-mode";
+import {
+  buildKnowledgeNetworkMetaAnswerText,
+  isKnowledgeNetworkMetaQuery,
+} from "./knowledge-network-meta-query";
 import { checkKnowledgeNetworkPipelineReady } from "./knowledge-network-guards";
+import { workspaceUserDisplayName } from "./workspace-display-names";
 import { decodePathProjectId } from "./projects-resolve";
 import {
   assertValidHermesBaseUrl,
@@ -997,6 +1002,32 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
   const history = (body.history ?? []).filter(
     (m) => m.role === "user" || m.role === "assistant",
   );
+
+  if (isKnowledgeNetworkMetaQuery(message)) {
+    let knMeta = null;
+    try {
+      knMeta = await getProjectKnowledgeNetworkMeta(env, projectId);
+    } catch {
+      /* D1 未就绪 */
+    }
+    const answer = buildKnowledgeNetworkMetaAnswerText(
+      knMeta,
+      projectTitleHint,
+      knMeta ? workspaceUserDisplayName(knMeta.updatedBy) : undefined,
+    );
+    return json({
+      answer,
+      citationMap,
+      projectId,
+      async: false,
+      chatMode: "standard",
+      skillIntent: "standard",
+      knowledgeNetworkMetaQuery: true,
+      ...(knMeta
+        ? { projectKnowledgeNetworkVersion: knMeta.version }
+        : { hasKnowledgeNetwork: false }),
+    });
+  }
 
   if (shouldRouteToHermes(chatMode) && isHermesAgentConfigured(env)) {
     return handleChatViaHermes(env, ctx, {
