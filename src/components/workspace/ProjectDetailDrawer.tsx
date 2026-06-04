@@ -240,7 +240,11 @@ export function ProjectDetailDrawer({
                 canManage={chatOk && detailTier !== "guest"}
               />
               {detailTier !== "guest" ? (
-                <ProjectKnowledgeNetworkSection projectId={project.id} userId={userId} />
+                <ProjectKnowledgeNetworkSection
+                  projectId={project.id}
+                  userId={userId}
+                  project={project}
+                />
               ) : null}
             </>
           ) : userCreated ? (
@@ -276,7 +280,11 @@ export function ProjectDetailDrawer({
                 canManage={chatOk && detailTier !== "guest"}
               />
               {detailTier !== "guest" ? (
-                <ProjectKnowledgeNetworkSection projectId={project.id} userId={userId} />
+                <ProjectKnowledgeNetworkSection
+                  projectId={project.id}
+                  userId={userId}
+                  project={project}
+                />
               ) : null}
             </>
           ) : (

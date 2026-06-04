@@ -10,7 +10,8 @@ import {
   uploadProjectKnowledgeNetwork,
   type ProjectKnowledgeNetworkResponse,
 } from "@/lib/project-api";
-import { getProjectRole } from "@/workspace/workspace-users";
+import { canPublishProjectKnowledgeNetwork } from "@/workspace/project-manage";
+import type { WorkspaceProject } from "@/workspace/projects";
 import {
   KNOWLEDGE_NETWORK_FULL_REGENERATE_PROMPT,
   KNOWLEDGE_NETWORK_INCREMENTAL_PROMPT,
@@ -24,6 +25,8 @@ import { Button } from "@/components/ui/button";
 type ProjectKnowledgeNetworkSectionProps = {
   projectId: string;
   userId: string;
+  /** 用于创建人上传权限（云端 proj-* 须传 createdBy） */
+  project?: Pick<WorkspaceProject, "id" | "createdBy">;
 };
 
 function formatKnDate(iso: string): string {
@@ -53,6 +56,7 @@ function updaterLabel(meta: { updatedBy: string; updatedByDisplayName?: string }
 export function ProjectKnowledgeNetworkSection({
   projectId,
   userId,
+  project,
 }: ProjectKnowledgeNetworkSectionProps) {
   const navigate = useNavigate();
   const [data, setData] = useState<ProjectKnowledgeNetworkResponse | null>(null);
@@ -68,10 +72,10 @@ export function ProjectKnowledgeNetworkSection({
   const useLive = ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT);
   const canPublish =
     useLive &&
-    (() => {
-      const role = getProjectRole(userId, projectId);
-      return role === "admin" || role === "core" || role === "mid";
-    })();
+    canPublishProjectKnowledgeNetwork(userId, {
+      id: project?.id ?? projectId,
+      createdBy: project?.createdBy ?? null,
+    });
 
   const reload = useCallback(async () => {
     if (!useLive || !userId) {
@@ -147,11 +151,14 @@ export function ProjectKnowledgeNetworkSection({
     }
     setViewVersion(num);
     setLoadingVersion(true);
+    setError(null);
     try {
       const html = await fetchProjectKnowledgeNetworkVersionHtml(projectId, num, userId);
       setViewHtml(html);
     } catch (e) {
       setError(e instanceof Error ? e.message : "历史版本加载失败");
+      setViewVersion("current");
+      setViewHtml(data?.html ?? null);
     } finally {
       setLoadingVersion(false);
     }

@@ -24,7 +24,7 @@ function WorkspaceChatRedirect() {
           const rows = await fetchProjectsFromApi();
           if (!cancelled) setApiProjects(rows);
         } catch {
-          /* 仍用种子项目 fallback */
+          /* 无 API 时列表为空 */
         }
       }
       if (!cancelled) setReady(true);

@@ -31,3 +31,16 @@ export function canUserManageProjectMetadata(
   if (getProjectRole(userId, project.id) === "admin") return true;
   return Boolean(project.createdBy && project.createdBy === userId);
 }
+
+/** 项目详情：上传/覆盖知识网络 HTML（与 Worker canPublishProjectKnowledgeNetwork 对齐） */
+export function canPublishProjectKnowledgeNetwork(
+  userId: string,
+  project: Pick<WorkspaceProject, "id" | "createdBy">,
+): boolean {
+  const uid = userId.trim();
+  if (!uid) return false;
+  const role = getProjectRole(uid, project.id);
+  if (role === "admin" || role === "core") return true;
+  const creator = (project.createdBy ?? "").trim();
+  return Boolean(creator && creator === uid);
+}

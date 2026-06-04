@@ -281,7 +281,7 @@ export default function ProjectOverview() {
       .catch((e) => {
         if (!cancelled) {
           setProjectsLoadError(
-            e instanceof Error ? e.message : "项目列表同步失败，仍显示本地种子项目",
+            e instanceof Error ? e.message : "项目列表同步失败，请稍后刷新",
           );
         }
       })

@@ -1,14 +1,11 @@
 import { loadChatStateForUser } from "@/workspace/chat-persistence";
 import { inferProjectIdFromConversationId } from "@/workspace/chat-conversation-id";
-import { ALL_PROJECTS } from "@/workspace/projects";
 import {
   getMergedProjects,
   getProjectById,
   sortProjectsForOverview,
 } from "@/workspace/project-registry";
 import { loadLastChatProjectId } from "@/workspace/session";
-
-const FALLBACK_SEED_PROJECT_ID = "nn-fresh-port";
 
 function pathForConversation(projectId: string, conversationId: string): string {
   if (conversationId === `${projectId}-main`) {
@@ -17,10 +14,10 @@ function pathForConversation(projectId: string, conversationId: string): string 
   return `/app/chat/${projectId}/${conversationId}`;
 }
 
-function pickSeedFallbackProjectId(): string {
+function pickFirstProjectChatPath(): string | null {
   const sorted = sortProjectsForOverview(getMergedProjects());
-  const seed = sorted.find((p) => ALL_PROJECTS.some((s) => s.id === p.id));
-  return seed?.id ?? ALL_PROJECTS[0]?.id ?? FALLBACK_SEED_PROJECT_ID;
+  const first = sorted[0];
+  return first ? `/app/chat/${first.id}` : null;
 }
 
 function resolveFromLastChatOrSeed(): string {
@@ -33,7 +30,7 @@ function resolveFromLastChatOrSeed(): string {
       return `/app/chat/${lastChat}`;
     }
   }
-  return `/app/chat/${pickSeedFallbackProjectId()}`;
+  return pickFirstProjectChatPath() ?? "/app/projects";
 }
 
 function resolveFromChatState(
@@ -73,12 +70,12 @@ function resolveFromChatState(
   return null;
 }
 
-/** 同步兜底：仅用上次打开的项目或种子项目（不读 localStorage） */
+/** 同步兜底：上次打开的项目或列表中第一个云端项目 */
 export function resolveChatEntryPath(_userId: string | null): string {
   return resolveFromLastChatOrSeed();
 }
 
-/** 顶部「对话中心」/ /app/chat：优先云端最近会话，否则上次项目或种子 */
+/** 顶部「对话中心」：优先云端最近会话，否则上次项目或项目总览 */
 export async function resolveChatEntryPathAsync(
   userId: string | null,
 ): Promise<string> {

@@ -1281,8 +1281,10 @@ export default {
         /^\/api\/projects\/[^/]+\/knowledge-network\/versions\/(\d+)$/u.test(path) &&
         request.method === "GET"
       ) {
+        const knVersionMatch =
+          /^\/api\/projects\/[^/]+\/knowledge-network\/versions\/(\d+)$/u.exec(path);
         const projectId = decodePathProjectId(path.split("/")[3] ?? "");
-        const version = Number(path.split("/")[5] ?? "0");
+        const version = Number(knVersionMatch?.[1] ?? "0");
         response = await handleGetProjectKnowledgeNetworkVersion(
           env,
           projectId,

@@ -1093,5 +1093,5 @@ const DEMOS: Record<string, ProjectResourceDemo> = {
 };
 
 export function getProjectResourceDemo(projectId: string): ProjectResourceDemo {
-  return DEMOS[projectId] ?? DEMOS.shrimp;
+  return DEMOS[projectId] ?? null;
 }

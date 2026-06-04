@@ -1,38 +1,26 @@
-import { ALL_PROJECTS } from "./projects";
 import type { WorkspaceRole, WorkspaceUser } from "./types";
 
 /** 内部预览环境统一密码 */
 export const MOCK_PASSWORD = "jfo2026";
 
-function fillRoles(role: WorkspaceRole): Record<string, WorkspaceRole> {
-  return Object.fromEntries(ALL_PROJECTS.map((p) => [p.id, role]));
-}
+export const GUEST_USER_ID = "janice-hi";
 
-/** 用户在各项目中的权限（主档位 + 项目级覆盖） */
+/** 无种子项目后的默认档位（云端 proj-* 未单独配置时使用） */
+const DEFAULT_ROLE_BY_USER: Record<string, WorkspaceRole> = {
+  "candice-guo": "admin",
+  "jimmy-huang": "core",
+  "jessica-hu": "mid",
+  "jensen-fang": "low",
+  "janice-hi": "guest",
+};
+
+/** 按项目 id 覆盖（仅云端项目需要时再增） */
 const PROJECT_ROLES: Record<string, Record<string, WorkspaceRole>> = {
-  "candice-guo": fillRoles("admin"),
-  "jimmy-huang": {
-    ...fillRoles("core"),
-    shrimp: "core",
-    "natgeo-rwa": "core",
-    "offshore-trust": "core",
-    "ip-invest": "mid",
-  },
-  "jessica-hu": {
-    ...fillRoles("mid"),
-    "digital-portal": "core",
-    "ip-invest": "core",
-    "edu-ma": "core",
-    "cross-trade": "low",
-  },
-  "jensen-fang": {
-    ...fillRoles("low"),
-    shrimp: "core",
-    "hk-us-equity": "mid",
-    "energy-ma": "mid",
-    "med-channel": "mid",
-  },
-  "janice-hi": fillRoles("guest"),
+  "candice-guo": {},
+  "jimmy-huang": {},
+  "jessica-hu": {},
+  "jensen-fang": {},
+  "janice-hi": {},
 };
 
 export const WORKSPACE_USERS: Record<string, WorkspaceUser> = {
@@ -126,11 +114,11 @@ export function getProjectRole(
   userId: string,
   projectId: string
 ): WorkspaceRole {
-  const map = PROJECT_ROLES[userId];
-  if (!map) return "guest";
-  if (map[projectId]) return map[projectId];
-  if (userId === GUEST_USER_ID) return "guest";
-  return "core";
+  const uid = userId.trim();
+  if (!uid) return "guest";
+  const override = PROJECT_ROLES[uid]?.[projectId];
+  if (override) return override;
+  return DEFAULT_ROLE_BY_USER[uid] ?? "guest";
 }
 
 /** 对话区与表格的展示档位（与旧 core/secondary/broker 对齐） */
@@ -162,6 +150,3 @@ export function roleLabelForProject(role: WorkspaceRole): string {
 export function canEnterChat(role: WorkspaceRole): boolean {
   return role !== "guest";
 }
-
-/** 访客账号 id（用于导航与弹窗判断） */
-export const GUEST_USER_ID = "janice-hi";

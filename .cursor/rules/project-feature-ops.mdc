@@ -11,7 +11,7 @@ alwaysApply: false
 1. **创建人**：`created_by` 落库；创建人可 **编辑**、**删除**（后端鉴权 + 前端入口）。
 2. **管理员代管**：平台 admin（如 `candice-guo`）可代管云端项目。
 3. **删除级联**：删项目时清理 D1（documents、chunks、agent_jobs、user_conversations/messages）与 R2 资料，避免孤儿数据。
-4. **种子 vs 云端**：演示种子项目（`shrimp` 等）不可通过 API 删改；仅 `proj-*` 等 D1 项目可管理。
+4. **项目来源**：演示种子已移除；总览与对话仅展示 D1 云端项目（`proj-*`），创建人可编辑/删除。
 5. **权限与 UI**：非创建人看不到编辑/删除；Guest 摘要与 Core 摘要字段若分开需可编辑。
 
 未在本轮范围的功能须在回复中写明，勿假装已支持。
