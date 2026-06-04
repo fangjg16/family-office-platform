@@ -114,8 +114,63 @@ For each item found, assess:
   - **不写 七 投资回报**: 投资人 IRR / MOIC 是 returns-analysis 的产物, 不是公开信息搜集的结果。即使 OM 中写了 'projected IRR 18%', 也只能作为'卖方声称'录入 七 的对比项, 不能作为投资回报本身。
   - 每条新增内容标注 certainty (默认 ⚪ 待确认 或 🔵 分析师推论)
   - 新增的 URL/文献来源同步登记到 附录 A
-- All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+## KB Handoff (mandatory — do not skip)
+
+This skill does **not** write HTML or edit the KB file directly. After Step 4, output the following Handoff Block in the chat response, then invoke `knowledge-base-generation` to render it. Omit any slot key that has no new findings.
+
+**Target slots** (subset, based on what was found): `snapshot`, `assets`, `legal-relationships`, `business-model`, `capital-structure`, `timeline`
+
+```
+---KB-HANDOFF---
+from-skill:   public-info-search
+target-slots: [<only the slots with new findings>]
+update-mode:  merge
+version-bump: minor | major    # minor if ≤3 slots; major if ≥4
+findings:
+  snapshot:                    # include only if new snapshot-level facts found
+    - field: <field name, e.g. 当前阶段>
+      value: <value>
+      certainty: ✅ | 🟡 <party> | 🔵 AI推论 | ⚪
+      source: [A-N]
+  assets:                      # include only if new asset/resource facts found
+    - item: <asset or resource name>
+      detail: <description>
+      certainty: ...
+      source: [...]
+  legal-relationships:
+    - entity: <canonical entity name>
+      role: 实控人 | 董事 | 关联方 | 顾问 | ...
+      detail: <detail>
+      certainty: ...
+      source: [...]
+  business-model:
+    - topic: <topic name, e.g. 中国出口合规路径>
+      status: 待调研 | 部分解答 | 研究结论 | 已解答
+      findings:
+        - <finding text, certainty tag, source>
+  capital-structure:
+    - field: <e.g. 历史融资轮次>
+      value: <value>
+      certainty: ...
+      source: [...]
+  timeline:                    # project-entity events only; no industry history
+    - date: <YYYY-MM-DD or YYYY-MM>
+      event: <event description>
+      relevance: 关键 | 重要 | 一般
+      certainty: ...
+      source: [...]
+new-sources:
+  - id: A-N
+    type: AI生成
+    title: <source title, e.g. TGA官网 BPC-157 Schedule 4公告>
+    url: <url>
+    excerpt: <verbatim 1-2 sentences from the source, max 200 chars>
+new-terms: [<any new technical/regulatory terms introduced>]
+---END-HANDOFF---
+```
+
+> Never write KB section HTML directly from this skill. **宏观背景数据**（行业大盘、政策环境等）只作为 `new-sources` 登记到附录 A，不写入任何 slot 的 findings 中。
+
 ## Important Notes
 
 - Always record the source URL or reference — every finding must be traceable.
@@ -124,3 +179,16 @@ For each item found, assess:
 - When a government portal shows a project status, capture the exact status label and date.
 - Comparable transaction data is often behind paywalls — note what is available vs. what requires paid access.
 - Respect data privacy — do not attempt to access non-public personal information.
+
+
+## 持续学习（Self-Evolution）
+
+每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+
+触发记录的条件：
+- 遇到当前指令未覆盖的特殊情况或边界案例
+- 用户给出了纠正或更好的建议
+- 发现值得重用的成功经验或模式
+- 原有指令出现歧义或冲突
+
+若认为核心指令需要改进，请主动告知用户并说明原因。

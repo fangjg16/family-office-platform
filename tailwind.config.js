@@ -83,6 +83,10 @@ export default {
             boxShadow: "0 0 0 6px rgba(14, 165, 233, 0)",
           },
         },
+        typing: {
+          "0%, 60%, 100%": { transform: "translateY(0)", opacity: "0.35" },
+          "30%": { transform: "translateY(-3px)", opacity: "1" },
+        },
         "scroll-hint": {
           "0%, 100%": {
             opacity: "0.2",
@@ -111,6 +115,7 @@ export default {
         "fade-up": "fade-up 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "fade-in": "fade-in 0.5s ease-out forwards",
         "pulse-dot": "pulse-dot 2s ease infinite",
+        typing: "typing 1s ease-in-out infinite",
         "scroll-hint": "scroll-hint 2.5s ease-in-out infinite",
         "login-blob":
           "login-blob 18s cubic-bezier(0.45, 0, 0.55, 1) infinite",

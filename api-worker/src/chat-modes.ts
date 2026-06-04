@@ -31,7 +31,7 @@ type IntentRule = { intent: SkillIntent; re: RegExp };
 
 /** 越靠前优先级越高（更具体的意图先匹配） */
 const INTENT_RULES: IntentRule[] = [
-  { intent: "knowledge_network", re: /知识网络|知识底座|knowledge\s*base|knowledge\s*network|生成.*html|更新\s*kb|项目知识网络|\[AI\].*知识网络|build project profile|organize what we know/u },
+  { intent: "knowledge_network", re: /知识网络|知识底座|knowledge\s*base|knowledge\s*network|生成.*html|生成\s*kb|更新\s*kb|项目知识网络|\[AI\].*知识网络|build project profile|organize what we know/u },
   { intent: "ic_memo", re: /投资委员会|ic\s*memo|ic备忘录|投资决策备忘录|立项备忘录|表决建议|条款清单|投委会|decision memo|prepare for ic|总结一下这个项目|write up the deal/u },
   { intent: "dd_checklist", re: /dd\s*checklist|尽调清单|diligence request|data room review|尽调跟踪|还要查什么|what do we still need to check|工作流清单/u },
   { intent: "dd_claim_audit", re: /声明审计|claim audit|verify claims|cross check|信息审计|矛盾|contradiction|审计.*声明|可信度|is this true|audit this/u },
@@ -100,7 +100,7 @@ const SKILL_PROMPTS: Record<Exclude<SkillIntent, "standard">, string[]> = {
     "若涉及五维：区位政策、功能设施、招商进度、建设状态、财务风险——每项 ✅/⚠️/❌ + 依据。",
   ],
   knowledge_network: [
-    "【项目知识网络 HTML】输出完整单文件 HTML（米色 Portable 版式）于 ```html 代码块；含 masthead、kb-summary、项目快照及有资料板块；内联 style + panel-switcher script。",
+    "【项目知识网络 HTML】在本条回复末尾附完整单文件 HTML（米色 Portable）于 ```html 代码块（含 <!DOCTYPE>）；前面可写简短摘要。禁止只写磁盘路径、禁止让用户再发一条消息补 HTML。",
   ],
   ic_memo: [
     "【投资委员会备忘录（草稿）】Markdown：投资概要、标的与交易、投资逻辑、主要风险与缓释、关键条款/交割条件、表决建议（通过/有条件/否决及条件）。",
@@ -158,7 +158,7 @@ export function skillIntentSystemLines(
   const lines = [...sharedCorpusLines(), ...SKILL_PROMPTS[intent]];
   if (intent === "knowledge_network") {
     lines.push(
-      `逻辑文件名：[AI] ${name}_知识网络.html；须把完整 HTML 放入回复的 \\\`\\\`\\\`html 代码块，勿只写磁盘路径。`,
+      `逻辑文件名：[AI] ${name}_知识网络.html；**同一条回复**末尾必须有 \\\`\\\`\\\`html 整页代码块（平台预览与入库依赖此块，一次交付完毕）。`,
     );
   }
   return lines;
@@ -183,6 +183,28 @@ export function extractKnowledgeNetworkHtml(answer: string): string | null {
   if (html.length < 200) return null;
   if (!/<html[\s>]/i.test(html) && !/kb-shell|项目知识网络/i.test(html)) return null;
   return html;
+}
+
+/** 无 ```html 围栏时，从正文抽取整页 HTML（Hermes 常只贴裸 HTML） */
+export function extractKnowledgeNetworkHtmlLoose(answer: string): string | null {
+  const fenced = extractKnowledgeNetworkHtml(answer);
+  if (fenced) return fenced;
+
+  const doctype = answer.match(/(<!DOCTYPE[\s\S]*?<\/html\s*>)/i);
+  if (doctype) {
+    const html = doctype[1].trim();
+    if (html.length >= 200) return html;
+  }
+
+  const htmlBlock = answer.match(/(<html[\s\S]*?<\/html\s*>)/i);
+  if (htmlBlock) {
+    const html = htmlBlock[1].trim();
+    if (html.length >= 200 && (/kb-shell|panel-switcher|项目知识网络/i.test(html) || html.length > 800)) {
+      return html;
+    }
+  }
+
+  return null;
 }
 
 /** 供前端快捷芯片等人话文案（不含 skill 名） */

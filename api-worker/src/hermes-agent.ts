@@ -1,5 +1,12 @@
-import { extractKnowledgeNetworkHtml, type SkillIntent } from "./chat-modes";
-import { buildHermesKnowledgeNetworkFileProtocol } from "./hermes-knowledge-network";
+import {
+  extractKnowledgeNetworkHtml,
+  extractKnowledgeNetworkHtmlLoose,
+  type SkillIntent,
+} from "./chat-modes";
+import {
+  buildHermesKnowledgeNetworkFileProtocol,
+  buildHermesKnowledgeNetworkRequiredReads,
+} from "./hermes-knowledge-network";
 import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
   listHermesRunApprovalUrls,
@@ -238,6 +245,7 @@ export function buildHermesAgentInstructions(
     const jobId = (ctx?.jobId ?? "").trim() || "unknown-job";
     const knMode = detectKnowledgeNetworkUpdateMode(ctx?.userMessage ?? "");
     lines.push(
+      buildHermesKnowledgeNetworkRequiredReads(),
       buildHermesKnowledgeNetworkFileProtocol(
         jfoBase,
         projectId,
@@ -470,8 +478,9 @@ export function finalizeHermesOutput(output: string, intent: SkillIntent): {
   knowledgeNetworkHtml: string | null;
 } {
   const answer = output.trim() || "（Hermes 已完成，但未返回可展示正文。）";
-  /** 知识网络正文以 Hermes PUT /api/hermes/.../knowledge-network/current 为准，不从回复解析 HTML */
   const knowledgeNetworkHtml =
-    intent === "knowledge_network" ? null : extractKnowledgeNetworkHtml(answer);
+    intent === "knowledge_network"
+      ? extractKnowledgeNetworkHtmlLoose(answer)
+      : extractKnowledgeNetworkHtml(answer);
   return { answer, knowledgeNetworkHtml };
 }

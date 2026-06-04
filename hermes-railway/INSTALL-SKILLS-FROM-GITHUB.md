@@ -1,44 +1,47 @@
-# 从 GitHub Raw 安装 Hermes Skills（免 nano）
+# 从 GitHub 安装 Hermes Skills（合域 v2.5 + 家办桥接）
 
-把合域 v2.2 的 16 个 skill + 家办桥接 `jfo-r2-materials` 都放在本仓库：
+源：**opportunistic-investments v2.5** → 同步到本仓库 `hermes-railway/`。
 
 ```text
-hermes-railway/skills/<skill-name>/SKILL.md
-hermes-railway/reference/STYLE_GUIDE.md
-hermes-railway/reference/skills_reference.md
+hermes-railway/
+├── skills/
+│   ├── jfo-r2-materials/          # 家办 R2 资料桥（仅网站）
+│   ├── knowledge-base-generation/   # ★ 整目录：SKILL + kb-template + assets + references
+│   └── …（其余 15 个 skill + 可选 knowledge/）
+├── reference/
+│   ├── STYLE_GUIDE.md
+│   ├── skills_reference.md
+│   └── README-hermes.md           # Hermes 速读（非完整 plugin README）
+├── install-jfo-skills-v25.sh        # Railway 容器一键安装
+└── SOUL-JFO-KB.md                   # 粘贴到 Dashboard → SOUL
 ```
 
-**不要**把 `opportunistic-investments v2.2` 整包提交到 Git（体积大、有 `.bak`）；已复制进 `hermes-railway/skills/`。
+**不要**把整包 `opportunistic-investments v2.5` 提交进 Git（体积、`.bak`）；只维护 `hermes-railway/`。
 
 ---
 
-## 第 1 步：推到 GitHub（你本机做一次）
+## 第 1 步：本机同步 v2.5 后 push
 
-在 PowerShell：
+修改 plugin 后，将 `heyu-opportunistic-investments/skills/*`、`STYLE_GUIDE.md`、`skills_reference.md` 复制到 `hermes-railway/`（或让助手用脚本同步），然后：
 
 ```powershell
 cd "c:\Users\jensenfang\Downloads\家办平台\family-office-platform"
-git add hermes-railway/skills hermes-railway/reference hermes-railway/INSTALL-SKILLS-FROM-GITHUB.md
+git add hermes-railway/
 git status
-git commit -m "Add Hermes skills (heyu v2.2 + jfo-r2-materials) for raw install"
+git commit -m "Sync Hermes skills to opportunistic v2.5 with full KB directory layout"
 git push origin main
 ```
 
-> 仓库须为 **Public**（或 Hermes 容器能访问的私有 Raw），否则 Raw URL 会 404。
-
-推送成功后，任意 skill 的 Raw 地址形如：
+验证 Raw（浏览器应显示原文，非 404）：
 
 ```text
-https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/skills/jfo-r2-materials/SKILL.md
+https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/skills/knowledge-base-generation/kb-template.html
+https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/skills/knowledge-base-generation/references/STYLE_GUIDE.md
 ```
-
-在浏览器打开上述链接，应直接看到 Markdown 原文（不是 404）。
 
 ---
 
-## 第 2 步：进 Railway 容器（仍需 SSH 一次，但不用 nano）
-
-完成 `ssh-keygen` 与 `railway.cmd login` 后：
+## 第 2 步：Railway SSH
 
 ```powershell
 railway.cmd ssh --project=c6d187c9-e149-4e27-b576-8d0c763f0d85 --environment=c3fbdd4a-fa30-4bcb-81c5-da20dc1b48b7 --service=eb8fc221-019c-4539-92e2-04e755375b6a
@@ -46,48 +49,47 @@ railway.cmd ssh --project=c6d187c9-e149-4e27-b576-8d0c763f0d85 --environment=c3f
 
 ---
 
-## 第 3 步：在容器里批量安装（复制整段）
+## 第 3 步：容器内安装（推荐脚本）
 
 ```bash
-BASE="https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/skills"
-SKILLS="jfo-r2-materials project-intake document-reorganize public-info-search knowledge-base-generation term-annotator comp-analysis dd-checklist dd-claim-audit background-check risk-matrix returns-analysis sensitivity-analysis value-creation-plan ic-memo gap-tracking node-monitoring"
-
-for s in $SKILLS; do
-  echo "=== Installing $s ==="
-  hermes skills install "$BASE/$s/SKILL.md" --name "$s" || echo "FAILED: $s"
-done
-
-hermes skills list | grep -E 'jfo-r2|project-intake|knowledge-base'
+curl -fsSL "https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/install-jfo-skills-v25.sh" -o /tmp/install-jfo-skills-v25.sh
+bash /tmp/install-jfo-skills-v25.sh
 ```
 
-装完可在 Hermes Dashboard → **Restart Gateway**，SKILLS 里搜索 `jfo`、`intake`。
+或手动确认 KB 目录：
+
+```bash
+ls -la ~/.hermes/skills/knowledge-base-generation/
+# 须有：SKILL.md  kb-template.html  assets/components.html  references/STYLE_GUIDE.md  references/README-hermes.md
+```
+
+**禁止**对 `knowledge-base-generation` 只执行 `hermes skills install .../SKILL.md`（会丢失模板）。
+
+其余 16 个 skill 可为单文件 `SKILL.md`；脚本会为每个 skill 拉取 `knowledge/README.md`（v2.5 学习笔记目录）。
+
+装完 → **Restart Gateway** → `hermes skills list | grep knowledge-base`
 
 ---
 
-## 只装桥接 skill（最小）
+## 第 4 步：SOUL（必做）
 
-```bash
-hermes skills install "https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/skills/jfo-r2-materials/SKILL.md" --name jfo-r2-materials
-```
+打开 `hermes-railway/SOUL-JFO-KB.md`，全文粘贴到 Railway Hermes **SOUL** 或 **CONFIG**。
+
+与 Worker 配合：网站发「生成知识网络」时，Worker 也会在 instructions 里写入「执行前必读」五条路径 + 文件 PUT 回路。
 
 ---
 
-## 第 4 步：SOUL / CONFIG（网页粘贴，不用 SSH）
+## 知识网络任务时的阅读顺序（v2.5）
 
-Dashboard → **CONFIG** 或 **SOUL**，追加：
-
-```markdown
-## 联合家办平台 · 资料来源
-
-当用户提到家办平台项目（projectId 如 nn-fresh-port）或「网站上传的资料」时：
-
-1. **禁止**默认本地项目文件夹里有尽调 PDF。
-2. **必须先**执行 skill `jfo-r2-materials`：GET manifest?scope=package，再 GET 各 textUrl（Header: Authorization: Bearer $JFO_INTERNAL_KEY）。
-3. 再用 project-intake、knowledge-base-generation 等处理已拉取的正文。
-4. 生成知识网络 HTML 时遵守合域 STYLE_GUIDE（见仓库 hermes-railway/reference/STYLE_GUIDE.md）。
-
-环境变量：JFO_API_PUBLIC_BASE、JFO_INTERNAL_KEY。
-```
+| 顺序 | 文件 | 作用 |
+|------|------|------|
+| 1 | `references/README-hermes.md` | 家办流程速读 |
+| 2 | `references/STYLE_GUIDE.md` | 版式与组件规范 |
+| 3 | `SKILL.md` | slot / 成熟度 / changelog |
+| 4 | `kb-template.html` | HTML 壳（勿改 JS/CSS） |
+| 5 | `assets/components.html` | 时间轴、topic 等片段 |
+| 6 | `jfo-r2-materials` | 网站资料 |
+| 7 | 生成 HTML → PUT + 回复 ` ```html ` |
 
 ---
 
@@ -95,17 +97,17 @@ Dashboard → **CONFIG** 或 **SOUL**，追加：
 
 | 问题 | 处理 |
 |------|------|
-| Raw 404 | 还没 `git push`，或分支不是 `main` |
-| install 401/失败 | 容器出网受限；改用手动 curl + 写到 ~/.hermes/skills/ |
-| Redeploy 后 skill 没了 | 容器无持久盘；Redeploy 后**再跑一遍**第 3 步，或挂 Railway Volume |
-| 16 个 skill 已存在 | `hermes skills list` 看是否重复；重复可 `hermes skills uninstall <name>` 后再装 |
+| Raw 404 | 未 push 或分支不是 `main` |
+| 无 kb-template | 用了旧版「只装 SKILL.md」→ 跑 `install-jfo-skills-v25.sh` |
+| Redeploy 后 skill 没了 | 无 Volume → Redeploy 后重跑安装脚本 |
+| STYLE_GUIDE 找不到 | 确认 `references/STYLE_GUIDE.md` 在 KB skill 目录内 |
 
 ---
 
-## 和「整包 opportunistic-investments v2.2」的关系
+## 与 Claude plugin 的关系
 
 | 位置 | 用途 |
 |------|------|
-| 你本机 `家办平台/opportunistic-investments v2.2/` | 本地备份 / Cowork 插件安装 |
-| GitHub `hermes-railway/skills/*` | **Hermes 用 Raw URL 安装的唯一来源** |
-| 网站 `family-office-platform` | 对话与上传，不装 plugin |
+| 本机 `opportunistic-investments v2.5/` | Cowork 安装 plugin（含 `commands/`） |
+| GitHub `hermes-railway/` | **Hermes 唯一安装源** |
+| 家办网站 | Worker 指挥 Hermes，不装 plugin |

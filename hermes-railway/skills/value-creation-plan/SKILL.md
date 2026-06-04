@@ -129,3 +129,16 @@ Report section contents:
 - For cross-border assets, include currency hedging and repatriation strategy as a value preservation measure.
 - The value creation plan feeds into `ic-memo` as supporting evidence for the investment thesis.
 - Track execution against plan post-acquisition — the plan should have measurable KPIs.
+
+
+## 持续学习（Self-Evolution）
+
+每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+
+触发记录的条件：
+- 遇到当前指令未覆盖的特殊情况或边界案例
+- 用户给出了纠正或更好的建议
+- 发现值得重用的成功经验或模式
+- 原有指令出现歧义或冲突
+
+若认为核心指令需要改进，请主动告知用户并说明原因。

@@ -27,6 +27,7 @@ import {
   X,
 } from "lucide-react";
 import { ChatMarkdown } from "@/components/workspace/ChatMarkdown";
+import { TypingLoader } from "@/components/ui/loader";
 import {
   KnowledgeNetworkPreview,
   prepareKnowledgeNetworkMessageDisplay,
@@ -1049,6 +1050,32 @@ function UserBubble({
         ) : null}
       </div>
     </div>
+  );
+}
+
+function ChatThinkingBadge({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5",
+        className,
+      )}
+    >
+      <TypingLoader size="sm" className="[&>div]:bg-[hsl(var(--wine-deep)/0.7)]" />
+      <span className="text-sm font-medium text-muted-foreground">{children}</span>
+    </div>
+  );
+}
+
+function ChatAgentStatusLine({ children }: { children: ReactNode }) {
+  return (
+    <p className="mt-2 whitespace-nowrap text-[11px] text-muted-foreground">{children}</p>
   );
 }
 
@@ -3240,12 +3267,7 @@ export default function ConversationCenter() {
                       onDeleteMessage={deleteThisMessage}
                     >
                       {m.isStreaming ? (
-                        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
-                          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
-                          <span className="text-sm font-medium text-muted-foreground">
-                            思考中…
-                          </span>
-                        </div>
+                        <ChatThinkingBadge className="mb-3">思考中…</ChatThinkingBadge>
                       ) : null}
                       {m.content.trim() ? (
                         <div
@@ -3267,12 +3289,9 @@ export default function ConversationCenter() {
                       ) : null}
                       {m.pendingJobId ? (
                         <div className="mt-3 flex flex-col gap-1.5">
-                          <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
-                            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
-                            <span className="text-sm font-medium text-muted-foreground">
-                              {m.jobProgressLabel?.trim() || "深度分析中，请稍候…"}
-                            </span>
-                          </div>
+                          <ChatThinkingBadge>
+                            {m.jobProgressLabel?.trim() || "深度分析中，请稍候…"}
+                          </ChatThinkingBadge>
                           <p className="text-[11px] text-muted-foreground/90">
                             可保持本页打开；刷新后会自动继续等待结果。
                           </p>
@@ -3287,42 +3306,27 @@ export default function ConversationCenter() {
                             </p>
                           ) : null}
                         </>
-                      ) : /知识网络未通过 API 回传|knowledge-network\/current/i.test(
+                      ) : /知识网络交付失败|未检测到 curl PUT|知识网络未通过 API/i.test(
                           m.content,
                         ) ? (
                         <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm leading-relaxed text-amber-950">
-                          Hermes 未执行 curl PUT 回传。请确认 Railway 已配置{" "}
-                          <span className="font-medium">JFO_INTERNAL_KEY</span> 与{" "}
-                          <span className="font-medium">JFO_API_PUBLIC_BASE</span>
-                          ，且 Runs 可用。若仍为聊天兼容模式，请让模型在回复末尾附完整{" "}
-                          <span className="font-medium">```html</span> 代码块，系统可自动提取写入。
-                        </p>
-                      ) : /知识网络|\.html|文件位置/u.test(m.content) ? (
-                        <p className="mt-3 rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-sm text-amber-950">
-                          本次回复未附带可预览 HTML。请再发一句，要求把完整知识网络放在{" "}
-                          <span className="font-medium">```html</span> 代码块中返回。
+                          本次未生成可预览的知识网络（回复末尾缺少完整{" "}
+                          <span className="font-medium">```html</span> 整页）。请点击「生成知识网络」重试；系统已要求<strong>一次回复</strong>即含整页 HTML，无需再发第二条消息。
                         </p>
                       ) : null}
-                      <p className="mt-2 text-[11px] text-muted-foreground">
+                      <ChatAgentStatusLine>
                         ● Master Agent · AI {m.isStreaming ? "处理中" : "返回"}
                         {m.pendingJobId ? " · 后台分析" : ""}
                         {knPrepared?.html ? " · 含知识网络 HTML" : ""}
-                      </p>
+                      </ChatAgentStatusLine>
                     </AiShell>
                   );
                 })
               )}
               {isCurrentConversationSending && !hasStreamingAssistantInThread ? (
                 <AiShell>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
-                    <span className="text-sm font-medium text-muted-foreground">
-                      思考中...
-                    </span>
-                  </div>
-                  <p className="mt-2 whitespace-nowrap text-[11px] text-muted-foreground">
-                    ● Master Agent · AI 处理中
-                  </p>
+                  <ChatThinkingBadge>思考中…</ChatThinkingBadge>
+                  <ChatAgentStatusLine>● Master Agent · AI 处理中</ChatAgentStatusLine>
                 </AiShell>
               ) : null}
             </>
@@ -3351,13 +3355,8 @@ export default function ConversationCenter() {
               )}
               {playbackThinking ? (
                 <AiShell>
-                  <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-muted/25 px-3 py-1.5">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[hsl(var(--wine-deep)/0.7)]" />
-                    <span className="text-sm font-medium text-muted-foreground">思考中...</span>
-                  </div>
-                  <p className="mt-2 whitespace-nowrap text-[11px] text-muted-foreground">
-                    ● Master Agent · 处理中
-                  </p>
+                  <ChatThinkingBadge>思考中…</ChatThinkingBadge>
+                  <ChatAgentStatusLine>● Master Agent · 处理中</ChatAgentStatusLine>
                 </AiShell>
               ) : null}
             </>

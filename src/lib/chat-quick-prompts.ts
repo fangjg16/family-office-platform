@@ -5,6 +5,10 @@ export const CHAT_QUICK_PROMPTS: { label: string; message: string }[] = [
   { label: "尽调清单", message: "生成尽调清单，标出已有和还缺的材料" },
   { label: "风险矩阵", message: "做一版风险矩阵，列主要风险和缓释建议" },
   { label: "IC 备忘录", message: "写一版投资委员会备忘录草稿" },
-  { label: "知识网络", message: "生成项目知识网络" },
+  {
+    label: "知识网络",
+    message:
+      "生成项目知识网络 HTML。本条回复末尾须附完整 ```html 整页，前面可写简短摘要。",
+  },
   { label: "查外部资料", message: "查外部资料：补充这个项目公开信息并与现有材料对照" },
 ];

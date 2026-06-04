@@ -234,3 +234,16 @@ If multiple files were uploaded, also invoke `document-reorganize` in parallel d
 - When technical terms appear in the source materials (e.g., 构网型逆变器, LFP, AEMO, DA, FIRB), do not silently include them in the KB — delegate to `term-annotator` so they receive footnote definitions.
 - **Project naming is a one-time decision with permanent downstream consequences**. If unsure between single-asset and multi-asset, ask once before generating the KB — re-naming later requires re-renumbering every per-asset reference. Default to multi-asset when in doubt: a single-asset deal can always be rendered without partitioning, but a multi-asset deal mis-rendered as single-asset hides material information.
 - **Asymmetric multi-asset data is the rule, not the exception** in opportunistic investing. One asset is always more documented than the others. The plugin must surface this asymmetry loudly, not paper over it. Every section, every callout, every chat response must distinguish "we have data for asset X" from "we have data for the deal".
+
+
+## 持续学习（Self-Evolution）
+
+每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+
+触发记录的条件：
+- 遇到当前指令未覆盖的特殊情况或边界案例
+- 用户给出了纠正或更好的建议
+- 发现值得重用的成功经验或模式
+- 原有指令出现歧义或冲突
+
+若认为核心指令需要改进，请主动告知用户并说明原因。

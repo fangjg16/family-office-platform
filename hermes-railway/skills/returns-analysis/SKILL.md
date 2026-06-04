@@ -96,8 +96,59 @@ Report section contents:
   - 五: 仅在与投资人资金安排相关的部分补充 (e.g. 自有资金占比、债务杠杆假设)
   - **不写 四**: 目标公司的收入模型、客户、定价属于 public-info-search 的范畴，本 skill 只消费这些假设、不写入它们
   - 每条假设 trace 回 KB 中对应 section + 来源 + certainty。🟡/⚪ 假设须显式高亮
-- All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+## KB Handoff (mandatory — do not skip)
+
+This skill does **not** write HTML or edit the KB file directly. After Step 6, output the following Handoff Block in the chat response, then invoke `knowledge-base-generation` to render it.
+
+**Target slots**: `returns` (primary), `capital-structure` (supplementary, only if new capital-structure facts arise from modeling)
+
+```
+---KB-HANDOFF---
+from-skill:   returns-analysis
+target-slots: [returns]        # add capital-structure only if new facts
+update-mode:  replace          # returns is always replaced with the latest model
+version-bump: minor
+findings:
+  returns:
+    model-type: development-sell | development-hold | acquisition-operating | acquisition-turnaround | jv
+    currency-primary: <AUD | USD | CNY | ...>
+    currency-secondary: RMB    # always include for cross-border deals
+    scenarios:
+      base:
+        unlevered-irr: X%
+        levered-irr: X%
+        equity-multiple: X.Xx
+        cash-on-cash: X%
+        npv: $Xm
+        payback-years: N
+        exit-year: N
+        exit-assumption: <description of exit basis>
+      upside:
+        <same fields>
+      downside:
+        <same fields>
+    key-assumptions:
+      - name: <assumption name, e.g. 终端零售价 AUD/瓶>
+        value: <value>
+        certainty: 🟡 <party> | 🔵 AI推论 | ⚪
+        source-slot: <#anchor of the KB section this assumption came from>
+        flagged: true | false    # true = 🟡/⚪ assumptions that need visual highlight
+    seller-irr-comparison:       # only if seller claimed an IRR in their materials
+      seller-claimed: X%
+      our-base: X%
+      gap-explanation: <reason for the gap>
+  capital-structure:             # only if new facts; omit this block otherwise
+    equity-required: $Xm
+    debt-assumed: $Xm | none
+    ltv: X%
+    dscr-check: X.Xx | n/a
+new-sources: []
+new-terms: []
+---END-HANDOFF---
+```
+
+> Never write cash-flow tables, IRR cells, or scenario comparison HTML directly from this skill. **不写 section 四**: target-slots 中不含 `business-model`——目标公司的客户/定价数据属于 `public-info-search` 的范畴，本 skill 只消费这些假设，不重复写入它们。
+
 ## Important Notes
 
 - Every assumption in the model MUST trace back to the knowledge base (L1) with a certainty tag.
@@ -106,3 +157,16 @@ Report section contents:
 - For cross-border deals, model in BOTH local currency and RMB, with explicit FX assumption.
 - The returns model feeds into `ic-memo` (Section 5: Valuation & Returns) and `sensitivity-analysis`.
 - Do NOT present single-point IRR as "the" return — always show a range across scenarios.
+
+
+## 持续学习（Self-Evolution）
+
+每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+
+触发记录的条件：
+- 遇到当前指令未覆盖的特殊情况或边界案例
+- 用户给出了纠正或更好的建议
+- 发现值得重用的成功经验或模式
+- 原有指令出现歧义或冲突
+
+若认为核心指令需要改进，请主动告知用户并说明原因。

@@ -1,5 +1,5 @@
 import type { SkillIntent } from "./chat-modes";
-import { extractKnowledgeNetworkHtml } from "./chat-modes";
+import { extractKnowledgeNetworkHtmlLoose } from "./chat-modes";
 import { syncCompletedAgentJobToChat } from "./chat-sync";
 import {
   getProjectKnowledgeNetworkMeta,
@@ -30,8 +30,9 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
-const KN_PUT_FAIL_ERROR =
-  "知识网络未通过 API 回传：任务结束前须成功 PUT /api/hermes/projects/{projectId}/knowledge-network/current（见 Hermes 任务说明）。";
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
 
 type JobFinalizeResult =
   | {
@@ -45,35 +46,32 @@ type JobFinalizeResult =
       answer: string;
     };
 
-async function trySalvageKnowledgeNetworkFromAnswer(
+function extractKnHtmlFromResult(result: {
+  answer: string;
+  knowledgeNetworkHtml: string | null;
+}): string | null {
+  const direct = (result.knowledgeNetworkHtml ?? "").trim();
+  if (direct) return direct;
+  return extractKnowledgeNetworkHtmlLoose(result.answer);
+}
+
+async function writeKnowledgeNetworkFromHtml(
   env: AgentJobEnv,
   row: AgentJobRow,
-  result: { answer: string; knowledgeNetworkHtml: string | null },
-): Promise<JobFinalizeResult | null> {
-  const salvaged =
-    (result.knowledgeNetworkHtml?.trim() || "") ||
-    extractKnowledgeNetworkHtml(result.answer) ||
-    "";
-  if (!salvaged) return null;
-
+  html: string,
+  answerSummary: string,
+): Promise<{ meta: Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>; html: string } | null> {
   await upsertProjectKnowledgeNetwork(env, {
     projectId: row.project_id,
     userId: row.user_id,
-    html: salvaged,
+    html,
     lastJobId: row.id,
-    answerSummary: "Hermes 未 PUT，Worker 从回复提取 HTML 写入",
+    answerSummary,
   });
-
   const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
-  const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
-  if (!meta || !html) return null;
-
-  const salvageNote = `\n\n已写入**项目知识网络 v${meta.version}**（Hermes 未执行 curl PUT，系统从回复中提取 HTML）。建议在 Railway 配置 \`JFO_INTERNAL_KEY\` 与 \`JFO_API_PUBLIC_BASE\`，下次走文件回传更稳。`;
-  const answer = result.answer.includes("项目知识网络 v")
-    ? result.answer
-    : `${result.answer}${salvageNote}`;
-
-  return { status: "ok", answer, knowledgeNetworkHtml: html };
+  const stored = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+  if (!meta || !stored) return null;
+  return { meta, html: stored };
 }
 
 async function finalizeKnowledgeNetworkJobResult(
@@ -81,38 +79,68 @@ async function finalizeKnowledgeNetworkJobResult(
   row: AgentJobRow,
   result: { answer: string; knowledgeNetworkHtml: string | null },
 ): Promise<JobFinalizeResult> {
-  const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
-  if (meta?.lastJobId !== row.id) {
-    const salvaged = await trySalvageKnowledgeNetworkFromAnswer(env, row, result);
-    if (salvaged) return salvaged;
+  let meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
 
-    const viaChatFallback = (row.hermes_run_id ?? "").startsWith("chat-fallback-");
-    return {
-      status: "failed",
-      error: KN_PUT_FAIL_ERROR,
-      answer:
-        (result.answer.trim() || "Hermes 已结束，但未检测到与本任务绑定的 PUT 回传。") +
-        (viaChatFallback
-          ? "\n\n当前为**聊天兼容模式**（Runs 不可用），无法在容器内 curl PUT。请确认 Railway 已开放 POST /v1/runs，或让 Hermes 在回复中包含完整 ```html 代码块以便系统提取。"
-          : "\n\n请确认 Railway Hermes 已配置 JFO_INTERNAL_KEY、JFO_API_PUBLIC_BASE，且任务说明中的 curl PUT 已执行成功。"),
-    };
+  // 路径 A：Hermes 已 curl PUT（最理想）
+  if (meta?.lastJobId === row.id) {
+    const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+    if (html) {
+      const note = `\n\n已同步至**项目知识网络 v${meta.version}**（文件 API 回传，可在项目详情预览）。`;
+      const answer = result.answer.includes("项目知识网络 v")
+        ? result.answer
+        : `${result.answer}${note}`;
+      return { status: "ok", answer, knowledgeNetworkHtml: html };
+    }
   }
 
-  const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
-  if (!html) {
-    return {
-      status: "failed",
-      error: "知识网络元数据已登记，但 R2 文件缺失。",
-      answer: result.answer,
-    };
+  // 给 Hermes 几秒迟到的 PUT
+  if (!meta || meta.lastJobId !== row.id) {
+    await sleep(4000);
+    meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+    if (meta?.lastJobId === row.id) {
+      const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+      if (html) {
+        const note = `\n\n已同步至**项目知识网络 v${meta.version}**（文件 API 回传）。`;
+        return {
+          status: "ok",
+          answer: result.answer.includes("项目知识网络 v")
+            ? result.answer
+            : `${result.answer}${note}`,
+          knowledgeNetworkHtml: html,
+        };
+      }
+    }
   }
 
-  const note = `\n\n已同步至**项目知识网络 v${meta.version}**（可在项目详情预览）。`;
-  const answer = result.answer.includes("项目知识网络 v")
-    ? result.answer
-    : `${result.answer}${note}`;
+  // 路径 B：从 Hermes 回复提取 HTML 写入（PUT 失败时的主交付）
+  const extracted = extractKnHtmlFromResult(result);
+  if (extracted) {
+    const written = await writeKnowledgeNetworkFromHtml(
+      env,
+      row,
+      extracted,
+      "从 Hermes 回复提取 HTML",
+    );
+    if (written) {
+      const note = `\n\n已写入**项目知识网络 v${written.meta.version}**（从回复提取 HTML；建议 Railway 配置密钥以便下次走 curl PUT）。`;
+      const answer = result.answer.includes("项目知识网络 v")
+        ? result.answer
+        : `${result.answer}${note}`;
+      return { status: "ok", answer, knowledgeNetworkHtml: written.html };
+    }
+  }
 
-  return { status: "ok", answer, knowledgeNetworkHtml: html };
+  const viaChatFallback = (row.hermes_run_id ?? "").startsWith("chat-fallback-");
+  return {
+    status: "failed",
+    error: "知识网络交付失败",
+    answer:
+      (result.answer.trim() || "Hermes 已结束，但未返回可用知识网络。") +
+      "\n\n本条回复须在同一次交付末尾附完整 ```html 整页（含 <!DOCTYPE），平台才能预览并写入项目知识网络。" +
+      (viaChatFallback
+        ? "\n\n（当前为聊天兼容模式，无法 curl，代码块为唯一交付方式。）"
+        : ""),
+  };
 }
 
 async function finalizeJobResult(
@@ -220,9 +248,7 @@ export async function failAgentJob(
   error: string,
   answerForChat?: string | null,
 ): Promise<void> {
-  const answer =
-    (answerForChat ?? "").trim() ||
-    `深度分析失败：${error}`;
+  const answer = (answerForChat ?? "").trim() || `深度分析失败：${error}`;
 
   await env.DB.prepare(
     `UPDATE agent_jobs SET status = 'failed', error = ?, answer = ?, knowledge_network_html = NULL, updated_at = ? WHERE id = ?`,

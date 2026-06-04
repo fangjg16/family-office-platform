@@ -146,3 +146,16 @@ Append to 附录 B · 术语表 (`<dl class="glossary">`). In bilingual mode inc
 - **One annotation per term per KB**: even if "LFP" appears 50 times in the document, only the first occurrence carries the marker.
 - **Re-numbering safety**: if a previously annotated term is later deleted from the body, do NOT renumber existing footnotes — keep the historical numbering and mark the orphaned glossary entry with `(已不在正文中引用)` rather than deleting it (the term may reappear).
 - **User-supplied terms**: if the user explicitly asks "什么是 [term]", add it to 附录 B even if it's not in the body (mark as `(用户提问)`).
+
+
+## 持续学习（Self-Evolution）
+
+每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+
+触发记录的条件：
+- 遇到当前指令未覆盖的特殊情况或边界案例
+- 用户给出了纠正或更好的建议
+- 发现值得重用的成功经验或模式
+- 原有指令出现歧义或冲突
+
+若认为核心指令需要改进，请主动告知用户并说明原因。

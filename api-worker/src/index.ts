@@ -650,12 +650,16 @@ async function processHermesJobViaChat(
   },
 ): Promise<void> {
   try {
-    const messages = [
-      { role: "system", content: params.instructions },
+    let instructions = params.instructions;
+    if (intent === "knowledge_network") {
+      instructions +=
+        "\n\n【聊天兼容·无 bash】无法 curl。交付方式仅有：在本条回复末尾附完整 ```html 整页；禁止只写路径或要求用户再发一条。";
+    }
+    const { answer } = await callHermes(env, [
+      { role: "system", content: instructions },
       ...params.history.slice(-12),
       { role: "user", content: params.message },
-    ];
-    const { answer } = await callHermes(env, messages);
+    ]);
     const finalized = finalizeHermesOutput(answer, intent);
     await completeAgentJob(env, jobId, finalized);
   } catch (e) {

@@ -1,556 +1,223 @@
 ---
 name: knowledge-base-generation
-description: "Owns the project's single Project Knowledge Base (项目知识网络) HTML file. Creates, updates, and re-renders the 10-section KB document. Every other analysis skill writes into the KB through this skill. Triggers on \"generate knowledge base\", \"项目知识网络\", \"项目知识底座\", \"update KB\", \"refresh knowledge base\", \"structure this project\", \"organize what we know\", \"build project profile\", or automatically when any other skill produces new findings."
+description: "Owns the project's single Project Knowledge Base (项目知识网络) HTML file. Creates, updates, and re-renders the 11-section KB document. Every other analysis skill writes into the KB through this skill. Triggers on \"generate knowledge base\", \"项目知识网络\", \"项目知识底座\", \"update KB\", \"refresh knowledge base\", \"structure this project\", \"organize what we know\", \"build project profile\", or automatically when any other skill produces new findings."
 ---
 
-# Knowledge Base Generation (Project 知识网络)
+# 知识网络生成（Knowledge Base Generation）
 
-This is the **central output skill** of the plugin. The plugin maintains exactly one HTML file per project: `[AI] <项目名>_知识网络.html` (note `[AI]` prefix — always present to distinguish from human-uploaded files). Every other skill (except `ic-memo`) writes through this skill.
+本 skill 是 plugin 的**核心输出技能**，唯一维护 `[AI] <项目名>_知识网络.html`（`[AI]` 前缀必须存在）。除 `ic-memo` 外，所有 skill 均通过本 skill 写入 KB。
 
-### Rendering modes (set during project-intake, persist for life of KB)
+## 执行前必读（硬性规则）
 
-| Mode | Trigger | Effect |
-|------|---------|--------|
-| **Single-asset / Multi-asset** | `project-intake` Step 2.4 | Multi-asset partitions sections 二/三/四/五/七/八/九 per asset (`<h3>` subsections like 二.1, 二.2). See `STYLE_GUIDE.md` "Multi-Asset Project Rendering". |
-| **Chinese-only / Bilingual** | `project-intake` Step 2.2 jurisdiction | Bilingual renders zh + en parallel content + adds language toggle button in header. See `STYLE_GUIDE.md` "Bilingual Knowledge Base". |
-| **Visual theme (Portable = DEFAULT)** | Default unless user explicitly asks for the plain grey theme | **Every KB renders in the Portable theme (米色背景 / 酒红 / Playfair) by default.** The look comes from `kb-template.html` in this skill directory — use that file as the starting point, fill in the `{{PLACEHOLDER}}` tokens. Only drop to the default grey theme if the user explicitly requests it. |
+每次开始任务前，必须按顺序 **read_file** 以下文件；仅阅读本文件后直接执行视为不合规。
 
-These modes interact: a bilingual multi-asset project renders both per-asset subsections AND per-language content blocks. The modes are decided once at intake and applied to every subsequent skill output.
+### Railway Hermes / 联合家办（优先）
 
-## The 11 Canonical Sections (fixed slots, dynamically numbered)
+路径均相对于 `~/.hermes/skills/knowledge-base-generation/`：
 
-The KB has 11 canonical section *slots* plus 2 appendix slots. The slots are **fixed in identity and stable in order**; the visible Chinese numerals (一/二/三…) are **assigned at render time** based on which slots actually render. A slot that is completely empty is **hidden** — its anchor, its `<h2>`, its `<nav>` link, and its numeral are all omitted, and the surviving slots are renumbered consecutively starting from 一.
+1. `references/README-hermes.md` — 家办工作流与命名（速读）
+2. `references/STYLE_GUIDE.md` — 样式、组件、标签/引用规范
+3. `SKILL.md` — 本文件（流程与 slot 治理）
+4. `kb-template.html` — 壳 + CSS + panel-switcher（禁止改 JS/CSS）
+5. `assets/components.html` — 可拷贝 HTML 组件片段
 
-Slot table — stable order, stable anchor, stable role. Numerals shown here are the *fully-populated* fallback numbering (used only when every slot renders).
+家办资料须先 skill `jfo-r2-materials`（curl 网站 manifest），**禁止**假设本地项目文件夹有 PDF。
 
-| Slot key | Section | Anchor | Primary writer skills |
-|----------|---------|--------|----------------------|
+### Claude Cowork plugin（本地根目录）
+
+1. `skills/knowledge-base-generation/SKILL.md`
+2. 插件根目录 `STYLE_GUIDE.md`
+3. `assets/components.html`
+4. `kb-template.html`（本 skill 目录）
+
+冲突优先级：`SKILL.md`（业务）> `STYLE_GUIDE.md`（样式）> `components.html`（示例）> `kb-template.html`（壳）。
+
+## 最小执行清单（5 条）
+
+1. 解析输入（Handoff 或用户新信息）并映射到 canonical slot，禁止按浮动编号处理。
+2. 逐 slot 判定状态（已填充 / Stub / 空），生成 render manifest 并据此重排编号与导航。
+3. 仅用模板允许的结构渲染（`kb-template.html` + `STYLE_GUIDE.md` + `components.html`），不得自创 class 或改动底层 JS/CSS。
+4. 对每条事实补齐确定性标注与来源引用（🟡/🔵 必须归因，tooltip 含摘录）。
+5. 一次性原子写入：重渲 + 版本号递增 + changelog 一行 + 成熟度重算（Factor A 分母始终 11）。
+
+## 渲染模式（由 project-intake 确定，贯穿 KB 生命周期）
+
+| 模式 | 触发条件 | 效果 |
+|------|---------|------|
+| 单/多标的 | `project-intake` 步骤 2.4 | 多标的模式下，资产专属章节按子标的拆分为 `<h3>` 子节 |
+| 纯中文/双语 | `project-intake` 步骤 2.2（海外项目） | 双语模式渲染中英并列内容 + 语言切换按钮 |
+| Portable 主题（默认） | 默认；用户明确要求时切换灰色主题 | 所有 KB 默认米色背景/酒红/Playfair 字体，从 `kb-template.html` 起点填充 |
+
+## 11 个 Canonical Slot（固定顺序、固定锚点）
+
+| Slot key | 章节 | 锚点 | 主要写入 skill |
+|----------|------|------|--------------|
 | `snapshot` | 项目快照 | `#snapshot` | `project-intake`, `public-info-search` |
-| `assets` | 资产构成 / 平台能力与资源（类型自适应：实物资产 vs 资源能力） | `#assets` | `public-info-search`, `dd-claim-audit` |
+| `assets` | 资产构成 / 平台能力与资源 | `#assets` | `public-info-search`, `dd-claim-audit` |
 | `legal-relationships` | 法律结构与关键关系网 | `#legal-relationships` | `background-check`, `public-info-search` |
 | `business-model` | 业务模式与收入假设 | `#business-model` | `public-info-search` |
 | `capital-structure` | 融资结构与资本结构 | `#capital-structure` | `public-info-search` |
 | `comps` | 市场对标与可比交易 | `#comps` | `comp-analysis` |
 | `returns` | 投资回报与敏感性分析 | `#returns` | `returns-analysis`, `sensitivity-analysis` |
-| `timeline` | 项目时间轴（进展、依赖与外部窗口） | `#timeline` | `node-monitoring`, `public-info-search` |
+| `timeline` | 项目时间轴 | `#timeline` | `node-monitoring`, `public-info-search` |
 | `risks` | 关键风险与缓释 | `#risks` | `risk-matrix`, `dd-claim-audit` |
 | `open-questions` | 待确认问题清单 | `#open-questions` | `gap-tracking`, `dd-checklist` |
-| `decision-framework` | 决策框架 | `#decision-framework` | `value-creation-plan` + analyst synthesis |
+| `decision-framework` | 决策框架 | `#decision-framework` | `value-creation-plan` + 综合 |
 
-> **Conceptual boundary between `business-model` and `returns`**: `business-model` describes the **target company's revenue model** (its customers, its pricing, its unit economics) — i.e. the business as a standalone entity. `returns` describes the **investor's expected returns on this specific deal** (IRR/MOIC under base/upside/downside, sensitivity to assumptions, breakeven). Investor-return numbers go to `returns` only, never to `business-model`. Customer/pricing data goes to `business-model` only, never to `returns`.
+附录 slot（可隐藏）：附录 A 来源索引 `#source-index`（`document-reorganize`）、附录 B 术语表 `#glossary`（`term-annotator`）。
 
-Plus two unnumbered appendix slots (also hideable when empty):
-- **附录 A · 来源索引** (`#source-index`) — maintained by `document-reorganize`
-- **附录 B · 术语表** (`#glossary`) — maintained by `term-annotator`
+**`business-model` 描述目标公司盈利模式；`returns` 描述投资人回报（IRR/MOIC）。两者严格分离。**
 
-### Hide-and-renumber rule (the core "fixed format" guarantee)
+## 隐藏与重新编号
 
-A slot **renders** iff it has at least one piece of populated content (a populated subsection, a table row, a tagged data point, or a deliberately-recorded 缺乏资料 placeholder for *partial* populated content). A slot **hides** iff it would otherwise contain *only* a generic "no data" message and nothing else.
+Slot 渲染 ↔ 有实质内容。空 slot（无任何 skill 评估）完全不输出——无 `<section>` 无导航无编号。存活 slot 从一开始连续重新编号。跨章节引用用**锚点**（`#returns`），不用编号（"第七节"浮动）。
 
-Hidden slots produce **no output at all** — no `<section>`, no `<h2>`, no `<nav>` link, no entry in the on-page TOC, no contribution to the visible numbering. The remaining rendered slots are then assigned Chinese numerals 一/二/三… **in stable slot order**, so numbering is always gap-free.
+## KB 布局（面板切换器）
 
-Example — if only `snapshot`, `assets`, `returns`, `risks`, `decision-framework` have data, the rendered output is:
-- 一 项目快照 → `#snapshot`
-- 二 资产构成 → `#assets`
-- 三 投资回报与敏感性分析 → `#returns`
-- 四 关键风险与缓释 → `#risks`
-- 五 决策框架 → `#decision-framework`
+KB 是左侧边栏面板切换器，非长滚动文档。结构：`<div class="kb-shell"><nav class="kb-nav">…</nav><main class="kb-content">…</main></div>`。
 
-Same project, after `public-info-search` adds business-model content → renumber automatically:
-- 一 项目快照 → `#snapshot`
-- 二 资产构成 → `#assets`
-- 三 业务模式与收入假设 → `#business-model`
-- 四 投资回报与敏感性分析 → `#returns`
-- 五 关键风险与缓释 → `#risks`
-- 六 决策框架 → `#decision-framework`
+- **`#overview` 面板**（默认 `.active`）：仅含 `.masthead` + `.kb-summary`（≤200 字自动摘要）。不在 slot 面板内重复 masthead。
+- 导航按钮列在渲染时从 render manifest 动态生成，禁止硬编码。`#overview` 按钮标签「项目总览」，`.kb-nav-num` 用 `◎`。
+- 面板切换 JS 已内置于 `kb-template.html`，不要修改。
+- 详细 HTML/CSS 规范见 `STYLE_GUIDE.md` 与 `assets/components.html`。
 
-Anchors are stable (`#returns` is always `#returns`); only the displayed numeral changes. Any cross-section reference must use the slot key / anchor, never the numeral.
+## 交接协议（Handoff Block）
 
-### Left section-nav (panel switcher) is generated, not hard-coded
+**本 skill 是 KB HTML 的唯一所有者。** 其他 skill 通过结构化交接块交付数据，禁止直接写入 HTML。
 
-The KB is **not** one long scrolling page. It renders as a **left-sidebar section switcher**: a fixed vertical column of buttons (`.kb-nav` / `.kb-nav-btn`, one per rendered slot + appendices) on the left, and a content area (`.kb-content`) on the right that shows **only the active panel** (`.kb-panel`) at a time. Clicking a button activates its panel and hides the rest.
-
-- The button list is built **at render time from the render manifest in slot order** — never hard-coded. Each button carries `data-target="<anchor>"` matching its panel `id`; its `.kb-nav-num` shows the manifest `displayNumeral` (一/二/三… for slots, `A`/`B` for appendices). Hidden slots emit neither a button nor a panel.
-- The **first rendered slot** gets `.active` on both its button and its panel (so something shows even without JS).
-- The vanilla-JS panel switcher is already included in `kb-template.html` — do not modify or re-generate it. It toggles `.active`, supports `#anchor` deep-links, and needs no library.
-- The **masthead** and **`.kb-summary`** live in a dedicated first panel `#overview` (nav label「项目总览」) — **not** outside panels. They appear **only** on that tab; content slots (一…十一、附录) show their own panel body without repeating the header.
-- The old top horizontal `.sticky-nav` is **deprecated** — do not emit it.
-
-### Overview panel (`#overview`) — masthead + summary (once only)
-
-Every KB renders a fixed **overview** panel as the **first** nav button and the **default active** panel on load. It contains only:
-1. `.masthead` (title, meta, Factor A/B/C stat-row, language toggle if bilingual)
-2. `.kb-summary` (auto-generated ≤200-字 digest)
-
-Do **not** duplicate masthead or `.kb-summary` inside slot panels. Slot panels start directly with their `<h2 class="section-title">`.
-
-```html
-<section class="block kb-panel active" id="overview">
-  <header class="masthead">…</header>
-  <div class="kb-summary">…</div>
-</section>
-<section class="block kb-panel" id="snapshot">…</section>
+```
+---KB-HANDOFF---
+from-skill:   <skill 名称>
+target-slots: [<slot-key-1>, <slot-key-2>]
+update-mode:  merge | replace
+version-bump: minor | major
+findings:
+  <slot-key-1>:
+    <结构化内容>
+  <slot-key-2>:
+    <结构化内容>
+new-sources:
+  - id: A-N
+    type: AI生成 | 用户上传
+    title: <来源标题>
+    url: <如适用>
+    excerpt: <1–2 句原文摘录，≤200 字>
+new-terms: [<term1>, <term2>]
+---END-HANDOFF---
 ```
 
-Nav: first button `data-target="overview"`, label「项目总览」, `.kb-nav-num` may use `◎` (not a Chinese numeral — overview is outside the 11-slot manifest).
+收到交接块后：解析 slot → 统计受影响数量 → 定向/全量重渲 → 追加 `new-sources` 到附录 A → 传 `new-terms` 给 `term-annotator` → 更新版本号 → 写入 HTML。
 
-### Auto-summary card (≤200 字, inside `#overview` only)
+## 工作流程
 
-The `.kb-summary` card sits **inside `#overview` only** (not above 项目快照 in every tab). It is an **auto-generated ≤200-字 Chinese overview** that captures the project's profile + investment logic in one paragraph: what the asset is, who the counterparty is, indicative size, the core thesis, and current stage/maturity. Regenerate it on every re-render so it tracks the latest state. Keep it factual and non-advisory; certainty tags are not required inside the summary (it is a digest, not a data source). HTML/CSS: see `STYLE_GUIDE.md` `.kb-summary`.
+### 步骤 1：确定执行模式
 
-```html
-<div class="kb-summary">
-  <p class="kb-summary-label">项目概览 · 自动生成</p>
-  <p>[≤200 字：资产/标的 + 所在地 + 交易对手 + 指引价/规模 + 投资逻辑一句话 + 当前阶段与成熟度]</p>
-</div>
-```
+| 模式 | 触发 | 定向 vs 全量 |
+|------|------|-------------|
+| 新建 | KB 文件不存在 | 始终全量 |
+| 更新 | 收到交接块 | ≤3 slot 且顺序不变 → **定向**；否则全量 |
+| 重审 | 用户说"刷新全文"或成熟度偏差 | 始终全量 |
 
-### Partial vs empty — how to decide
+**不要询问用户选哪种模式**，本 skill 自动判断。
 
-| State | What it means | What renders |
-|-------|---------------|--------------|
-| **Populated** | Slot has hard evidence on ≥1 sub-topic | Full slot renders; missing sub-topics inside get inline "—— 待补充" lines |
-| **Stub** | Slot has at least one explicit "缺乏资料" callout written by a skill *because the skill examined the corpus and found nothing* | Slot renders with the 缺乏资料 callout — this is the "tell the user what to upload" value |
-| **Empty (hidden)** | No skill has yet touched this slot at all | Slot is hidden entirely; numbering skips it |
+### 步骤 1.5：实体归并（硬性规则）
 
-The default for a fresh KB is **everything Empty (hidden) except `snapshot`**. As skills run, slots transition Empty → Stub or Empty → Populated. A slot can also fall back from Stub to Empty if `document-reorganize` later determines the original "缺乏资料" prompt was speculative (rare).
+写入前规范化所有实体名：建立实体主表（规范名←别名映射）。同一实体在 KB 全文中只用规范名。解析人↔实体代表关系，标注归因时用规范实体名。**新建和重审时均须运行。**
 
-## Workflow
+### 步骤 2：Slot 状态分类
 
-### Step 1: Determine Mode
+| 状态 | 判定 | 输出 |
+|------|------|------|
+| **已填充** | ≥1 子题有实质证据 | 完整渲染；缺失子题用内联"——待补充" |
+| **Stub** | skill 已检查并记录"无内容"，缺口对用户有价值 | 单个 `<aside class="callout missing">` |
+| **空（隐藏）** | 无任何 skill 评估，或被清除 | 完全不输出 |
 
-| Mode | Trigger | Action |
-|------|---------|--------|
-| **Create** | No `[AI] <项目名>_知识网络.html` exists | Build the HTML scaffold and render only the slots that already have data (typically just `snapshot` after intake) |
-| **Update** | KB exists, a skill produced new findings | Locate target slot(s), merge/replace contents, re-render the whole HTML (renumbering happens automatically) |
-| **Re-audit** | User says "refresh KB" or completeness drift detected | Re-evaluate every slot's state against the latest source corpus; slots may transition between Empty / Stub / Populated |
+分类完成后建立 render manifest（`{slotKey, state, displayNumeral}`）驱动输出。
 
-### Step 1.5: Entity Resolution (实体归并) — HARD RULE
+### 步骤 3：各章节内容要点
 
-Before writing any content, normalize all entities across the *entire* uploaded corpus. **The same entity must never appear under different names in the KB.**
+- **snapshot**：项目名/地点/资产类型、交易对手法人名、指引价、当前阶段、一句话成熟度、Factor A/B/%
+- **assets（类型自适应）**：实物资产型 → 资产清单、规模数字、审批状态；平台/贸易型 → 政府关系、资质配额、物流能力、团队 know-how，每条注明自有/绑定/第三方
+- **legal-relationships**：持股架构图、实控人、关键关系人、三方顾问、关联交易、跨境架构。*监管路径/牌照申请流程不属于本节（归入 business-model 外部调研）*
+- **business-model**：先按 STYLE_GUIDE.md 选可视化形式（Journey Map / Process Flow / BMC 等），再列收入拆分、单位经济、主要客户、关键运营假设。外部调研 topic 用可折叠 `<details class="topic">`，状态标语义标签（待调研/部分解答/已解答）。*投资人回报数字归入 returns，不在本节*
+- **capital-structure**：总投资额拆解、资金来源与用途、现有股权结构、拟议交易结构、债务条款
+- **comps**：直接可比主体/交易（名称、规模、对价、倍数）；无对标时保留 callout.missing，不用宏观数据填充
+- **returns**：三档情景（base/upside/downside）的 IRR/MOIC/Cash-on-Cash/Payback、关键假设（🟡/⚪ 高亮）、敏感性分析（Tornado + 双变量矩阵 + 盈亏平衡）
+- **timeline**：三子块——8.1 已发生（年→月→日层级展开）、8.2 推进中、8.3 未来节点（表格含"影响程度"badge + "结果触发行动"列）。*只收录本项目实体的事件，行业历史归入 business-model 外部调研*
+- **risks**：风险矩阵（Likelihood × Impact）、critical/high 风险明细（来源+mitigation+责任人）、红线风险
+- **open-questions**：仍须项目方提供的缺口，按所属 section 分组表格，列：待补充项/紧迫度/负责方/详见
+- **decision-framework**：投资论点（3–5条带证据）、投后增值杠杆、决策选项 trade-off、推荐意见、下一步清单
 
-1. **Build an entity master table** (held in working memory / 附录, not necessarily rendered): one canonical name per real-world entity (company, fund, SPV, government body, advisor firm), with all observed aliases mapped to it. E.g. `项目公司` = "Stone Island Holdings Pty Ltd" = "SIH" = "the Bowen entity" → all render as the one canonical name.
-2. **Resolve person↔entity representation.** When a person speaks/acts *for* an entity, identify and label the representation relationship. Render as `张三（卖方 Stone Island Holdings 代表）` on first mention, and tag claims by that person with the entity, not just the name (e.g. `🟡 卖方` when 张三 is the seller's rep). Maintain a person↔entity map so a person who represents multiple entities is disambiguated per context.
-3. **All references point to the canonical name.** Tables, org charts, citations, certainty-tag attributions, and the glossary all use the canonical name. Aliases may appear once in parentheses on first mention for traceability, then never again.
-4. This runs on **Create** and re-runs on **Re-audit** (a later upload may reveal that two names are the same entity, or split one). When `document-reorganize` assigns source IDs it uses the same entity master table so source attributions stay consistent.
+### 步骤 4：缺乏资料 Callout
 
-This rule directly feeds the certainty-tag attribution rule (Step 5): "哪个当事方" must be a *canonical* entity, not a stray alias.
+见 `STYLE_GUIDE.md` `.callout.missing` 模板。提示列表必须**针对具体项目类型**，不能写"请补充更多资料"这类泛化文字。
 
-### Step 2: For Each Slot — Decide State
+### 步骤 5：确定性标注（每条数据必须标注）
 
-For every one of the 11 slots + 2 appendices, classify into one of three states (see "Hide-and-renumber rule" above for definitions):
+| 标注 | 含义 |
+|------|------|
+| ✅ 已核实 | ≥2 个独立来源交叉核实，或权威来源 |
+| 🟡 当事方声明 | 某当事方声称，未独立确认——**必须注明哪个当事方**（规范实体名） |
+| 🔵 分析师推论 | 推导结论——**必须注明 AI推论 或 内部分析师** |
+| ⚪ 待确认 | 已提及但未核实 |
 
-| State | When | What appears in the HTML |
-|-------|------|--------------------------|
-| **Populated** | Hard evidence exists (figures, dates, named parties, documents) | Slot renders. Tables / callouts / bullets with inline certainty tags + source links. Missing sub-topics inside the slot render as inline "—— 待补充" lines (NOT as a separate full 缺乏资料 callout that would dominate the slot). |
-| **Stub** | A skill has explicitly recorded that it looked and found nothing actionable in the corpus, AND the absence is informative to the user (i.e. it tells them what to upload) | Slot renders. Body is a single `<aside class="callout missing">` block — see template in Step 4. |
-| **Empty (hidden)** | No skill has yet evaluated this slot, or `document-reorganize` has cleared a speculative stub | Slot is omitted entirely. No `<section>`, no `<h2>`, no nav entry, no numeral. Subsequent slots renumber up. |
+🟡/🔵 不标归因不再被接受。HTML 语法见 `STYLE_GUIDE.md` "Tags and badges"。
 
-After classifying every slot, build the **render manifest**: an ordered array of `{slotKey, state, displayNumeral}` covering only Populated + Stub slots. The display numeral is assigned by enumerating the manifest 一/二/三…. This manifest drives both `<section>` emission and sticky-nav generation.
+### 步骤 6：来源链接
 
-### Step 3: Apply Section-Specific Content Templates
+每段已填充内容必须链回来源（tooltip 格式，含 1–2 行原文摘录）。来源 ID：`U-N` 用户上传，`A-N` AI 生成。详见 `STYLE_GUIDE.md` "Tooltip-Enabled Citations"。
 
-Each section has a required sub-structure. If a sub-block has no data, render it as 缺乏资料.
+### 步骤 7：术语注释
 
-#### 一、项目快照
-- 项目名 / 所在地 / 资产类型
-- 交易对手主体（法人名称）
-- Indicative price / range
-- 项目当前阶段
-- 一句话定性（"Bare lead" / "Early stage" / "Mid stage" / "Mature"）
-- 信息完备度（Factor A %）/ 来源多样性（Factor B %）/ 综合（Overall %）
+渲染完成后扫描新引入技术术语，调用 `term-annotator` 在**首次出现处**插入 tooltip 标注，并写入附录 B。后续出现不加（避免 `*` 泛滥）。
 
-#### 二、资产构成 / 平台能力与资源（类型自适应）
+### 步骤 8：版本号与 Changelog
 
-> **类型自适应 slot.** 这一节根据项目类型在两种渲染形态间二选一：
-
-| 项目类型 | 渲染形态 | 标题 |
-|----------|----------|------|
-| **实物资产型**（地产、储能、基础设施、单一标的收购） | 资产构成（实物资产视角） | 二、资产构成（投资标的剖析、规划审批状态） |
-| **平台 / 贸易型**（易货贸易、配额转口、平台撮合、轻资产运营） | 平台能力与资源（资源/能力视角） | 二、平台能力与资源 |
-
-判定规则：标的核心价值来自**可登记的实物/产权资产**（土地、建筑、设备、IP、可转让合同）→ 实物资产形态；标的核心价值来自**关系、资质、网络、运营能力等无形资源**而非单一可估值资产 → 平台能力形态。混合型（如自有冷链 + 配额）以"投资对价主要为何买单"为准；说不清时默认实物资产形态并在节首注明判定依据。
-
-**形态 A — 实物资产（实物资产型）**
-- 物理资产清单（土地 / 建筑 / 设备 / 知识产权 / 客户合同）
-- 规模数据（面积、产能、装机量等）
-- 当前状态（在建 / 运营 / 待建 / 闲置）
-- 规划审批状态：
-  - 已取得的批文（名称、文号、有效期、发证机构）
-  - 在审批文（提交日期、预计完成、风险点）
-  - 缺失但必需的批文
-
-**形态 B — 平台能力与资源（平台/贸易型）**
-- 政府关系 / 政策资源（口岸关系、配额审批通道、地方背书）—— 注明深度与可持续性
-- 资质与配额（易货贸易资质、进出口许可、特许经营、牌照），含有效期与可转让性
-- 物流 / 冷链 / 仓储能力（自有 vs 租用、覆盖区域、产能）
-- 平台获客 / 撮合能力（流量、商户网络、复购、撮合规模）
-- 团队与 know-how（关键人依赖、可替代性）
-- 每条资源标注：自有 / 绑定关键人 / 第三方依赖，以及"投资后是否随交易转移"
-
-> **边界**：宏观背景类信息（口岸概况、区域贸易政策、行业大势等）**不是**本节的"资产/资源"，也不归入 section 四。处理规则：① 若某条宏观数据是用于支撑某个资产/资源条目的，作为该行表格的来源注释内联呈现（`来源`列或行内 `<sup>` 引用）；② 若属于投资论点层面的宏观支撑，归入 section 十一 决策框架的论据。**Section 2 本身不设"宏观背景"子块**，不论实物资产形态还是平台能力形态均适用。本节只放**标的自身**掌握/可调用的能力与资源。
-
-#### 三、法律结构与关键关系网
-- 持股架构图（项目公司 → 中间层 → 实控人）
-- 关键关系人：实控人、董事、关联方
-- 律师 / 会计 / 估值机构
-- 关联交易识别
-- 跨境结构（SPV、BVI、VIE 等）
-
-#### 四、业务模式与收入假设（含外部调研）
-> Target-company analysis only. Investor returns belong in 七.
-
-**业务模式可视化 — 按核心问题选图**
-
-先问"Section 四要回答什么核心问题"，再选图形式。按下表逐行匹配，第一个命中的即为选用形式：
-
-| 核心问题 | 判定条件 | 选用 | HTML 类 |
-|---------|---------|------|---------|
-| 钱从哪几条路来？ | ≥2 条实质性变现/退出路径，互为替代或并行（如：多通道贸易、多退出策略地产、多产品线分销） | **Journey Map** | `.journey` |
-| 一条链，每步赚多少？ | 单条线性流程，重点是各环节利润拆解与增值（如：农业/制造/加工贸易，原料→加工→分销→终端） | **Process Flow** | `.process-flow` |
-| 收入结构多复杂？ | 多产品线/地区/客群，收入需多层级拆分才看得清"钱从哪里来"（如：集团型多业务线标的） | **Revenue Tree** | 手工构建 |
-| 哪个环节有护城河？ | 单条价值链，重点是竞争优势定位而非利润数字（如：制造业收购、品牌消费品） | **Value Chain** | 手工构建 |
-| 增长靠什么飞轮？ | 自我强化的网络效应循环（用户↑→供给↑→体验↑→用户↑）（如：电商平台、共享经济） | **Flywheel** | 手工构建 |
-| 多方之间怎么交换价值？ | 多边市场，价值在各方之间双向流动（如：医疗健康平台、政府特许经营、农业产业链整合） | **Ecosystem Map** | 手工构建 |
-| 以上均不命中 | 稳定单一业务，说清楚客户/价值主张/成本结构即可（如：持有型资产、持牌特许经营） | **BMC** | `.bmc` |
-
-> **注意**：行业类型不是判定依据。判断的核心是"这个 section 四要回答什么问题"。判断不明确时，优先选 Journey Map，并在 section 开头一句话注明判断依据。
->
-> Journey Map / Process Flow / BMC 有标准 HTML 模板，见 `assets/components.html`。Revenue Tree / Value Chain / Flywheel / Ecosystem Map 无标准模板，手工构建（components.html 后续补充）。
-
-三种标准形式的 HTML 示例见 `assets/components.html`。
-
-**收入与运营假设**（不论选哪种图，下列数据都要在图下以文字/表格给出）：
-- 收入来源拆分（按产品 / 客户 / 地理 / 阶段）
-- 单位经济假设：定价、毛利率、收入周期、产能利用率
-- 主要客户 / 租户 / 用户名单（具体名称、合同金额、剩余期限）
-- 关键运营假设（occupancy、价格涨幅、续约率、流失率等）
-- 收入合同的可持续性、续约风险
-
-**外部调研 Topic（融入本节，不再用 Q-01/Q-02 编号）**：
-- 先针对该业务模式定义一组要调研的 **topic**（如 贸易类：口岸政策与配额、对手国货源稳定性、汇兑/结算合规、物流冷链可达性；地产类：区域规划、可比成交、审批进度、需求侧）。
-- 用户在后续对话中补充的问题**不再孤立编号**，而是**归类到对应 topic 下**，作为该 topic 的待答/已答条目。
-- 为控制全文长度，每个 topic 用**可点击展开**的 `<details class="topic">`（默认折叠，summary 显示标题 + 语义状态）。模板见 `STYLE_GUIDE.md` `.topic`。
-
-**topic-count 用语义状态，不用数字计数**：
-
-| 状态 | 写法示例 |
+| 触发 | 版本变化 |
 |------|---------|
-| 尚未开始调研 | `待调研` |
-| 有部分发现但有缺口 | `部分解答 · 高` / `部分解答 · Blocker` |
-| 已有明确研究结论 | `研究结论 · 暂缓` / `研究结论 · 可行` |
-| 完全解答 | `已解答` |
+| 首次生成 | → v1.0 |
+| 定向更新（≤3 slot，顺序不变） | x.y → x.(y+1) |
+| 全量重渲（≥4 slot 或顺序变化）或用户要求刷新 | x.y → (x+1).0 |
 
-**`.topic-q` 追问来源标注规则**（有出处就标，无则省略）：
-- 有录音/会议记录，知道发言人 → `<strong>会议追问（Jimmy，录音 00:01:30）：</strong>`
-- 有明确提问人但无时间戳 → `<strong>追问（Jessica）：</strong>`
-- 对话中用户补充，无具体归因 → `<strong>用户追问：</strong>`
-- 调研中自己发现的缺口，非追问 → `<strong>残余缺口：</strong>` 或 `<strong>待验证：</strong>`
+每次在 HTML 底部追加一行 changelog：`vX.Y | 日期时间 | 来源 skill | 变更摘要`。
 
-```html
-<details class="topic">
-  <summary>口岸政策与配额可持续性 <span class="topic-count">部分解答 · Blocker</span></summary>
-  <div class="topic-body">
-    <p>[topic 现有发现，带 certainty tag + 来源]</p>
-    <p class="topic-q"><strong>会议追问（Jimmy，录音 00:01:30）：</strong>配额政策若调整，平台是否有替代通道？<span class="topic-q-status">待项目方</span></p>
-    <p class="topic-q"><strong>用户追问：</strong>易货资质有效期？<span class="topic-q-status">已答：2027 到期 <span class="tag tag-party">🟡 项目方</span></span></p>
-    <p class="topic-q"><strong>残余缺口：</strong>年度总配额规模未公开，需政府关系或现场咨询。<span class="topic-q-status">待验证</span></p>
-  </div>
-</details>
-```
+### 步骤 9：成熟度重算
 
-#### 五、融资结构与资本结构
-> Sources & uses + capital stack. Investor return targets belong in 七.
+- **Factor A** = 11 个 canonical slot 完备度均值（分母始终为 11，空 slot 得 0，Stub slot 5–15%）
+- **Factor B** = 来源多样性（附录 A）
+- 综合成熟度 = 0.6 × A + 0.4 × B
+- 多标的：Factor A 先按子标的/slot 计算，显示每子标的分项分数，禁止合并为单一数字
+- 跨越阶段边界时（Early→Mid→Mature）在 chat 提示用户
 
-- 总投资额拆解（土地 / 建设 / 营运资金 / 储备）
-- 资金来源（自有 / 股权 / 债务 / 政府补贴 / 优先股）
-- 现有股东结构与历史融资轮次（轮次、估值、领投方）
-- 拟议交易结构（收购 / 增资 / 合作开发 / SPV 安排）
-- 债务条款（贷款方、利率、抵押安排、covenant、还款期）
+### 步骤 10：头部与骨架
 
-#### 六、市场对标与可比交易
-> 本节只放**与标的直接可比的主体或交易**——能用来支撑估值或定价的 peers 数据。不是泛调研，不是背景信息。
+从 `kb-template.html` 起点填充。Header 使用 `STYLE_GUIDE.md` "Masthead" 两栏布局，三色 stat-row（Factor A 浅米 / Factor B 中酒红 / 综合成熟度 深酒红）。`ai-badge` 始终显示。`meta-row` 的 `dt` 文本不加冒号或末尾「·」。
 
-**判断一条数据是否属于本节的唯一标准**：它能否用来支撑对标的估值或定价？能 → 放这里；不能 → 不放。
+## 输出格式
 
-**永远不进本节**（无论什么项目类型）：
-- 宏观市场规模数据（行业大盘、贸易总量、区域 GDP、进出口统计等）
-- 调研背景信息（政策环境、行业趋势、口岸概况）
-- 与标的业务模式不同的案例（用来"凑数"的泛案例）
+- **Chat**：更新了什么章节、哪些编号变化、新的成熟度分数、建议下一步
+- **HTML 文件**：`[AI] <项目名>_知识网络.html`，保存到项目文件夹根目录
+- **新建**：从 `kb-template.html` 填充占位符，不重写 CSS/JS
+- **更新**：只编辑相关 `<section>` 面板内容，不触碰 `<style>` 块或底部 `<script>`
+- **保存前自检**：① 只有 `#overview` 的按钮和面板有 `.active` ② masthead/summary 只在 `#overview` ③ 每个渲染 slot 有对应导航按钮 ④ `</body>` 前有 `<script>` 块
 
-上述信息若有用，归入 section 四 外部调研对应 topic，或作为行内来源引用，不在本节出现。
+## 重要规则
 
-**有对标时**，内容包括：
-- 已识别可比主体/交易表（名称、日期、规模、对价、估值倍数、业务模式相似点）
-- 行业基准（cap rate / EV/EBITDA / 单价 / 单位经济，视行业而定）
-- 项目相对 peers 的差异化定位与估值参照区间
+- **单一数据源**：所有非 IC 输出均写入此文件，禁止创建独立"层级"HTML
+- **隐藏而非填充**：空 slot 隐藏，不用泛化"暂无资料"占位符
+- **确定性标注不可省略，🟡/🔵 必须归因**
+- **原子性更新**：一轮对话的所有 slot 一次性写入，一次版本号递增，一行 changelog
+- **章节名称由类型自适应规则决定**，AI 不得单方面更改 `<h2>` 标题。新增 canonical slot 外的章节须先在 chat 获用户确认
+- **每次对话的任何新信息**（哪怕随口一句）必须分类到对应 slot 并触发更新
 
-**无对标时**（找不到直接可比的主体或交易）：
-- 保留 `callout.missing` Stub，**不要用宏观数据填充**
-- Stub 内列出"补充哪些信息可以激活本节"（如：同类企业名单、可访谈渠道、付费数据库来源）
-- `callout-hint` 最后一句明确写：`在此之前不强行填充宏观统计或背景调研数据。`
+## 持续学习（Self-Evolution）
 
-```html
-<aside class="callout missing">
-  <p class="callout-title">⚠ 缺乏资料 — [对标类型] 案例</p>
-  <p>尚未识别可公开核实的直接可比主体或交易。待补充项：</p>
-  <ul>
-    <li>[具体缺什么：如同类企业名单、历史交易数据、行业报告来源]</li>
-  </ul>
-  <p class="callout-hint">有线索后可触发 comp-analysis；在此之前不强行填充宏观统计或背景调研数据。</p>
-</aside>
-```
+每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
 
-#### 七、投资回报与敏感性分析
-> The investor's deal economics. Built primarily from `returns-analysis` + `sensitivity-analysis`. Every assumption MUST trace back to a source in another section (typically 四 / 五 / 六).
+触发记录的条件：
+- 遇到当前指令未覆盖的特殊情况或边界案例
+- 用户给出了纠正或更好的建议
+- 发现值得重用的成功经验或模式
+- 原有指令出现歧义或冲突
 
-- 三档情景回报表（base / upside / downside）
-  - IRR / MOIC / Cash-on-Cash / Payback
-  - 退出时点、退出倍数、退出方式
-- 关键假设清单（带 certainty 标签 + 来源指向）
-  - 🟡 或 ⚪ 假设须用 `<span class="assumption flagged">` 高亮
-- 敏感性分析
-  - Tornado chart：对 IRR 影响最大的 5–8 个变量
-  - 双变量敏感性矩阵（如 退出 cap rate × 营收增长率）
-  - Break-even 阈值（哪些变量在什么值会让项目不可投）
-- 与卖方声称 IRR / 项目 OM 中数字的差异分析
-- 跨币种 / 跨税制时同时给出本币和 RMB 视角
-
-#### 八、项目时间轴（进展、依赖与外部窗口）
-> **三子块竖排时间轴** — 本节拆成三个 `<h3>` 子块，不要合并成一张统一大表。两类信息必须一眼可见：8.1/8.2 标「重要性」，8.3 标「影响程度」。
-
-- **8.1 已发生关键事件** — **层级展开（年→月→日）**：默认按**年份**折叠，每年一行**年度进展总结**；点击年份展开**月份**进展；若某月有日度数据再展开到 `.tl-item` 日级条目。用嵌套 `<details>`（`.tl-tree` > `.tl-year` > `.tl-month` > `.tl-item`，模板见 `STYLE_GUIDE.md` "Timeline — 层级展开（年→月→日）"），最近年份默认 `open`。每条日级 `.tl-item` 仍带「重要性」badge（`badge-red 关键` / `badge-amber 重要` / `badge-blue 一般`）+ certainty tag + 来源。仅当已发生事件 ≤4 条时可退回扁平 `.timeline`。
-- **8.2 当前正在推进的事项** — 同样 `.timeline`，`.tl-item.pending`（橙点），每条带「重要性」badge。
-- **8.3 未来关键节点** — 用表格，列为 `节点 | 预计时间 | 影响程度 | 结果触发行动`。影响程度用 badge：`badge-red 极高` / `badge-amber 中高 / 中` / `badge-blue 里程碑`。"结果触发行动"列写明该节点正/负结果分别触发什么动作（对照 STYLE_GUIDE 模板）。
-
-子块顶部各放一行小字说明该 badge 表示「重要性」还是「影响程度」。完整 HTML 模板见 `assets/components.html` Section D（D1 完整三子块 + D2 扁平版）。
-
-Multi-asset projects：在每个子块内按 asset 分组（`.tl-item` 前缀资产名）或在 8.3 表加 `asset` 列。
-
-`node-monitoring` 把事件喂进这三个子块（按已发生/推进中/未来归类）—— 不产出自己单独的表。
-
-#### 九、关键风险与缓释
-
-- 风险矩阵（Likelihood × Impact）
-- 每条 critical/high 风险：来源证据、当前 mitigation、责任人
-- 红线风险（一旦触发须停止推进）
-- 来自 七 敏感性分析的极度敏感变量同步登记为风险
-
-#### 十、待项目方补充的信息
-> 本节收录**仍须项目方/对方团队提供的信息缺口**，按所属 section 分组列出。用户日常追问的已解答/研究中部分已归入 section 四 外部调研对应 topic；本节只放"现在还缺、需要对方来补"的项目。
-
-**section-lead 固定写法**：
-> 会议与公开研究中的已解答部分已写入 [四 · 外部调研主题]（按路径折叠）。本节仅列仍须 [项目方名称] / 团队提供的缺口，按板块归集。
-
-**结构**：按所属 section 分组，每组一张表，列为：
-
-| 待补充项 | 紧迫度 | 负责方 | 详见 |
-|---------|-------|-------|-----|
-
-- **紧迫度** 用 badge：`badge-red Blocker`（阻塞决策）/ `badge-amber 高` / `badge-blue 中`
-- **详见** 列用锚链接指回对应 section（如 `<a href="#business-model">四 · 平台共性</a>`）
-- 按紧迫度排序，Blocker 置顶
-- 若所有缺口已解决，本节降为 Stub 或隐藏（按 hide-and-renumber 规则）
-
-```html
-<p class="section-lead">会议与公开研究中的<strong>已解答部分</strong>已写入 <a href="#business-model">四 · 外部调研主题</a>（按路径折叠）。本节仅列仍须 [项目方] / 团队提供的缺口，按板块归集。</p>
-
-<h3>[板块名，如：业务模式 · 配额与路径]</h3>
-<table>
-  <thead><tr><th>待补充项</th><th>紧迫度</th><th>负责方</th><th>详见</th></tr></thead>
-  <tbody>
-    <tr>
-      <td>[具体缺什么]</td>
-      <td><span class="badge badge-red">Blocker</span></td>
-      <td>[负责人 / 渠道]</td>
-      <td><a href="#[anchor]">[section编号 · topic名]</a></td>
-    </tr>
-  </tbody>
-</table>
-
-<h3>[板块名，如：主体、合作方与融资]</h3>
-<table>
-  <thead><tr><th>待补充项</th><th>紧迫度</th><th>负责方</th><th>详见</th></tr></thead>
-  <tbody>
-    <tr>
-      <td>[具体缺什么]</td>
-      <td><span class="badge badge-amber">高</span></td>
-      <td>[负责人]</td>
-      <td><a href="#[anchor]">[section编号]</a></td>
-    </tr>
-  </tbody>
-</table>
-```
-
-#### 十一、决策框架
-> Synthesis layer. Inputs from every section above.
-
-- 投资论点（3–5 条，每条带证据链接到对应 section）
-- 投后增值杠杆（金额、概率、时间窗口）— from `value-creation-plan`
-- 关键决策选项（推进 / 改条件推进 / 放弃 / 暂缓）+ 各选项 trade-off
-- 推荐意见 + 一句话理由
-- 推进所需的下一步动作清单（owner / deadline）
-
-### Step 4: 缺乏资料 Callout Template
-
-```html
-<aside class="callout missing">
-  <p class="callout-title">⚠ 缺乏资料</p>
-  <p>当前材料未提供 <strong>[具体缺失的子项]</strong>。需补充以下任一资料以激活本节：</p>
-  <ul>
-    <li>[最优先：来源类型 + 具体文件名建议]</li>
-    <li>[次优先：来源类型 + 具体文件名建议]</li>
-    <li>[备选：可通过公开渠道获取的资料]</li>
-  </ul>
-  <p class="callout-hint">在 chat 中直接补充信息或上传文件，本节将自动更新。</p>
-</aside>
-```
-
-The bulleted prompts must be **sector-aware and specific** — not "请补充更多资料". Example for 五、融资结构 in a real-estate deal:
-- 卖方提供的 indicative term sheet 或定价邮件
-- 项目历史融资记录（资本变更登记、股东会决议）
-- 拟定债务结构说明（贷款方、抵押安排、利率）
-
-### Step 5: Certainty Tagging (every data point)
-
-Every fact in the KB carries an inline certainty tag, defined in `STYLE_GUIDE.md`:
-
-| Tag | Meaning | When |
-|-----|---------|------|
-| ✅ 已核实 | Cross-verified from ≥2 independent sources, or from an authoritative source (regulator, audit) | Use sparingly — most data does not qualify |
-| 🟡 当事方声明 | Claimed by a party (seller / project co / advisor); not independently confirmed | Default for most data from a CIM or seller deck — **MUST name the party** |
-| 🔵 分析师推论 | Derived by analysis, not stated explicitly anywhere | Mark conclusions/projections/estimates — **MUST name the analysis source (AI vs human)** |
-| ⚪ 待确认 | Mentioned but unverified, or partial information | Flag for follow-up |
-
-**Attribution is mandatory for 🟡 and 🔵 (a bare dot is no longer acceptable):**
-
-- 🟡 **当事方声明 → name *which* party** (use the canonical entity name from Step 1.5 Entity Resolution): `🟡 卖方` / `🟡 项目方` / `🟡 顾问 (XX 律所)` / `🟡 经纪`. Markup: `<span class="tag tag-party">🟡 <span class="tag-src">卖方</span></span>`.
-- 🔵 **分析师推论 → name the analysis source: AI or internal human analyst**: `🔵 AI推论` / `🔵 内部分析师`（可加首字母）。Markup: `<span class="tag tag-analyst">🔵 <span class="tag-src">AI推论</span></span>`.
-- ✅ / ⚪ need no attribution. For extra context that would crowd the pill, use the `.tag-attrib` italic suffix outside the tag (e.g. `(CIM p.12)`). Full markup spec: `STYLE_GUIDE.md` "Tags and badges (portable)".
-
-### Step 6: Source Linking (clickable + hoverable)
-
-Every populated paragraph must link back to its source(s). Citations are rendered as **tooltip-enabled references** — clickable to jump, hoverable to preview — using the pattern in `STYLE_GUIDE.md` "Tooltip-Enabled Citations".
-
-```html
-<span class="cite-ref">
-  <a href="#src-U-7">[U-7]</a>
-  <span class="tooltip">
-    <span class="tooltip-title">📄 用户上传 · U-7</span>
-    <span class="tooltip-source">DPHI Town Centres Strategy 2024.pdf, p.47</span>
-    <span class="tooltip-preview">"…FSR for the precinct shall not exceed 2.5:1…"</span>
-  </span>
-</span>
-```
-
-Rules:
-- Source IDs use **prefix convention**: `U-N` for user-uploaded sources, `A-N` for AI-generated sources (e.g., the KB itself, prior IC memos, scraped public-info-search results). `document-reorganize` assigns and maintains these IDs.
-- The tooltip MUST include a 1–2 line verbatim excerpt where the citation lands — not just the filename. This lets the reader sanity-check without leaving the document.
-- For URL-based sources, the tooltip excerpt is the relevant sentence from the page (max 200 chars).
-- For AI-generated sources, the tooltip preview shows the relevant sentence from the prior agent output + timestamp.
-
-### Step 7: Term Annotation Hand-off
-
-After rendering, scan the new/updated content for technical terms (储能 LFP / 构网型逆变器 / DA / FSR / FIRB / AEMO / BESS / SPV / VIE / cap rate / ROFR etc.). For each newly-introduced term, invoke `term-annotator` to insert a **tooltip-enabled term reference** on first occurrence and add a glossary entry in 附录 B.
-
-```html
-<span class="term-ref">
-  构网型逆变器<a href="#term-grid-forming" class="term-marker">*</a>
-  <span class="tooltip">
-    <span class="tooltip-title">构网型逆变器 / Grid-forming inverter</span>
-    <span class="tooltip-preview">能主动建立电网电压与频率参考的逆变器…</span>
-  </span>
-</span>
-```
-
-Rules:
-- First occurrence in the KB body gets the marker; subsequent occurrences do not (avoid `*` clutter).
-- The hover tooltip carries the 1-sentence definition — full definition lives in 附录 B.
-- In bilingual mode, both the inline marker and the tooltip definition are bilingual.
-
-### Step 8: Version & Changelog
-
-Increment the KB version (e.g., v1.6 → v1.7). Append one row to the changelog at the bottom of the HTML:
-
-```
-v1.7 | 2026-05-18 14:30 | risk-matrix | 八: 新增 3 项 critical 风险 (跨境合规、招商进度、电价波动)
-v1.6 | 2026-05-18 12:10 | comp-analysis | 六: 添加 4 个澳洲 BESS 可比交易
-...
-```
-
-### Step 9: Maturity Recompute
-
-After every update, recompute Factor A and Factor B. Update the header. If overall maturity crosses a tier boundary (Early → Mid → Mature), surface a notice in the chat response.
-
-**Factor A** = mean completeness score across **all 11 canonical slots** (denominator is always 11, regardless of how many slots are currently rendered). Empty (hidden) slots score 0; Stub slots score per the stub's own self-rating (typically 5–15% — they're "we know what's missing" not "we have content"); Populated slots score per their internal sub-block coverage. This preserves the prompt to fill gaps — hiding a slot makes the document look tighter, but the maturity score still penalizes the absence.
-
-**Factor B** = source diversity from 附录 A, unchanged. If 附录 A is itself hidden (no sources yet), Factor B is 0.
-
-For multi-asset projects, Factor A is computed per-asset per-slot first, averaged within slot (across assets), then averaged across the full 11-slot canonical denominator. The header MUST surface the per-asset breakdown — never collapse to a single number.
-
-### Step 10: KB Header & Shell Construction
-
-The whole body is wrapped in the `.kb-shell` panel-switcher layout (see "Left section-nav (panel switcher)" above): `<div class="kb-shell"><nav class="kb-nav">…buttons…</nav><main class="kb-content">…panels only…</main></div>`. Emit **`#overview` first** (masthead + `.kb-summary`, default `.active`), then one `.kb-panel` per rendered slot/appendix. Each content slot renders as `<section class="block kb-panel" id="…">` with **no** masthead inside. Only `#overview`'s nav button and panel get `.active` on initial load. Paste the panel-switcher `<script>` before `</body>`.
-
-The header itself is the `.masthead` two-column block defined in `STYLE_GUIDE.md` "### Masthead": left = title block, right = `.masthead-meta` data column, below = 3-colour `.stat-row`. Copy that structure; fill the project's values.
-
-```html
-<header class="masthead">
-  <div class="masthead-split">
-    <div class="masthead-main">
-      <div class="masthead-badges">
-        <span class="conf-badge">Confidential Investment Memorandum</span>
-        <span class="ai-badge">🤖 AI 生成</span>
-        <!-- Bilingual only: language toggle goes here -->
-      </div>
-      <h1><!-- 项目名 · 项目知识网络 --></h1>
-      <p class="masthead-subtitle"><!-- English line · Knowledge Network · v1.0 --></p>
-      <p class="masthead-lead"><!-- 一句话项目定位：地点 · 指引价 · 资金需求 · 卖方 · 阶段 --></p>
-    </div>
-    <aside class="masthead-meta" aria-label="文档元数据">
-      <dl>
-        <div class="meta-row"><dt>Version</dt><dd>v1.0</dd></div>
-        <div class="meta-row"><dt>Date_stamp</dt><dd>2026-05-20</dd></div>
-        <div class="meta-row"><dt>Deal_stage</dt><dd><span class="stage-pill">Mid-Stage</span></dd></div>
-        <div class="meta-row"><dt>Report_status</dt><dd>卖方挂牌 · 待核实</dd></div>
-      </dl>
-    </aside>
-  </div>
-  <div class="stat-row">
-    <div class="stat-item stat-item-a"><div class="stat-label">Factor A · 完备度</div><div class="stat-value">61%</div><p class="stat-note">11 slot 全渲染</p></div>
-    <div class="stat-item stat-item-b"><div class="stat-label">Factor B · 来源多样性</div><div class="stat-value">54%</div><p class="stat-note">来源类型</p></div>
-    <div class="stat-item stat-item-c"><div class="stat-label">综合成熟度</div><div class="stat-value">58%</div><p class="stat-note">Mid Stage</p></div>
-  </div>
-</header>
-```
-
-Rules:
-- **`ai-badge` 始终显示**（白底描边），无论语言切换。`conf-badge` 是酒红实心。
-- **`meta-row` 的 `dt` 文本不要手动加冒号或末尾「·」** —— 大写与字距由 CSS 控制，多加字符会渲染出 `REPORT_STATUS·` 这类多余符号。`Deal_stage` 的 `dd` 用黑色 `stage-pill`，其余 `dd` 为纯文本。
-- **三个 stat 块固定语义**：`stat-item-a`=Factor A（浅米）/ `stat-item-b`=Factor B（中酒红）/ `stat-item-c`=综合成熟度（深酒红）。
-- **多资产**：把 per-asset breakdown（如 `Wollar 62% · Moorabool 8%`）放进 Factor A 的 `stat-note`，不另起一块。
-- **双语**：语言切换按钮放进 `.masthead-badges` 内，右对齐；只在 bilingual 模式渲染。
-- 免责声明（"本文档非投资建议…"）放在页面底部 `.footer`，不再单列 `kb-disclosure` 段。
-
-## Output Format
-
-
-
-- **Chat**: Brief markdown — what changed in this update, which sections moved, new maturity scores, suggested next action
-- **HTML file**: `[AI] <项目名>_知识网络.html` (note `[AI]` prefix is mandatory) — full re-render of the 11 sections + 2 appendices + header + changelog
-- **Location**: Saved to the project folder root (same folder the user opened in Cowork)
-- **Creating a KB**: Read `kb-template.html` from this skill directory. It contains the complete CSS, font links, HTML shell, and panel-switcher JS — all pre-baked. Fill in the `{{PLACEHOLDER}}` tokens with project data, then save as `[AI] <项目名>_知识网络.html`. Do NOT rewrite the CSS or JS — they are already correct.
-- **Updating an existing KB**: Edit only the content inside the relevant `<section>` panels. Never strip or modify the `<style>` block or the `<script>` at the bottom.
-- **Self-check before saving**: confirm (1) exactly one `.kb-panel.active` on `#overview` + matching `.kb-nav-btn.active`, (2) masthead + `.kb-summary` only inside `#overview` (not repeated in slot panels), (3) every active slot has a matching nav button, (4) the `<script>` block is present before `</body>`.
-
-## Important Notes
-
-- **Single source of truth**: All non-IC outputs go here. Do NOT create separate "layer" HTML files. Do NOT spread project information across multiple documents.
-- **Hide-and-renumber, don't pad**: Empty slots are hidden, not filled with generic "暂无资料" placeholders. A 缺乏资料 callout is reserved for slots a skill has *actually examined* and found informative absences in — those are Stubs and they DO render. The distinction matters: a fresh KB right after intake should look short and clean, not bloated with eleven "to be filled" boxes.
-- **Specific prompts, not generic**: A Stub 缺乏资料 callout that says "需要更多资料" is useless and disqualifies the slot from being a Stub at all (downgrade it to Empty). Real Stubs name file types, source parties, and what they would unlock.
-- **Anchors and slot keys are stable; numerals are not**: When one skill needs to reference content in another slot, link to the anchor (`#returns`) or use the slot key, never the numeral ("第七节") — the numeral floats as the manifest changes.
-- **Certainty tagging is non-negotiable, and 🟡/🔵 must be attributed**: An untagged fact is worse than no fact. 🟡 must name the party, 🔵 must name AI vs internal analyst. If unsure, mark ⚪ 待确认.
-- **Atomic updates**: When a skill writes to multiple slots in one turn, do all writes + one version bump + one changelog entry + one re-render, not multiple bumps.
-- **Maturity penalizes hiding**: Factor A's denominator is always 11. Hiding an empty slot doesn't game the score — only adding content does.
-- **The KB feeds `ic-memo`**: When `/ic-memo` is invoked, it reads this HTML as primary input. A high-quality KB → high-quality memo with minimal extra work.
-- **Auto-update on every conversation**: Any new info from the user in chat (even a casual "对了忘了说，项目方已经拿到 FIRB 批准了") must be classified into the right slot(s) and trigger an update, which may transition a slot from Empty → Populated and trigger renumbering.
+若认为核心指令需要改进，请主动告知用户并说明原因。

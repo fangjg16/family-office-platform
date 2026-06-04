@@ -109,14 +109,49 @@ Report section contents:
 ## Output Format
 
 - **Chat**: Markdown — critical risks list + overall risk profile
-- **KB update**: writes to the following Project Knowledge Base section(s) of `[AI] <项目名>_知识网络.html`:
-  - 九 关键风险与缓释
-- **Section details**:
-  - 九: 风险矩阵 (Likelihood × Impact)、每条 critical/high 风险的证据来源 + 当前 mitigation + 责任人
-  - 红线风险显式标记 (一旦触发须停止推进)
-  - 新发现的 mitigation 缺口同步到 十 待确认问题清单
-- All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+
+## KB Handoff (mandatory — do not skip)
+
+This skill does **not** write HTML or edit the KB file directly. After Step 5, output the following Handoff Block in the chat response, then invoke `knowledge-base-generation` to render it.
+
+**Target slots**: `risks`, `open-questions`
+
+```
+---KB-HANDOFF---
+from-skill:   risk-matrix
+target-slots: [risks, open-questions]
+update-mode:  merge
+version-bump: minor
+findings:
+  risks:
+    overall-profile: aggressive | moderate | conservative
+    items:
+      - id: R-001
+        category: <one of 8 standard categories>
+        description: <specific risk scenario — not just the category name>
+        likelihood: 1-4
+        impact: 1-4
+        score: <L×I>
+        level: Critical | High | Medium | Low
+        redline: true | false       # true = deal-stopper if triggered
+        mitigation-current: <what is already in place>
+        mitigation-gap: <what additional action is needed>
+        owner: <responsible party>
+        certainty: ✅ | 🟡 <party> | 🔵 AI推论 | ⚪
+        source: [U-N, A-N]
+      - id: R-002
+        ...
+  open-questions:
+    - section: risks
+      item: <specific information gap or mitigation action>
+      urgency: Blocker | 高 | 中
+      owner: <who must provide this>
+new-sources: []
+new-terms: []
+---END-HANDOFF---
+```
+
+> Never write `<table>`, `<tr>`, risk badge HTML, or any KB HTML fragment directly from this skill. All rendering is done by `knowledge-base-generation` from the Handoff Block above.
 ## Important Notes
 
 - The risk matrix is a **living document** — update when new information arrives or events occur.
@@ -125,3 +160,16 @@ Report section contents:
 - For cross-border projects, include a dedicated "Cross-border / Regulatory" sub-section covering FIRB, FX, tax treaty, and repatriation risks.
 - The risk matrix feeds directly into `ic-memo` (Section 4: Core Risks) and `sensitivity-analysis`.
 - Do NOT list risks without actionable context — every risk needs "so what" (what it means for the deal).
+
+
+## 持续学习（Self-Evolution）
+
+每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+
+触发记录的条件：
+- 遇到当前指令未覆盖的特殊情况或边界案例
+- 用户给出了纠正或更好的建议
+- 发现值得重用的成功经验或模式
+- 原有指令出现歧义或冲突
+
+若认为核心指令需要改进，请主动告知用户并说明原因。

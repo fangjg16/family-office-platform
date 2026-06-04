@@ -173,7 +173,22 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
   });
 }
 
-/** Hermes Agent 指令：文件回路（禁止用 ```html 代码块交付） */
+/** Worker 注入：KB 任务前必须 read_file 的 Hermes 容器内路径（v2.5 布局） */
+export function buildHermesKnowledgeNetworkRequiredReads(): string {
+  const base = "~/.hermes/skills/knowledge-base-generation";
+  return `
+
+【知识网络 · 执行前必读（read_file，未完成 1–5 不得写 HTML）】
+1. ${base}/references/README-hermes.md
+2. ${base}/references/STYLE_GUIDE.md
+3. ${base}/SKILL.md
+4. ${base}/kb-template.html
+5. ${base}/assets/components.html
+
+生成时以 kb-template.html 为壳填数据；组件/HTML 语法遵守 STYLE_GUIDE 与 components.html；禁止自创 class、禁止修改 template 内 JS/CSS。`;
+}
+
+/** Hermes Agent 指令：文件回路 + 回复末尾 \`\`\`html 双交付 */
 export function buildHermesKnowledgeNetworkFileProtocol(
   jfoBase: string,
   projectId: string,
@@ -193,35 +208,32 @@ export function buildHermesKnowledgeNetworkFileProtocol(
 
   return `
 
-【知识网络 · 文件回路（硬性，取代聊天里的整页 HTML）】
+【知识网络 · 一次回复双交付（硬性）】
 ${modeLine}
-家办平台**只认** Worker API 回传的 HTML 文件，**禁止**在回复里放 \\\`\\\`\\\`html 整页代码块（网站不会解析）。
 
-工作文件路径（容器内）：\`${workFile}\`
-执行前：\`mkdir -p ./kb/${projectId}\`
+**对用户可见回复（最高优先级，不得省略）**
+1. 先写 3–8 行简体中文摘要（改了哪些 section、Populated/Stub）。
+2. **同一条回复末尾**必须附完整整页 HTML：\\\`\\\`\\\`html … \\\`\\\`\\\`（含 <!DOCTYPE html>，按 knowledge-base-generation + kb-template）。
+3. **禁止**只写「已保存到 ${workFile}」「见磁盘路径」而不附代码块——用户只有一条消息，看不到容器内文件。
+4. **不要**要求用户「再发一句」或「把 HTML 放在下一条消息」。
 
-**A. 拉取当前已发布版（增量时必做，全量重做可跳过）**
+**容器内工作流（有 bash 时额外执行，与代码块并行）**
+工作文件：\`${workFile}\`（\`mkdir -p ./kb/${projectId}\`）
+
+**A. 拉取当前版（增量必做，全量可跳过）**
 \`\`\`bash
 curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
   "${url}?format=raw" -o "${workFile}" || echo "NO_CURRENT_KB"
 \`\`\`
-若 curl 失败（404 / NO_CURRENT_KB），表示首次生成，直接按 knowledge-base-generation + kb-template 新建 \`${workFile}\`。
 
-**B. 编辑工作文件**
-- 执行 knowledge-base-generation；先读 skill 目录 kb-template.html，壳与脚本原样保留。
-- 用 bash / 编辑器 / patch **只改** \`${workFile}\`，勿在对话里重写整页 HTML。
-- 时间轴 #timeline 须含 8.1 / 8.2 / 8.3；投资论点在 #decision-framework 内。
+**B. 编辑** \`${workFile}\`（局部或全量）；#timeline 含 8.1/8.2/8.3；投资论点在 #decision-framework。
 
-**C. 回传（任务结束前必须成功，否则项目详情不更新）**
+**C. curl PUT（尽量成功，便于项目详情版本号）**
 \`\`\`bash
 curl -sS -X PUT -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
   -H "Content-Type: text/html; charset=utf-8" \\
   "${url}?${qBase}&changelog=hermes-file-put" \\
   --data-binary @"${workFile}"
 \`\`\`
-确认响应 JSON 含 ok:true、version、jobId（jobId 查询参数建议带上；若省略，服务端会绑到进行中的知识网络任务）。
-
-**D. 对用户回复**
-- 仅 3–8 行简体中文摘要：改了哪些 section、Populated/Stub 一句、回传后的 version 号。
-- **不要**附 \\\`\\\`\\\`html 代码块或磁盘路径。`;
+PUT 失败时仍须完成步骤 2 的 \\\`\\\`\\\`html 代码块；平台从回复提取并入库。`;
 }

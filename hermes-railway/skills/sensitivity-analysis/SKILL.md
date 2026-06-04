@@ -121,3 +121,16 @@ Report section contents:
 - For real estate, separately model pre-sale scenario vs. completed-stock scenario if market conditions are uncertain.
 - Time delay sensitivity is often underestimated — model it explicitly (carrying cost, opportunity cost, market shift).
 - This skill feeds directly into `ic-memo` and `risk-matrix`.
+
+
+## 持续学习（Self-Evolution）
+
+每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+
+触发记录的条件：
+- 遇到当前指令未覆盖的特殊情况或边界案例
+- 用户给出了纠正或更好的建议
+- 发现值得重用的成功经验或模式
+- 原有指令出现歧义或冲突
+
+若认为核心指令需要改进，请主动告知用户并说明原因。
