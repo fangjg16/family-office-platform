@@ -219,7 +219,7 @@ export const USER_QUICK_PROMPTS: { label: string; message: string }[] = [
   {
     label: "知识网络",
     message:
-      "生成项目知识网络 HTML。本条回复末尾须附完整 ```html 整页，前面可写简短摘要。",
+      "请基于项目资料包生成项目知识网络 HTML（首次）。正文前附 3–5 行摘要，同条回复末尾须附完整 ```html 整页。",
   },
   { label: "查外部资料", message: "查外部资料：补充这个项目公开信息并与现有材料对照" },
 ];
