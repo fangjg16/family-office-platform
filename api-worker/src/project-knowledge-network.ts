@@ -36,6 +36,26 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 
+const KN_HTML_MAX_BYTES = 5 * 1024 * 1024;
+
+/** 用户本地上传 / 浏览器 PUT 前的 HTML 校验 */
+export function validateProjectKnowledgeNetworkHtml(html: string): string | null {
+  const trimmed = html.trim();
+  if (!trimmed) return "HTML 为空";
+  if (trimmed.length < 200) return "HTML 过短，请上传完整单页";
+  if (trimmed.length > KN_HTML_MAX_BYTES) {
+    return `HTML 过大（>${Math.floor(KN_HTML_MAX_BYTES / 1024 / 1024)}MB）`;
+  }
+  if (
+    !/<html[\s>]/i.test(trimmed) &&
+    !/<!DOCTYPE/i.test(trimmed) &&
+    !/kb-shell|项目知识网络/i.test(trimmed)
+  ) {
+    return "须为完整 HTML 页面（含 <html> 或 kb-template 结构）";
+  }
+  return null;
+}
+
 function changelogFromAnswer(answer: string): string | null {
   const trimmed = answer.replace(/\s+/gu, " ").trim();
   if (!trimmed) return null;

@@ -63,6 +63,7 @@ import {
 import {
   handleGetProjectKnowledgeNetwork,
   handleGetProjectKnowledgeNetworkVersion,
+  handlePutProjectKnowledgeNetwork,
 } from "./project-knowledge-network-routes";
 import {
   getProjectKnowledgeNetworkMeta,
@@ -1186,19 +1187,27 @@ export default {
           version,
           url.searchParams.get("userId"),
         );
-      } else if (
-        /^\/api\/projects\/[^/]+\/knowledge-network$/u.test(path) &&
-        request.method === "GET"
-      ) {
+      } else if (/^\/api\/projects\/[^/]+\/knowledge-network$/u.test(path)) {
         const projectId = decodePathProjectId(path.split("/")[3] ?? "");
-        const htmlParam = (url.searchParams.get("html") ?? "1").trim();
-        const includeHtml = htmlParam !== "0" && htmlParam !== "false";
-        response = await handleGetProjectKnowledgeNetwork(
-          env,
-          projectId,
-          url.searchParams.get("userId"),
-          includeHtml,
-        );
+        if (request.method === "GET") {
+          const htmlParam = (url.searchParams.get("html") ?? "1").trim();
+          const includeHtml = htmlParam !== "0" && htmlParam !== "false";
+          response = await handleGetProjectKnowledgeNetwork(
+            env,
+            projectId,
+            url.searchParams.get("userId"),
+            includeHtml,
+          );
+        } else if (request.method === "PUT") {
+          response = await handlePutProjectKnowledgeNetwork(
+            request,
+            env,
+            projectId,
+            url.searchParams.get("userId"),
+          );
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
       } else if (path === "/api/admin/project-knowledge-network/backfill" && request.method === "POST") {
         response = await handleBackfillProjectKnowledgeNetworks(request, env, url);
       } else if (

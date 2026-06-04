@@ -13,10 +13,20 @@ echo "=== JFO Hermes skills install (v2.5 layout) ==="
 echo "RAW=$RAW"
 echo "SKILLS_ROOT=$SKILLS_ROOT"
 
+uninstall_skill_quiet() {
+  local name="$1"
+  # 卷上常有旧版/残缺安装；先卸再装。Hermes CLI 会交互确认，非 TTY 时用 yes 自动选 y。
+  if [ -t 0 ]; then
+    hermes skills uninstall "$name" 2>/dev/null || true
+  else
+    yes | hermes skills uninstall "$name" 2>/dev/null || true
+  fi
+}
+
 install_skill_md() {
   local name="$1"
   echo "--- $name (SKILL.md) ---"
-  hermes skills uninstall "$name" 2>/dev/null || true
+  uninstall_skill_quiet "$name"
   hermes skills install "$RAW/skills/$name/SKILL.md" --name "$name" || {
     echo "WARN: hermes install failed for $name, trying curl fallback"
     mkdir -p "$SKILLS_ROOT/$name"
@@ -26,7 +36,7 @@ install_skill_md() {
 
 # --- knowledge-base-generation：整目录（模板 + assets + references）---
 echo "--- knowledge-base-generation (full directory) ---"
-hermes skills uninstall knowledge-base-generation 2>/dev/null || true
+uninstall_skill_quiet knowledge-base-generation
 if hermes skills install "$RAW/skills/knowledge-base-generation" --name knowledge-base-generation 2>/dev/null; then
   echo "OK: hermes directory install"
 else

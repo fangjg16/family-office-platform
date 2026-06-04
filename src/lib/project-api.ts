@@ -304,6 +304,49 @@ export async function fetchProjectKnowledgeNetwork(
   return data;
 }
 
+export type UploadProjectKnowledgeNetworkResult = {
+  ok: boolean;
+  projectId: string;
+  hasKnowledgeNetwork: boolean;
+  meta: ProjectKnowledgeNetworkMeta | null;
+  message?: string;
+};
+
+/** 本地上传 HTML，覆盖当前版（旧版归档，版本号 +1） */
+export async function uploadProjectKnowledgeNetwork(
+  projectId: string,
+  userId: string,
+  html: string,
+  options?: { changelog?: string },
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<UploadProjectKnowledgeNetworkResult> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
+  const q = new URLSearchParams({ userId });
+  const res = await fetch(
+    `${base}/api/projects/${encodeURIComponent(projectId)}/knowledge-network?${q}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        html,
+        ...(options?.changelog?.trim() ? { changelog: options.changelog.trim() } : {}),
+      }),
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as UploadProjectKnowledgeNetworkResult & {
+    error?: string;
+    code?: string;
+  };
+  if (res.status === 403) {
+    throw new Error(data.error || "无权上传或覆盖项目知识网络");
+  }
+  if (!res.ok) {
+    throw new Error(data.error || `上传失败（${res.status}）`);
+  }
+  return data;
+}
+
 export async function fetchProjectKnowledgeNetworkVersionHtml(
   projectId: string,
   version: number,

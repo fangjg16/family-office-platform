@@ -1,14 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { History, Loader2, Network, RotateCcw, Sparkles } from "lucide-react";
+import { History, Loader2, Network, RotateCcw, Sparkles, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ENABLE_LIVE_CHAT,
   AI_CHAT_ENDPOINT,
   fetchProjectKnowledgeNetwork,
   fetchProjectKnowledgeNetworkVersionHtml,
+  uploadProjectKnowledgeNetwork,
   type ProjectKnowledgeNetworkResponse,
 } from "@/lib/project-api";
+import { getProjectRole } from "@/workspace/workspace-users";
 import {
   KNOWLEDGE_NETWORK_FULL_REGENERATE_PROMPT,
   KNOWLEDGE_NETWORK_INCREMENTAL_PROMPT,
@@ -59,8 +61,17 @@ export function ProjectKnowledgeNetworkSection({
   const [viewVersion, setViewVersion] = useState<number | "current">("current");
   const [viewHtml, setViewHtml] = useState<string | null>(null);
   const [loadingVersion, setLoadingVersion] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const useLive = ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT);
+  const canPublish =
+    useLive &&
+    (() => {
+      const role = getProjectRole(userId, projectId);
+      return role === "admin" || role === "core" || role === "mid";
+    })();
 
   const reload = useCallback(async () => {
     if (!useLive || !userId) {
@@ -92,6 +103,33 @@ export function ProjectKnowledgeNetworkSection({
     navigate(`/app/chat/${projectId}`, {
       state: { draftMessage } satisfies KnowledgeNetworkChatEntryState,
     });
+  };
+
+  const onUploadHtmlFile = async (file: File) => {
+    if (!canPublish) return;
+    setUploadSuccess(null);
+    setError(null);
+    setUploading(true);
+    try {
+      const html = await file.text();
+      const changelog = window.prompt(
+        "可选：填写本次上传说明（将显示在版本摘要，留空则使用默认说明）",
+        "本地上传 HTML 覆盖",
+      );
+      if (changelog === null) {
+        return;
+      }
+      const result = await uploadProjectKnowledgeNetwork(projectId, userId, html, {
+        changelog: changelog.trim() || undefined,
+      });
+      setUploadSuccess(result.message ?? `已发布为 v${result.meta?.version ?? "?"}`);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "上传失败");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
   };
 
   const onSelectVersion = async (v: string) => {
@@ -154,7 +192,8 @@ export function ProjectKnowledgeNetworkSection({
             项目知识网络
           </h3>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            全员可见。更新时请在对话里写明要改/删的 section；「全量重做」将整页重建。
+            全员可见。对话里可「按板块更新」或「全量重做」；也可上传本地生成的单页 HTML
+            覆盖当前版（旧版自动归档），后续增量更新基于新版。
           </p>
         </div>
       </div>
@@ -184,7 +223,39 @@ export function ProjectKnowledgeNetworkSection({
               全量重做
             </Button>
           </>
-        ) : (
+        ) : null}
+        {canPublish ? (
+          <>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".html,text/html"
+              className="sr-only"
+              aria-hidden
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) void onUploadHtmlFile(f);
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-8 text-xs"
+              disabled={uploading}
+              title="选择本地 .html 单页，覆盖当前项目知识网络（版本 +1，旧版归档）"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {uploading ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Upload className="mr-1 h-3.5 w-3.5" />
+              )}
+              上传 HTML 覆盖
+            </Button>
+          </>
+        ) : null}
+        {!data?.hasKnowledgeNetwork ? (
           <Button
             type="button"
             size="sm"
@@ -195,8 +266,12 @@ export function ProjectKnowledgeNetworkSection({
             <Sparkles className="mr-1 h-3.5 w-3.5" />
             生成知识网络
           </Button>
-        )}
+        ) : null}
       </div>
+
+      {uploadSuccess ? (
+        <p className="mt-2 text-xs text-emerald-700">{uploadSuccess}</p>
+      ) : null}
 
       {loading ? (
         <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">

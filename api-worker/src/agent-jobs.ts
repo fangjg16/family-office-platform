@@ -7,7 +7,28 @@ import {
   upsertProjectKnowledgeNetwork,
 } from "./project-knowledge-network";
 
-export type AgentJobEnv = { DB: D1Database; FILES: R2Bucket };
+export type AgentJobEnv = {
+  DB: D1Database;
+  FILES: R2Bucket;
+  /** 用于知识网络交付说明（是否已配置 Hermes→Worker 桥接密钥） */
+  JFO_INTERNAL_KEY?: string;
+};
+
+/** 路径 B（从回复提取 HTML）成功时的说明：区分「未配密钥」与「已配但未 PUT」 */
+function knowledgeNetworkExtractFallbackNote(env: AgentJobEnv): string {
+  const bridgeConfigured = Boolean((env.JFO_INTERNAL_KEY ?? "").trim());
+  if (bridgeConfigured) {
+    return (
+      "（本次 Hermes 未通过 curl PUT 回传，Worker 从回复提取 HTML 入库。" +
+      "搭建期请按 docs/HERMES-RAILWAY-SSH-SETUP.md 在容器内重装 skills 并复测，直至显示「文件 API 回传」；" +
+      "上线后本条可作为用户侧兜底。）"
+    );
+  }
+  return (
+    "（从回复提取 HTML 入库；请在 Railway Variables 与 Worker 执行 wrangler secret put JFO_INTERNAL_KEY 配置相同密钥，" +
+    "以便 Hermes 使用 curl PUT 回传。）"
+  );
+}
 
 export type AgentJobStatus = "pending" | "running" | "completed" | "failed";
 
@@ -122,7 +143,7 @@ async function finalizeKnowledgeNetworkJobResult(
       "从 Hermes 回复提取 HTML",
     );
     if (written) {
-      const note = `\n\n已写入**项目知识网络 v${written.meta.version}**（从回复提取 HTML；建议 Railway 配置密钥以便下次走 curl PUT）。`;
+      const note = `\n\n已写入**项目知识网络 v${written.meta.version}**${knowledgeNetworkExtractFallbackNote(env)}`;
       const answer = result.answer.includes("项目知识网络 v")
         ? result.answer
         : `${result.answer}${note}`;

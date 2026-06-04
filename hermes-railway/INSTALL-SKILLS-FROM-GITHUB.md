@@ -43,8 +43,12 @@ https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-ra
 
 ## 第 2 步：Railway SSH
 
+**手把手（含搭建验收 + Dashboard 不破坏 8642）**：见 **[docs/HERMES-RAILWAY-SSH-SETUP.md](../docs/HERMES-RAILWAY-SSH-SETUP.md)**。
+
 ```powershell
-railway.cmd ssh --project=c6d187c9-e149-4e27-b576-8d0c763f0d85 --environment=c3fbdd4a-fa30-4bcb-81c5-da20dc1b48b7 --service=eb8fc221-019c-4539-92e2-04e755375b6a
+cd family-office-platform
+railway.cmd link -p c6d187c9-e149-4e27-b576-8d0c763f0d85 -e production -s hermes-agent
+railway.cmd ssh -s hermes-agent
 ```
 
 ---

@@ -53,3 +53,12 @@ export function canViewProjectKnowledgeNetwork(
 ): boolean {
   return getProjectRole(userId, projectId) !== "guest";
 }
+
+/** 上传/覆盖项目知识网络 HTML（访客与 low 只读） */
+export function canPublishProjectKnowledgeNetwork(
+  userId: string,
+  projectId: string,
+): boolean {
+  const role = getProjectRole(userId, projectId);
+  return role === "admin" || role === "core" || role === "mid";
+}
