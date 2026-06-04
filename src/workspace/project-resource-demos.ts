@@ -1092,6 +1092,54 @@ const DEMOS: Record<string, ProjectResourceDemo> = {
   },
 };
 
+/** 云端自建项目（无种子演示稿）时的占位数据，避免对话页访问 null.chat */
+const GENERIC_CLOUD_CHAT: ProjectChatSnippet = {
+  credibilityUserLine: "请结合项目资料说明主要参与方的可信度与风险要点。",
+  credibilityUserLineMid: "请说明资料中资金与资源安排的主要不确定性。",
+  credibilityUserLineLow: "请概述资源配置结论（不涉及具体主体名称与金额）。",
+  sidebarPreview: "基于项目资料包与对话进行分析",
+  credibilityTitleCore: "—",
+  credibilityTitleSecondary: "—",
+  rankingPlansCore: [
+    { rank: 1, name: "待补充方案 A", score: 0, rec: true },
+    { rank: 2, name: "待补充方案 B", score: 0, rec: false },
+    { rank: 3, name: "待补充方案 C", score: 0, rec: false },
+  ],
+  rankingPlansSecondary: [
+    { rank: 1, name: "待补充方案 A", score: 0, rec: true },
+    { rank: 2, name: "待补充方案 B", score: 0, rec: false },
+    { rank: 3, name: "待补充方案 C", score: 0, rec: false },
+  ],
+  rankingBullets: [
+    "请结合上传资料与对话内容完善资源配置表。",
+    "重大假设与缺口建议在项目知识网络中同步维护。",
+    "具体方案排名需资料齐备后再行定稿。",
+  ],
+};
+
+export const GENERIC_CLOUD_RESOURCE_DEMO: ProjectResourceDemo = {
+  coreRows: [
+    ["—", "—", "资料待补充", "—"],
+    ["—", "—", "资料待补充", "—"],
+    ["—", "—", "资料待补充", "—"],
+  ],
+  secondaryRows: [
+    ["—", "—", "资料待补充", "—"],
+    ["—", "—", "资料待补充", "—"],
+    ["—", "—", "资料待补充", "—"],
+  ],
+  brokerRows: [
+    ["—", "—", "待评估", "—"],
+    ["—", "—", "待评估", "—"],
+    ["—", "—", "待评估", "—"],
+    ["—", "—", "待评估", "—"],
+  ],
+  coreWarn: "当前项目尚无预设演示数据，请通过对话与资料包完善资源配置。",
+  secondaryWarn: "当前项目尚无预设演示数据，请以资料包与对话为准。",
+  brokerWarn: "当前项目尚无预设演示数据，请联系项目对接人。",
+  chat: GENERIC_CLOUD_CHAT,
+};
+
 export function getProjectResourceDemo(projectId: string): ProjectResourceDemo {
-  return DEMOS[projectId] ?? null;
+  return DEMOS[projectId] ?? GENERIC_CLOUD_RESOURCE_DEMO;
 }

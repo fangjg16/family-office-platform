@@ -1669,9 +1669,9 @@ export default function ConversationCenter() {
   );
 
   const playbackRounds = useMemo(() => {
-    if (!project || !tier || !projectRole) return [];
+    if (!project || !tier || !projectRole || !resourceDemo) return [];
     return buildDemoPlaybackRoundSpecs(project.name, tier, projectRole, resourceDemo.chat);
-  }, [project, tier, projectRole, resourceDemo.chat]);
+  }, [project, tier, projectRole, resourceDemo]);
 
   const permissionSidebarHint = projectRole ? permissionLineSidebar(projectRole) : "";
   const defaultChatTitle = project ? `${project.name} · 全局分析` : "项目对话";
