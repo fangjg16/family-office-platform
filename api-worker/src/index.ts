@@ -67,6 +67,7 @@ import {
 } from "./project-knowledge-network-routes";
 import {
   getProjectKnowledgeNetworkMeta,
+  readProjectKnowledgeNetworkHtml,
 } from "./project-knowledge-network";
 import {
   buildKnowledgeNetworkModeInstructions,
@@ -74,8 +75,11 @@ import {
 } from "./knowledge-network-mode";
 import {
   buildKnowledgeNetworkMetaAnswerText,
-  isKnowledgeNetworkMetaQuery,
-} from "./knowledge-network-meta-query";
+  buildKnowledgeNetworkSummarySystemPrompt,
+  isKnowledgeNetworkReadQuery,
+  isKnowledgeNetworkStatusOnlyQuery,
+  stripHtmlToPlainTextForSummary,
+} from "./knowledge-network-intent";
 import { checkKnowledgeNetworkPipelineReady } from "./knowledge-network-guards";
 import { workspaceUserDisplayName } from "./workspace-display-names";
 import { decodePathProjectId } from "./projects-resolve";
@@ -1003,30 +1007,97 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     (m) => m.role === "user" || m.role === "assistant",
   );
 
-  if (isKnowledgeNetworkMetaQuery(message)) {
+  if (isKnowledgeNetworkReadQuery(message)) {
     let knMeta = null;
+    let knHtml: string | null = null;
     try {
       knMeta = await getProjectKnowledgeNetworkMeta(env, projectId);
+      if (knMeta) {
+        knHtml = await readProjectKnowledgeNetworkHtml(env, projectId);
+      }
     } catch {
-      /* D1 未就绪 */
+      /* D1 / R2 未就绪 */
     }
-    const answer = buildKnowledgeNetworkMetaAnswerText(
-      knMeta,
-      projectTitleHint,
-      knMeta ? workspaceUserDisplayName(knMeta.updatedBy) : undefined,
-    );
-    return json({
-      answer,
-      citationMap,
-      projectId,
-      async: false,
-      chatMode: "standard",
-      skillIntent: "standard",
-      knowledgeNetworkMetaQuery: true,
-      ...(knMeta
-        ? { projectKnowledgeNetworkVersion: knMeta.version }
-        : { hasKnowledgeNetwork: false }),
-    });
+
+    if (isKnowledgeNetworkStatusOnlyQuery(message)) {
+      const answer = buildKnowledgeNetworkMetaAnswerText(
+        knMeta,
+        projectTitleHint,
+        knMeta ? workspaceUserDisplayName(knMeta.updatedBy) : undefined,
+      );
+      return json({
+        answer,
+        citationMap,
+        projectId,
+        async: false,
+        chatMode: "standard",
+        skillIntent: "standard",
+        knowledgeNetworkReadQuery: true,
+        ...(knMeta
+          ? { projectKnowledgeNetworkVersion: knMeta.version }
+          : { hasKnowledgeNetwork: false }),
+      });
+    }
+
+    if (!knMeta || !knHtml?.trim()) {
+      const answer = buildKnowledgeNetworkMetaAnswerText(
+        null,
+        projectTitleHint,
+        undefined,
+      );
+      return json({
+        answer,
+        citationMap,
+        projectId,
+        async: false,
+        chatMode: "standard",
+        skillIntent: "standard",
+        hasKnowledgeNetwork: false,
+        knowledgeNetworkReadQuery: true,
+      });
+    }
+
+    try {
+      const plain = stripHtmlToPlainTextForSummary(knHtml);
+      const { answer: summary } = await callQwen(env, [
+        { role: "system", content: buildKnowledgeNetworkSummarySystemPrompt() },
+        {
+          role: "user",
+          content: [
+            `项目：${projectTitleHint}`,
+            `已发布知识网络：v${knMeta.version}`,
+            "",
+            `用户问题：${message}`,
+            "",
+            "【知识网络正文摘录】",
+            plain,
+          ].join("\n"),
+        },
+      ]);
+      const answer = `${summary.trim()}\n\n---\n基于已发布 **v${knMeta.version}** 摘录作答；完整 HTML 见 **项目详情 → 项目知识网络**（本条**不会**生成新版 HTML）。`;
+      return json({
+        answer,
+        citationMap,
+        projectId,
+        async: false,
+        chatMode: "standard",
+        skillIntent: "standard",
+        knowledgeNetworkReadQuery: true,
+        projectKnowledgeNetworkVersion: knMeta.version,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return json({
+        answer: `无法根据知识网络生成摘要（${msg}）。请在 **项目详情 → 项目知识网络** 查看 **v${knMeta.version}** 完整预览。`,
+        citationMap,
+        projectId,
+        async: false,
+        chatMode: "standard",
+        skillIntent: "standard",
+        knowledgeNetworkReadQuery: true,
+        projectKnowledgeNetworkVersion: knMeta.version,
+      });
+    }
   }
 
   if (shouldRouteToHermes(chatMode) && isHermesAgentConfigured(env)) {

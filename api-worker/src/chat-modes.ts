@@ -1,4 +1,4 @@
-import { isKnowledgeNetworkMetaQuery } from "./knowledge-network-meta-query";
+import { isKnowledgeNetworkDeliveryIntent } from "./knowledge-network-intent";
 
 /**
  * 网站对话 ↔ Hermes 16 skills 意图映射（内部用，用户不可见 skill 名）
@@ -33,7 +33,6 @@ type IntentRule = { intent: SkillIntent; re: RegExp };
 
 /** 越靠前优先级越高（更具体的意图先匹配） */
 const INTENT_RULES: IntentRule[] = [
-  { intent: "knowledge_network", re: /知识网络|知识底座|knowledge\s*base|knowledge\s*network|生成.*html|生成\s*kb|更新\s*kb|项目知识网络|\[AI\].*知识网络|build project profile|organize what we know/u },
   { intent: "ic_memo", re: /投资委员会|ic\s*memo|ic备忘录|投资决策备忘录|立项备忘录|表决建议|条款清单|投委会|decision memo|prepare for ic|总结一下这个项目|write up the deal/u },
   { intent: "dd_checklist", re: /dd\s*checklist|尽调清单|diligence request|data room review|尽调跟踪|还要查什么|what do we still need to check|工作流清单/u },
   { intent: "dd_claim_audit", re: /声明审计|claim audit|verify claims|cross check|信息审计|矛盾|contradiction|审计.*声明|可信度|is this true|audit this/u },
@@ -56,7 +55,7 @@ const INTENT_RULES: IntentRule[] = [
 
 export function detectSkillIntent(message: string): SkillIntent {
   const m = message.trim();
-  if (isKnowledgeNetworkMetaQuery(m)) return "standard";
+  if (isKnowledgeNetworkDeliveryIntent(m)) return "knowledge_network";
   for (const { intent, re } of INTENT_RULES) {
     if (re.test(m)) return intent;
   }
@@ -217,6 +216,10 @@ export const USER_QUICK_PROMPTS: { label: string; message: string }[] = [
   { label: "尽调清单", message: "生成尽调清单，标出已有和还缺的材料" },
   { label: "风险矩阵", message: "做一版风险矩阵，列主要风险和缓释建议" },
   { label: "IC 备忘录", message: "写一版投资委员会备忘录草稿" },
-  { label: "知识网络", message: "生成项目知识网络" },
+  {
+    label: "知识网络",
+    message:
+      "生成项目知识网络 HTML。本条回复末尾须附完整 ```html 整页，前面可写简短摘要。",
+  },
   { label: "查外部资料", message: "查外部资料：补充这个项目公开信息并与现有材料对照" },
 ];

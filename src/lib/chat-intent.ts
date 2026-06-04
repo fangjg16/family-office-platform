@@ -1,11 +1,10 @@
-import { isKnowledgeNetworkMetaQuery } from "@/lib/knowledge-network-meta-query";
+import { isKnowledgeNetworkDeliveryIntent } from "@/lib/knowledge-network-intent";
 
 /**
  * 与 api-worker chat-modes INTENT_RULES 对齐：非 standard 即深度/专项交付。
  * 前端用于：深度任务不走轻问 SSE 气泡、避免误报「流式响应异常」。
  */
 const DEEP_SKILL_PATTERNS: RegExp[] = [
-  /知识网络|知识底座|knowledge\s*base|knowledge\s*network|生成.*html|更新\s*kb|项目知识网络|\[AI\].*知识网络|build project profile|organize what we know/u,
   /投资委员会|ic\s*memo|ic备忘录|投资决策备忘录|立项备忘录|表决建议|条款清单|投委会|decision memo|prepare for ic|总结一下这个项目|write up the deal/u,
   /dd\s*checklist|尽调清单|diligence request|data room review|尽调跟踪|还要查什么|what do we still need to check|工作流清单/u,
   /声明审计|claim audit|verify claims|cross check|信息审计|矛盾|contradiction|审计.*声明|可信度|is this true|audit this/u,
@@ -25,7 +24,8 @@ const DEEP_SKILL_PATTERNS: RegExp[] = [
 
 export function isDeepSkillMessage(message: string): boolean {
   const m = message.trim();
-  if (!m || isKnowledgeNetworkMetaQuery(m)) return false;
+  if (!m) return false;
+  if (isKnowledgeNetworkDeliveryIntent(m)) return true;
   return DEEP_SKILL_PATTERNS.some((re) => re.test(m));
 }
 

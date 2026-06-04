@@ -151,12 +151,31 @@ async function finalizeKnowledgeNetworkJobResult(
     }
   }
 
+  const answerTrim = result.answer.trim();
   const viaChatFallback = (row.hermes_run_id ?? "").startsWith("chat-fallback-");
+
+  /** 模型只回了文字（总结/分析）未贴 HTML：勿标「交付失败」，避免与「阅读/总结」类误触发混淆 */
+  if (
+    answerTrim.length >= 200 &&
+    !/```html|<html[\s>]/i.test(answerTrim)
+  ) {
+    return {
+      status: "ok",
+      answer:
+        answerTrim +
+        "\n\n（本条回复**未包含** ```html 整页，因此**未写入**项目知识网络。若你只想查看或总结已有版本，请直接问「简单总结一下知识网络内容」或到项目详情预览；若要更新 HTML，请使用「生成/按板块更新/全量重做」等明确话术。）" +
+        (viaChatFallback
+          ? "\n\n（当前为聊天兼容模式，无法 curl PUT，生成 HTML 时须在回复末尾附整页代码块。）"
+          : ""),
+      knowledgeNetworkHtml: null,
+    };
+  }
+
   return {
     status: "failed",
     error: "知识网络交付失败",
     answer:
-      (result.answer.trim() || "Hermes 已结束，但未返回可用知识网络。") +
+      (answerTrim || "Hermes 已结束，但未返回可用知识网络。") +
       "\n\n本条回复须在同一次交付末尾附完整 ```html 整页（含 <!DOCTYPE），平台才能预览并写入项目知识网络。" +
       (viaChatFallback
         ? "\n\n（当前为聊天兼容模式，无法 curl，代码块为唯一交付方式。）"
