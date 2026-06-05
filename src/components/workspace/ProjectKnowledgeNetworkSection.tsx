@@ -7,6 +7,7 @@ import {
   AI_CHAT_ENDPOINT,
   fetchProjectKnowledgeNetwork,
   fetchProjectKnowledgeNetworkVersionHtml,
+  knVersionDisplay,
   uploadProjectKnowledgeNetwork,
   type ProjectKnowledgeNetworkResponse,
 } from "@/lib/project-api";
@@ -125,8 +126,12 @@ export function ProjectKnowledgeNetworkSection({
       }
       const result = await uploadProjectKnowledgeNetwork(projectId, userId, html, {
         changelog: changelog.trim() || undefined,
+        uploadFileName: file.name,
       });
-      setUploadSuccess(result.message ?? `已发布为 v${result.meta?.version ?? "?"}`);
+      setUploadSuccess(
+        result.message ??
+          `已发布为 v${result.meta ? knVersionDisplay(result.meta) : "?"}`,
+      );
       await reload();
     } catch (e) {
       setError(e instanceof Error ? e.message : "上传失败");
@@ -166,15 +171,28 @@ export function ProjectKnowledgeNetworkSection({
 
   const versionOptions = [
     ...(data?.meta
-      ? [{ version: data.meta.version, label: `当前 v${data.meta.version}` }]
+      ? [
+          {
+            version: data.meta.version,
+            label: `当前 v${knVersionDisplay(data.meta)}`,
+          },
+        ]
       : []),
     ...(data?.versions ?? [])
       .filter((v) => v.version !== data?.meta?.version)
       .map((v) => ({
         version: v.version,
-        label: `归档 v${v.version} · ${formatKnDate(v.updatedAt)}`,
+        label: `归档 v${knVersionDisplay(v)} · ${formatKnDate(v.updatedAt)}`,
       })),
   ];
+
+  const viewingArchiveLabel =
+    viewVersion !== "current" && data?.meta && viewVersion !== data.meta.version
+      ? (() => {
+          const row = data.versions?.find((v) => v.version === viewVersion);
+          return row ? knVersionDisplay(row) : String(viewVersion);
+        })()
+      : null;
 
   if (!useLive) {
     return (
@@ -250,7 +268,7 @@ export function ProjectKnowledgeNetworkSection({
               variant="outline"
               className="h-8 text-xs"
               disabled={uploading}
-              title="选择本地 .html 单页，覆盖当前项目知识网络（版本 +1，旧版归档）"
+              title="选择本地 .html；文件名含 v5 或 v5.5 将用作展示版本号，否则在当前展示版整数位 +1"
               onClick={() => fileInputRef.current?.click()}
             >
               {uploading ? (
@@ -293,9 +311,9 @@ export function ProjectKnowledgeNetworkSection({
             <dl className="mt-3 grid gap-1 text-[11px] text-muted-foreground sm:grid-cols-2">
               <div>
                 <span className="font-semibold text-foreground/80">版本 </span>
-                v{data.meta.version}
-                {viewVersion !== "current" && viewVersion !== data.meta.version ? (
-                  <span className="text-amber-700"> · 正在查看 v{viewVersion}</span>
+                v{knVersionDisplay(data.meta)}
+                {viewingArchiveLabel ? (
+                  <span className="text-amber-700"> · 正在查看 v{viewingArchiveLabel}</span>
                 ) : null}
               </div>
               <div>
@@ -342,7 +360,14 @@ export function ProjectKnowledgeNetworkSection({
 
           <KnowledgeNetworkPreview
             html={viewHtml}
-            filename={`[AI]_${projectId}_知识网络_v${viewVersion === "current" ? data.meta?.version : viewVersion}.html`}
+            filename={`[AI]_${projectId}_知识网络_v${
+              viewVersion === "current"
+                ? knVersionDisplay(data.meta!)
+                : (() => {
+                    const row = data.versions?.find((v) => v.version === viewVersion);
+                    return row ? knVersionDisplay(row) : String(viewVersion);
+                  })()
+            }.html`}
           />
         </>
       ) : (

@@ -252,6 +252,8 @@ export async function uploadProjectPackageFile(
 
 export type ProjectKnowledgeNetworkMeta = {
   version: number;
+  versionLabel?: string | null;
+  versionDisplay?: string;
   updatedAt: string;
   updatedBy: string;
   updatedByDisplayName?: string;
@@ -262,11 +264,23 @@ export type ProjectKnowledgeNetworkMeta = {
 
 export type ProjectKnowledgeNetworkVersionSummary = {
   version: number;
+  versionLabel?: string | null;
+  versionDisplay?: string;
   updatedAt: string;
   updatedBy: string;
   updatedByDisplayName?: string;
   changelog: string | null;
 };
+
+export function knVersionDisplay(
+  meta: { version: number; versionLabel?: string | null; versionDisplay?: string },
+): string {
+  const d = meta.versionDisplay?.trim();
+  if (d) return d;
+  const l = meta.versionLabel?.trim();
+  if (l) return l;
+  return String(meta.version);
+}
 
 export type ProjectKnowledgeNetworkResponse = {
   ok: boolean;
@@ -317,7 +331,7 @@ export async function uploadProjectKnowledgeNetwork(
   projectId: string,
   userId: string,
   html: string,
-  options?: { changelog?: string },
+  options?: { changelog?: string; uploadFileName?: string },
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<UploadProjectKnowledgeNetworkResult> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
@@ -331,6 +345,9 @@ export async function uploadProjectKnowledgeNetwork(
       body: JSON.stringify({
         html,
         ...(options?.changelog?.trim() ? { changelog: options.changelog.trim() } : {}),
+        ...(options?.uploadFileName?.trim()
+          ? { uploadFileName: options.uploadFileName.trim() }
+          : {}),
       }),
     },
   );

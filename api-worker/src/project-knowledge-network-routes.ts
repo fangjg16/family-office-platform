@@ -1,3 +1,4 @@
+import { formatKnVersionDisplay } from "./knowledge-network-version";
 import {
   getProjectKnowledgeNetworkMeta,
   listProjectKnowledgeNetworkVersions,
@@ -28,14 +29,18 @@ function normalizeUserId(raw: string | null): string | null {
 
 function metaJson(meta: {
   version: number;
+  versionLabel: string | null;
   updatedAt: string;
   updatedBy: string;
   lastJobId: string | null;
   changelog: string | null;
   r2Key: string;
 }) {
+  const versionDisplay = formatKnVersionDisplay(meta.version, meta.versionLabel);
   return {
     version: meta.version,
+    versionLabel: meta.versionLabel,
+    versionDisplay,
     updatedAt: meta.updatedAt,
     updatedBy: meta.updatedBy,
     updatedByDisplayName: workspaceUserDisplayName(meta.updatedBy),
@@ -68,11 +73,15 @@ export async function handlePutProjectKnowledgeNetwork(
     );
   }
 
-  let body: { html?: string; changelog?: string };
+  let body: { html?: string; changelog?: string; uploadFileName?: string };
   try {
-    body = (await request.json()) as { html?: string; changelog?: string };
+    body = (await request.json()) as {
+      html?: string;
+      changelog?: string;
+      uploadFileName?: string;
+    };
   } catch {
-    return json({ error: "请求体须为 JSON：{ html, changelog? }" }, 400);
+    return json({ error: "请求体须为 JSON：{ html, changelog?, uploadFileName? }" }, 400);
   }
 
   const html = typeof body.html === "string" ? body.html : "";
@@ -82,13 +91,17 @@ export async function handlePutProjectKnowledgeNetwork(
   }
 
   const note = (body.changelog ?? "").trim().slice(0, 500);
+  const uploadFileName =
+    typeof body.uploadFileName === "string" ? body.uploadFileName.trim() : "";
   const meta = await upsertProjectKnowledgeNetwork(env, {
     projectId,
     userId,
     html: html.trim(),
     lastJobId: null,
     answerSummary: note || "本地上传 HTML 覆盖（视为全新当前版）",
+    uploadFileName: uploadFileName || undefined,
   });
+  const vDisplay = formatKnVersionDisplay(meta.version, meta.versionLabel);
 
   return json({
     ok: true,
@@ -96,13 +109,14 @@ export async function handlePutProjectKnowledgeNetwork(
     hasKnowledgeNetwork: true,
     meta: metaJson({
       version: meta.version,
+      versionLabel: meta.versionLabel,
       updatedAt: meta.updatedAt,
       updatedBy: meta.updatedBy,
       lastJobId: meta.lastJobId,
       changelog: meta.changelog,
       r2Key: meta.r2Key,
     }),
-    message: `已发布为项目知识网络 v${meta.version}；旧版已归档，后续「按板块更新」将基于此版。`,
+    message: `已发布为项目知识网络 v${vDisplay}；旧版已归档，后续「按板块更新」将基于此版。`,
   });
 }
 
@@ -162,6 +176,7 @@ export async function handleGetProjectKnowledgeNetwork(
     hasKnowledgeNetwork: true,
     meta: metaJson({
       version: meta.version,
+      versionLabel: meta.versionLabel,
       updatedAt: meta.updatedAt,
       updatedBy: meta.updatedBy,
       lastJobId: meta.lastJobId,
@@ -171,6 +186,8 @@ export async function handleGetProjectKnowledgeNetwork(
     html: includeHtml ? html : undefined,
     versions: archived.map((v) => ({
       version: v.version,
+      versionLabel: v.versionLabel,
+      versionDisplay: formatKnVersionDisplay(v.version, v.versionLabel),
       updatedAt: v.updatedAt,
       updatedBy: v.updatedBy,
       updatedByDisplayName: workspaceUserDisplayName(v.updatedBy),

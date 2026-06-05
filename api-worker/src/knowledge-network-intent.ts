@@ -1,3 +1,4 @@
+import { formatKnVersionDisplay } from "./knowledge-network-version";
 import type { ProjectKnowledgeNetworkMeta } from "./project-knowledge-network";
 
 const KN_TOPIC_RE =
@@ -85,7 +86,7 @@ export function buildKnowledgeNetworkMetaAnswerText(
   }
 
   const lines = [
-    `当前项目知识网络为 **v${meta.version}**（项目：${projectTitleHint}）。`,
+    `当前项目知识网络为 **v${formatKnVersionDisplay(meta.version, meta.versionLabel)}**（项目：${projectTitleHint}）。`,
     "",
     `- **更新时间**：${updatedAt}`,
     `- **更新人**：${who}`,

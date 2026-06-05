@@ -1,6 +1,7 @@
 import type { SkillIntent } from "./chat-modes";
 import { extractKnowledgeNetworkHtmlLoose } from "./chat-modes";
 import { syncCompletedAgentJobToChat } from "./chat-sync";
+import { formatKnVersionDisplay } from "./knowledge-network-version";
 import {
   getProjectKnowledgeNetworkMeta,
   readProjectKnowledgeNetworkHtml,
@@ -106,7 +107,7 @@ async function finalizeKnowledgeNetworkJobResult(
   if (meta?.lastJobId === row.id) {
     const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
     if (html) {
-      const note = `\n\n已同步至**项目知识网络 v${meta.version}**（文件 API 回传，可在项目详情预览）。`;
+      const note = `\n\n已同步至**项目知识网络 v${formatKnVersionDisplay(meta.version, meta.versionLabel)}**（文件 API 回传，可在项目详情预览）。`;
       const answer = result.answer.includes("项目知识网络 v")
         ? result.answer
         : `${result.answer}${note}`;
@@ -121,7 +122,7 @@ async function finalizeKnowledgeNetworkJobResult(
     if (meta?.lastJobId === row.id) {
       const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
       if (html) {
-        const note = `\n\n已同步至**项目知识网络 v${meta.version}**（文件 API 回传）。`;
+        const note = `\n\n已同步至**项目知识网络 v${formatKnVersionDisplay(meta.version, meta.versionLabel)}**（文件 API 回传）。`;
         return {
           status: "ok",
           answer: result.answer.includes("项目知识网络 v")
@@ -143,7 +144,7 @@ async function finalizeKnowledgeNetworkJobResult(
       "从 Hermes 回复提取 HTML",
     );
     if (written) {
-      const note = `\n\n已写入**项目知识网络 v${written.meta.version}**${knowledgeNetworkExtractFallbackNote(env)}`;
+      const note = `\n\n已写入**项目知识网络 v${formatKnVersionDisplay(written.meta.version, written.meta.versionLabel)}**${knowledgeNetworkExtractFallbackNote(env)}`;
       const answer = result.answer.includes("项目知识网络 v")
         ? result.answer
         : `${result.answer}${note}`;

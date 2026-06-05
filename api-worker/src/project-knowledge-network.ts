@@ -3,10 +3,17 @@ export type ProjectKnowledgeNetworkEnv = {
   FILES: R2Bucket;
 };
 
+import {
+  formatKnVersionDisplay,
+  resolveKnVersionOnUpload,
+} from "./knowledge-network-version";
+
 export type ProjectKnowledgeNetworkMeta = {
   projectId: string;
   r2Key: string;
   version: number;
+  /** 展示用版本（如 5.5）；无则 UI 用 version */
+  versionLabel: string | null;
   updatedAt: string;
   updatedBy: string;
   lastJobId: string | null;
@@ -15,6 +22,7 @@ export type ProjectKnowledgeNetworkMeta = {
 
 export type ProjectKnowledgeNetworkVersionRow = {
   version: number;
+  versionLabel: string | null;
   r2Key: string;
   updatedAt: string;
   updatedBy: string;
@@ -69,7 +77,7 @@ export async function getProjectKnowledgeNetworkMeta(
   projectId: string,
 ): Promise<ProjectKnowledgeNetworkMeta | null> {
   const row = await env.DB.prepare(
-    `SELECT project_id, r2_key, version, updated_at, updated_by, last_job_id, changelog
+    `SELECT project_id, r2_key, version, version_label, updated_at, updated_by, last_job_id, changelog
      FROM project_knowledge_networks WHERE project_id = ?`,
   )
     .bind(projectId)
@@ -77,6 +85,7 @@ export async function getProjectKnowledgeNetworkMeta(
       project_id: string;
       r2_key: string;
       version: number;
+      version_label: string | null;
       updated_at: string;
       updated_by: string;
       last_job_id: string | null;
@@ -87,6 +96,7 @@ export async function getProjectKnowledgeNetworkMeta(
     projectId: row.project_id,
     r2Key: row.r2_key,
     version: row.version,
+    versionLabel: row.version_label,
     updatedAt: row.updated_at,
     updatedBy: row.updated_by,
     lastJobId: row.last_job_id,
@@ -99,7 +109,7 @@ export async function listProjectKnowledgeNetworkVersions(
   projectId: string,
 ): Promise<ProjectKnowledgeNetworkVersionRow[]> {
   const { results } = await env.DB.prepare(
-    `SELECT version, r2_key, updated_at, updated_by, changelog
+    `SELECT version, version_label, r2_key, updated_at, updated_by, changelog
      FROM project_knowledge_network_versions
      WHERE project_id = ?
      ORDER BY version DESC`,
@@ -107,6 +117,7 @@ export async function listProjectKnowledgeNetworkVersions(
     .bind(projectId)
     .all<{
       version: number;
+      version_label: string | null;
       r2_key: string;
       updated_at: string;
       updated_by: string;
@@ -114,6 +125,7 @@ export async function listProjectKnowledgeNetworkVersions(
     }>();
   return (results ?? []).map((r) => ({
     version: r.version,
+    versionLabel: r.version_label,
     r2Key: r.r2_key,
     updatedAt: r.updated_at,
     updatedBy: r.updated_by,
@@ -167,9 +179,10 @@ async function archiveCurrentVersion(
   }
   await env.DB.prepare(
     `INSERT INTO project_knowledge_network_versions (
-       project_id, version, r2_key, updated_at, updated_by, changelog
-     ) VALUES (?, ?, ?, ?, ?, ?)
+       project_id, version, version_label, r2_key, updated_at, updated_by, changelog
+     ) VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(project_id, version) DO UPDATE SET
+       version_label = excluded.version_label,
        r2_key = excluded.r2_key,
        updated_at = excluded.updated_at,
        updated_by = excluded.updated_by,
@@ -178,6 +191,7 @@ async function archiveCurrentVersion(
     .bind(
       prev.projectId,
       prev.version,
+      prev.versionLabel,
       archiveKey,
       prev.updatedAt,
       prev.updatedBy,
@@ -194,6 +208,8 @@ export async function upsertProjectKnowledgeNetwork(
     html: string;
     lastJobId?: string | null;
     answerSummary?: string | null;
+    /** 本地上传时传入，用于解析文件名中的 v5.5 等展示版本 */
+    uploadFileName?: string | null;
   },
 ): Promise<ProjectKnowledgeNetworkMeta> {
   const html = params.html.trim();
@@ -210,14 +226,21 @@ export async function upsertProjectKnowledgeNetwork(
   if (prev) {
     await archiveCurrentVersion(env, prev);
   }
-  const version = (prev?.version ?? 0) + 1;
+  const fromUpload = Boolean(params.uploadFileName?.trim());
+  const { version, versionLabel } = fromUpload
+    ? resolveKnVersionOnUpload(prev, params.uploadFileName)
+    : {
+        version: (prev?.version ?? 0) + 1,
+        versionLabel: null as string | null,
+      };
+  const displayVer = formatKnVersionDisplay(version, versionLabel);
   const summary = params.answerSummary?.trim() ?? "";
   const changelog =
     (summary.length > 0 && summary.length <= 500 && !summary.startsWith("<")
       ? summary
       : null) ||
     changelogFromAnswer(summary) ||
-    (prev ? `版本 ${version} 更新` : "首次生成");
+    (prev ? `版本 v${displayVer} 更新` : "首次生成");
 
   await env.FILES.put(r2Key, html, {
     httpMetadata: { contentType: "text/html; charset=utf-8" },
@@ -225,11 +248,12 @@ export async function upsertProjectKnowledgeNetwork(
 
   await env.DB.prepare(
     `INSERT INTO project_knowledge_networks (
-       project_id, r2_key, version, updated_at, updated_by, last_job_id, changelog
-     ) VALUES (?, ?, ?, ?, ?, ?, ?)
+       project_id, r2_key, version, version_label, updated_at, updated_by, last_job_id, changelog
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT(project_id) DO UPDATE SET
        r2_key = excluded.r2_key,
        version = excluded.version,
+       version_label = excluded.version_label,
        updated_at = excluded.updated_at,
        updated_by = excluded.updated_by,
        last_job_id = excluded.last_job_id,
@@ -239,6 +263,7 @@ export async function upsertProjectKnowledgeNetwork(
       projectId,
       r2Key,
       version,
+      versionLabel,
       now,
       userId,
       params.lastJobId ?? null,
@@ -250,6 +275,7 @@ export async function upsertProjectKnowledgeNetwork(
     projectId,
     r2Key,
     version,
+    versionLabel,
     updatedAt: now,
     updatedBy: userId,
     lastJobId: params.lastJobId ?? null,
