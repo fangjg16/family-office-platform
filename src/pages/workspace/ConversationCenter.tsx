@@ -1512,7 +1512,9 @@ export default function ConversationCenter() {
     ProjectFileRecord[]
   >([]);
   const [fileTreeRefreshKey, setFileTreeRefreshKey] = useState(0);
+  const [conversationFilesLoading, setConversationFilesLoading] = useState(false);
   const [deletingSessionFileId, setDeletingSessionFileId] = useState<string | null>(null);
+  const conversationFilesMenuRef = useRef<HTMLDivElement>(null);
   const [chatSyncReady, setChatSyncReady] = useState(false);
   const [draftMessage, setDraftMessage] = useState("");
   /** 仅标记「当前会话」正在等同步 /api/chat 响应；深度任务用 pendingJobId，不占此项 */
@@ -2035,20 +2037,39 @@ export default function ConversationCenter() {
     };
   }, [isLiveAiMode, projectId, AI_CHAT_ENDPOINT]);
 
+  const sessionMessageFilenames = useMemo(() => {
+    const msgs = liveMessagesByConversation[effectiveConversationId] ?? [];
+    const names = new Set<string>();
+    for (const m of msgs) {
+      for (const f of m.files ?? []) {
+        if (f.name?.trim()) names.add(f.name.trim());
+      }
+    }
+    return names;
+  }, [liveMessagesByConversation, effectiveConversationId]);
+
   useEffect(() => {
     if (!isLiveAiMode || !AI_CHAT_ENDPOINT || !projectId || !effectiveConversationId || !userId) {
       setConversationFileRecords([]);
+      setConversationFilesLoading(false);
       return;
     }
     let cancelled = false;
+    setConversationFilesLoading(true);
     const run = async () => {
       try {
         const all = await fetchProjectFiles(projectId, userId);
         if (cancelled) return;
-        const session = filterConversationSessionFiles(all, effectiveConversationId);
+        const session = filterConversationSessionFiles(
+          all,
+          effectiveConversationId,
+          sessionMessageFilenames,
+        );
         setConversationFileRecords(dedupeFilesByFilename(session));
       } catch {
         if (!cancelled) setConversationFileRecords([]);
+      } finally {
+        if (!cancelled) setConversationFilesLoading(false);
       }
     };
     void run();
@@ -2062,13 +2083,15 @@ export default function ConversationCenter() {
     effectiveConversationId,
     fileTreeRefreshKey,
     AI_CHAT_ENDPOINT,
+    sessionMessageFilenames,
   ]);
 
   const conversationFileTreeItems = useMemo(() => {
-    if (isLiveAiMode && conversationFileRecords.length > 0) {
+    if (isLiveAiMode) {
       return conversationFileRecords.map((f) => ({
         key: f.id,
         documentId: f.id,
+        fileConversationId: f.conversationId ?? effectiveConversationId,
         name: f.filename,
         meta: `${f.chunkCount} 段 · ${new Date(f.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}`,
         canDelete: true,
@@ -2077,6 +2100,7 @@ export default function ConversationCenter() {
     return (activeConversation?.files ?? []).map((name) => ({
       key: name,
       documentId: undefined as string | undefined,
+      fileConversationId: undefined as string | undefined,
       name,
       meta: undefined as string | undefined,
       canDelete: false,
@@ -2085,11 +2109,15 @@ export default function ConversationCenter() {
     isLiveAiMode,
     conversationFileRecords,
     activeConversation,
-    projectId,
+    effectiveConversationId,
   ]);
 
   const handleDeleteSessionFile = useCallback(
-    async (documentId: string, filename: string) => {
+    async (
+      documentId: string,
+      filename: string,
+      fileConversationId?: string | null,
+    ) => {
       if (!projectId || !userId || !effectiveConversationId || !isLiveAiMode) return;
       const ok = window.confirm(
         `确定从本对话中删除「${filename}」？\n删除后检索将不再包含该附件，且无法恢复。`,
@@ -2103,7 +2131,15 @@ export default function ConversationCenter() {
           documentId,
           userId,
           AI_CHAT_ENDPOINT,
-          effectiveConversationId,
+          fileConversationId?.trim() || effectiveConversationId,
+        );
+        setConversationFileRecords((prev) => prev.filter((f) => f.id !== documentId));
+        setConversations((prev) =>
+          prev.map((c) =>
+            c.id === effectiveConversationId
+              ? { ...c, files: c.files.filter((n) => n !== filename) }
+              : c,
+          ),
         );
         setFileTreeRefreshKey((k) => k + 1);
       } catch (e) {
@@ -2114,6 +2150,18 @@ export default function ConversationCenter() {
     },
     [projectId, userId, effectiveConversationId, isLiveAiMode],
   );
+
+  useEffect(() => {
+    if (!showHistoryMenu) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const el = conversationFilesMenuRef.current;
+      if (el && !el.contains(e.target as Node)) {
+        setShowHistoryMenu(false);
+      }
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [showHistoryMenu]);
 
   useEffect(() => {
     if (!isLiveAiMode || !AI_CHAT_ENDPOINT) return;
@@ -3104,7 +3152,10 @@ export default function ConversationCenter() {
               Master Agent 在线
             </p>
           </div>
-          <div className="relative flex flex-wrap items-center gap-2">
+          <div
+            ref={conversationFilesMenuRef}
+            className="relative flex flex-wrap items-center gap-2"
+          >
             <button
               type="button"
               onClick={() => setShowHistoryMenu((v) => !v)}
@@ -3112,6 +3163,11 @@ export default function ConversationCenter() {
             >
               <MoreHorizontal className="h-4 w-4" />
               本对话文件
+              {isLiveAiMode && conversationFileTreeItems.length > 0 ? (
+                <span className="ml-0.5 rounded-full bg-[hsl(var(--wine-deep)/0.12)] px-1.5 py-0.5 text-[10px] font-bold text-[hsl(var(--wine-deep))]">
+                  {conversationFileTreeItems.length}
+                </span>
+              ) : null}
             </button>
             {showHistoryMenu ? (
               <div className="absolute right-0 top-10 z-20 w-[18rem] rounded-2xl border border-border/70 bg-white/95 p-2 shadow-[0_12px_32px_-16px_rgba(15,23,42,0.35)] backdrop-blur-md">
@@ -3120,9 +3176,15 @@ export default function ConversationCenter() {
                 </p>
                 <p className="px-2 pb-1 text-[10px] leading-snug text-muted-foreground">
                   仅含当前对话内上传、已入库的附件（非项目总览里的资料包）。
+                  {isLiveAiMode ? " 点右侧垃圾桶可删除。" : ""}
                 </p>
                 <div className="max-h-52 overflow-y-auto rounded-xl border border-border/60 bg-background/50 p-2">
-                  {conversationFileTreeItems.length === 0 ? (
+                  {conversationFilesLoading && isLiveAiMode ? (
+                    <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                      加载附件列表…
+                    </p>
+                  ) : conversationFileTreeItems.length === 0 ? (
                     <p className="text-[11px] text-muted-foreground">
                       暂无文件。请用输入栏回形针上传。
                     </p>
@@ -3143,7 +3205,11 @@ export default function ConversationCenter() {
                                   type="button"
                                   disabled={Boolean(deletingSessionFileId)}
                                   onClick={() =>
-                                    void handleDeleteSessionFile(item.documentId!, item.name)
+                                    void handleDeleteSessionFile(
+                                      item.documentId!,
+                                      item.name,
+                                      item.fileConversationId,
+                                    )
                                   }
                                   className={cn(
                                     "inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-rose-50 hover:text-rose-600",

@@ -207,10 +207,17 @@ export function filterPackageFiles(files: ProjectFileRecord[]): ProjectFileRecor
 export function filterConversationSessionFiles(
   files: ProjectFileRecord[],
   conversationId: string,
+  messageFilenames?: Iterable<string>,
 ): ProjectFileRecord[] {
-  return files.filter(
-    (f) => f.scope === "session" && f.conversationId === conversationId,
-  );
+  const names = messageFilenames
+    ? new Set(Array.from(messageFilenames).filter(Boolean))
+    : null;
+  return files.filter((f) => {
+    if (f.scope !== "session") return false;
+    if (f.conversationId === conversationId) return true;
+    if (names?.size && names.has(f.filename)) return true;
+    return false;
+  });
 }
 
 /** 同名文件保留最新一条，避免重复上传占满列表 */
