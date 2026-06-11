@@ -173,7 +173,7 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
   });
 }
 
-/** Worker 注入：KB 任务前必须 read_file 的 Hermes 容器内路径（v2.5 布局） */
+/** Worker 注入：KB 任务前必须 read_file 的 Hermes 容器内路径（v2.7 布局） */
 export function buildHermesKnowledgeNetworkRequiredReads(): string {
   const base = "~/.hermes/skills/knowledge-base-generation";
   return `
@@ -184,6 +184,12 @@ export function buildHermesKnowledgeNetworkRequiredReads(): string {
 3. ${base}/SKILL.md
 4. ${base}/kb-template.html
 5. ${base}/assets/components.html
+
+v2.7 规则摘要：
+- 11 个 canonical slot 的 key 与锚点 ID 固定；展示顺序由 <!-- KB-CONFIG --> 的 display-order 驱动（非固定章节序号）。
+- 新建/全量：project-intake 须写入 KB-CONFIG（project-type、rendering-mode、multi-asset、display-order、config-version、display-order-history）。
+- Factor A 分母始终 11；跨节引用只用锚点（如 <a href="#returns">），禁止「第七节」等浮动编号。
+- 重排模式：仅改 KB-CONFIG + nav + <h2> 编号，不触碰内容面板。
 
 生成时以 kb-template.html 为壳填数据；组件/HTML 语法遵守 STYLE_GUIDE 与 components.html；禁止自创 class、禁止修改 template 内 JS/CSS。`;
 }
@@ -203,8 +209,10 @@ export function buildHermesKnowledgeNetworkFileProtocol(
 
   const modeLine =
     mode === "full"
-      ? "全量重做：勿 GET 旧版（或 GET 后另存备份再重写）；按 kb-template 从零写入工作文件。"
-      : "增量更新：必须先 GET 当前版到工作文件，只改用户点名的 section，未改部分保持字节级不变。";
+      ? "全量重做：勿 GET 旧版（或 GET 后另存备份再重写）；按 kb-template 从零写入工作文件，并写入完整 KB-CONFIG。"
+      : mode === "reorder"
+        ? "展示顺序重排（轻量）：必须先 GET 当前版；只更新 <!-- KB-CONFIG -->（display-order、config-version、display-order-history）、nav 顺序与各 section <h2> 编号；禁止重写任何内容面板；版本 minor bump。"
+        : "增量更新：必须先 GET 当前版到工作文件，读取 KB-CONFIG 后只改用户点名的 slot/section，未改部分保持字节级不变。";
 
   return `
 

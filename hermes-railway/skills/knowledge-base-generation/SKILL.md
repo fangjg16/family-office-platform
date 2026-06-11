@@ -9,28 +9,13 @@ description: "Owns the project's single Project Knowledge Base (项目知识网�
 
 ## 执行前必读（硬性规则）
 
-每次开始任务前，必须按顺序 **read_file** 以下文件；仅阅读本文件后直接执行视为不合规。
+每次开始任务前，必须按顺序读取以下文件；仅阅读本文件后直接执行视为不合规：
 
-### Railway Hermes / 联合家办（优先）
+1. `skills/knowledge-base-generation/SKILL.md`（流程与治理规则）
+2. `STYLE_GUIDE.md`（样式、组件语法、标签/引用规范）
+3. `skills/knowledge-base-generation/assets/components.html`（可复制 HTML 组件模板）
 
-路径均相对于 `~/.hermes/skills/knowledge-base-generation/`：
-
-1. `references/README-hermes.md` — 家办工作流与命名（速读）
-2. `references/STYLE_GUIDE.md` — 样式、组件、标签/引用规范
-3. `SKILL.md` — 本文件（流程与 slot 治理）
-4. `kb-template.html` — 壳 + CSS + panel-switcher（禁止改 JS/CSS）
-5. `assets/components.html` — 可拷贝 HTML 组件片段
-
-家办资料须先 skill `jfo-r2-materials`（curl 网站 manifest），**禁止**假设本地项目文件夹有 PDF。
-
-### Claude Cowork plugin（本地根目录）
-
-1. `skills/knowledge-base-generation/SKILL.md`
-2. 插件根目录 `STYLE_GUIDE.md`
-3. `assets/components.html`
-4. `kb-template.html`（本 skill 目录）
-
-冲突优先级：`SKILL.md`（业务）> `STYLE_GUIDE.md`（样式）> `components.html`（示例）> `kb-template.html`（壳）。
+若三者存在冲突，优先级为：`SKILL.md`（业务规则） > `STYLE_GUIDE.md`（样式/标记规范） > `components.html`（示例实现）。
 
 ## 最小执行清单（5 条）
 
@@ -48,10 +33,14 @@ description: "Owns the project's single Project Knowledge Base (项目知识网�
 | 纯中文/双语 | `project-intake` 步骤 2.2（海外项目） | 双语模式渲染中英并列内容 + 语言切换按钮 |
 | Portable 主题（默认） | 默认；用户明确要求时切换灰色主题 | 所有 KB 默认米色背景/酒红/Playfair 字体，从 `kb-template.html` 起点填充 |
 
-## 11 个 Canonical Slot（固定顺序、固定锚点）
+## 11 个 Canonical Slot
 
-| Slot key | 章节 | 锚点 | 主要写入 skill |
-|----------|------|------|--------------|
+**数据层（永不变）**：11 个 slot 的 key 名称、锚点 ID、以及每个 skill 写入哪个 slot 的映射关系——这是所有 skill 定位写入目标的索引，不可修改。
+
+**展示层（项目启动时确定）**：slot 的显示顺序由 `project-intake` 根据项目类型确定，写入 KB 头部的 `<!-- KB-CONFIG -->` 块，之后每次渲染读取此配置驱动 nav 顺序和章节编号。用户可随时请求"调整展示顺序"触发轻量重排，无需重新 intake。
+
+| Slot key | 章节名称 | 锚点 ID | 主要写入 skill |
+|----------|---------|---------|--------------|
 | `snapshot` | 项目快照 | `#snapshot` | `project-intake`, `public-info-search` |
 | `assets` | 资产构成 / 平台能力与资源 | `#assets` | `public-info-search`, `dd-claim-audit` |
 | `legal-relationships` | 法律结构与关键关系网 | `#legal-relationships` | `background-check`, `public-info-search` |
@@ -68,9 +57,53 @@ description: "Owns the project's single Project Knowledge Base (项目知识网�
 
 **`business-model` 描述目标公司盈利模式；`returns` 描述投资人回报（IRR/MOIC）。两者严格分离。**
 
+## KB-CONFIG（展示层配置）
+
+KB HTML `<body>` 开头必须包含 KB-CONFIG 注释块。`knowledge-base-generation` 每次渲染前读取此块确定展示顺序；`project-intake` 在新建 KB 时写入；"reset display order"时仅更新此块 + nav + 章节编号，不触碰内容面板。
+
+### 格式规范
+
+```html
+<!-- KB-CONFIG
+display-order: snapshot, assets, legal-relationships, business-model, capital-structure, comps, returns, timeline, risks, open-questions, decision-framework
+project-type: real-estate-dev
+rendering-mode: chinese-only
+multi-asset: false
+config-version: 1
+display-order-history:
+  2026-06-09 | intake | 初始顺序，项目类型 real-estate-dev 默认
+-->
+```
+
+字段说明：
+- `display-order`：当前展示顺序，仅含已知 slot key（逗号分隔）；渲染时跳过内容为空的 slot
+- `project-type`：8 类类型码之一（见 `project-intake` SKILL.md 的类型表）
+- `rendering-mode`：`chinese-only` 或 `bilingual`
+- `multi-asset`：`true` / `false`
+- `config-version`：每次修改 display-order 时 +1
+- `display-order-history`：追加式日志，每行格式 `日期 | 触发来源 | 简述`
+
+### Reset Display Order（轻量更新，最小 token）
+
+触发词：用户说"调整展示顺序"/"把 X 移到 Y 前面"/"重排章节"等。
+
+执行三步，不询问、不重渲内容面板：
+
+1. 读取 KB-CONFIG 中现有 `display-order`，按用户意图修改顺序
+2. KB-CONFIG 末尾追加一行 `display-order-history`（格式：`日期 | reset | 用户说明`，无说明写"用户未说明原因"）；`config-version` +1
+3. 全量更新 nav 按钮顺序 + 各 section `<h2>` 编号——**不触碰任何内容面板**
+
+版本号：minor bump（x.y → x.y+1）。Chat 回复：一句话确认新顺序，例："已调整：快照 → 资产 → 回报 → …"
+
+### 跨项目模式总结（用于优化默认顺序）
+
+当用户说"分析调整记录优化默认顺序"时：扫描所有可访问路径下的 `[AI] *_知识网络.html`，提取每个 KB-CONFIG 的 `display-order-history`，按 `project-type` 分组归纳规律，输出优化建议供用户确认后写入本 SKILL.md 的各类型默认顺序。
+
 ## 隐藏与重新编号
 
-Slot 渲染 ↔ 有实质内容。空 slot（无任何 skill 评估）完全不输出——无 `<section>` 无导航无编号。存活 slot 从一开始连续重新编号。跨章节引用用**锚点**（`#returns`），不用编号（"第七节"浮动）。
+Slot 渲染 ↔ 有实质内容。空 slot（无任何 skill 评估）完全不输出——无 `<section>` 无导航无编号。存活 slot 按 KB-CONFIG `display-order` 的顺序从一开始连续重新编号。
+
+**跨章节引用硬性规则**：所有跨节引用必须使用 HTML 锚点形式，例如 `<a href="#returns">投资回报</a>`。**绝对禁止**使用"第七节"、"见上节"、"见下节"等浮动编号或位置描述——一旦 display-order 变更，此类引用立即失效且难以批量修正。违反此规则的写入视为不合规，须在写入前自行修正。
 
 ## KB 布局（面板切换器）
 
@@ -112,11 +145,12 @@ new-terms: [<term1>, <term2>]
 
 ### 步骤 1：确定执行模式
 
-| 模式 | 触发 | 定向 vs 全量 |
-|------|------|-------------|
+| 模式 | 触发 | 操作范围 |
+|------|------|---------|
 | 新建 | KB 文件不存在 | 始终全量 |
-| 更新 | 收到交接块 | ≤3 slot 且顺序不变 → **定向**；否则全量 |
+| 更新 | 收到交接块 | ≤3 slot 且 display-order 不变 → **定向**；否则全量 |
 | 重审 | 用户说"刷新全文"或成熟度偏差 | 始终全量 |
+| **重排** | 用户说"调整展示顺序"/"重排"/"把 X 移到 Y 前面" | **仅更新 KB-CONFIG + nav + 章节编号**，不触碰内容面板 |
 
 **不要询问用户选哪种模式**，本 skill 自动判断。
 
@@ -191,7 +225,7 @@ new-terms: [<term1>, <term2>]
 
 ### 步骤 10：头部与骨架
 
-从 `kb-template.html` 起点填充。Header 使用 `STYLE_GUIDE.md` "Masthead" 两栏布局，三色 stat-row（Factor A 浅米 / Factor B 中酒红 / 综合成熟度 深酒红）。`ai-badge` 始终显示。`meta-row` 的 `dt` 文本不加冒号或末尾「·」。
+从 `kb-template.html` 起点填充。**新建时**在 `<body>` 开头写入 KB-CONFIG 注释块（`project-intake` 已提供字段值）；**更新/重审时**先读取现有 KB-CONFIG 确定 display-order，再渲染。Header 使用 `STYLE_GUIDE.md` "Masthead" 两栏布局，三色 stat-row（Factor A 浅米 / Factor B 中酒红 / 综合成熟度 深酒红）。`ai-badge` 始终显示。`meta-row` 的 `dt` 文本不加冒号或末尾「·」。
 
 ## 输出格式
 
@@ -210,14 +244,17 @@ new-terms: [<term1>, <term2>]
 - **章节名称由类型自适应规则决定**，AI 不得单方面更改 `<h2>` 标题。新增 canonical slot 外的章节须先在 chat 获用户确认
 - **每次对话的任何新信息**（哪怕随口一句）必须分类到对应 slot 并触发更新
 
-## 持续学习（Self-Evolution）
+## 边界案例提醒
 
-每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+Plugin 安装后 skill 文件只读，Claude 无法自动写入经验。当遇到以下情况时，在**本次对话末尾**用固定格式提醒用户，由用户决定是否开启更新会话手动写入 SKILL.md：
 
-触发记录的条件：
-- 遇到当前指令未覆盖的特殊情况或边界案例
+- 当前指令未覆盖的特殊情况或边界案例
 - 用户给出了纠正或更好的建议
-- 发现值得重用的成功经验或模式
-- 原有指令出现歧义或冲突
+- 发现值得复用的成功模式
+- 原有指令存在歧义或冲突
 
-若认为核心指令需要改进，请主动告知用户并说明原因。
+提醒格式：
+```
+💡 建议写入 SKILL.md：[简短描述发现]
+原因：[为什么值得复用]
+```

@@ -4,9 +4,9 @@
 
 ## Skills（GitHub Raw 安装）
 
-合域 **v2.5** 的 16 个 skill + 家办桥接 `jfo-r2-materials` 已放在 `hermes-railway/skills/`。  
-`knowledge-base-generation` 为**整目录**（含 `kb-template.html`、`assets/components.html`、`references/STYLE_GUIDE.md`）。  
-安装见 **[INSTALL-SKILLS-FROM-GITHUB.md](./INSTALL-SKILLS-FROM-GITHUB.md)** 或容器内 **`install-jfo-skills-v25.sh`**；SOUL 见 **[SOUL-JFO-KB.md](./SOUL-JFO-KB.md)**。
+合域 **v2.7** 的 16 个 skill + 家办桥接 `jfo-r2-materials` 已放在 `hermes-railway/skills/`。  
+`knowledge-base-generation` 为**整目录**（含 `kb-template.html`、`KB-CONFIG`、`assets/components.html`、`references/STYLE_GUIDE.md`）。  
+安装见 **[INSTALL-SKILLS-FROM-GITHUB.md](./INSTALL-SKILLS-FROM-GITHUB.md)** 或容器内 **`install-jfo-skills-v27.sh`**；SOUL 见 **[SOUL-JFO-KB.md](./SOUL-JFO-KB.md)**。
 
 参考文档：`reference/STYLE_GUIDE.md`、`reference/skills_reference.md`。
 

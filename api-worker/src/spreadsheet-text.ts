@@ -12,6 +12,31 @@ export type SpreadsheetExtractResult = {
   warning?: string;
 };
 
+type XlsxLike = typeof import("xlsx");
+
+/** Cloudflare Workers 下 sheet_to_json / sheet_to_csv 不可靠，直接扫 !ref */
+function sheetRowsFromWorksheet(
+  sheet: import("xlsx").WorkSheet,
+  XLSX: XlsxLike,
+): unknown[][] {
+  const ref = sheet["!ref"];
+  if (!ref) return [];
+  const range = XLSX.utils.decode_range(ref);
+  const rows: unknown[][] = [];
+  for (let r = range.s.r; r <= range.e.r; r++) {
+    const row: unknown[] = [];
+    for (let c = range.s.c; c <= range.e.c; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = sheet[addr] as { v?: unknown; w?: string } | undefined;
+      row.push(cell?.w ?? cell?.v ?? "");
+    }
+    if (row.some((c) => cellToPlain(c))) {
+      rows.push(row);
+    }
+  }
+  return rows;
+}
+
 function cellToPlain(value: unknown): string {
   if (value == null) return "";
   if (value instanceof Date) {
@@ -34,10 +59,10 @@ export async function extractSpreadsheetPlainText(
   }
 
   try {
+    // dense:true 在 Cloudflare Workers 下会导致 sheet_to_json 读不到单元格（Node 正常）
     const wb = XLSX.read(new Uint8Array(data), {
       type: "array",
       cellDates: true,
-      dense: true,
     });
     const names = wb.SheetNames ?? [];
     if (names.length === 0) {
@@ -58,11 +83,7 @@ export async function extractSpreadsheetPlainText(
       const sheet = wb.Sheets[name];
       if (!sheet) continue;
 
-      const rows = XLSX.utils.sheet_to_json(sheet, {
-        header: 1,
-        defval: "",
-        raw: false,
-      }) as unknown[][];
+      let rows = sheetRowsFromWorksheet(sheet, XLSX);
 
       if (!rows.length) continue;
 
@@ -84,14 +105,17 @@ export async function extractSpreadsheetPlainText(
         lines.push(cells.join("\t"));
       }
 
-      const block = lines.join("\n");
-      if (!block.trim()) continue;
-      if (totalChars + block.length > MAX_EXTRACT_CHARS) {
-        warnings.push(`正文过长，后续工作表未纳入检索。`);
-        break;
+      if (lines.length <= 1) continue;
+      let block = lines.join("\n");
+      const budget = MAX_EXTRACT_CHARS - totalChars;
+      if (block.length > budget) {
+        block = block.slice(0, Math.max(0, budget));
+        warnings.push(`正文过长，已截断至 ${MAX_EXTRACT_CHARS} 字预算。`);
       }
+      if (!block.trim()) continue;
       blocks.push(block);
       totalChars += block.length;
+      if (totalChars >= MAX_EXTRACT_CHARS) break;
     }
 
     let body = blocks.join("\n\n");

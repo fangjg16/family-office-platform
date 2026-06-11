@@ -12,7 +12,7 @@ RAW="${JFO_SKILLS_RAW_BASE:-https://raw.githubusercontent.com/fangjg16/family-of
 SKILLS_ROOT="${HERMES_SKILLS_DIR:-/opt/data/.hermes/skills}"
 KB="$SKILLS_ROOT/knowledge-base-generation"
 
-echo "=== JFO skills (curl-only, Railway) ==="
+echo "=== JFO skills (curl-only, Railway, v2.7) ==="
 echo "RAW=$RAW"
 echo "SKILLS_ROOT=$SKILLS_ROOT"
 

@@ -27,7 +27,8 @@
 **然后：**
 
 6. 执行 `jfo-r2-materials`（若 Worker 未预注入资料摘录）
-7. 执行 `knowledge-base-generation`：以 `kb-template.html` 为壳填 `{{PLACEHOLDER}}`；组件语法遵守 STYLE_GUIDE 与 `components.html`；**禁止**自创 class、**禁止**修改 template 内 JS/CSS
-8. 交付：`curl PUT` 到 `JFO_API_PUBLIC_BASE` 的 `/api/hermes/projects/{projectId}/knowledge-network/current`；且同条回复末尾附完整 ` ```html ` 整页
+7. 执行 `knowledge-base-generation`：以 `kb-template.html` 为壳；读取/写入 `<!-- KB-CONFIG -->`（display-order、project-type、rendering-mode、multi-asset、config-version、display-order-history）；11 个 canonical slot 锚点固定，展示顺序由 KB-CONFIG 驱动；Factor A 分母始终 11
+8. **重排章节**（用户说调整展示顺序/把 X 移到 Y 前面）：仅更新 KB-CONFIG + nav + `<h2>` 编号，**禁止**重写内容面板
+9. 交付：`curl PUT` 到 `JFO_API_PUBLIC_BASE` 的 `/api/hermes/projects/{projectId}/knowledge-network/current`；且同条回复末尾附完整 ` ```html ` 整页
 
 未完成步骤 1–5 **不得**输出 HTML。

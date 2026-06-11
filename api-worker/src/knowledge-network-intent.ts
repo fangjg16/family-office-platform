@@ -8,7 +8,7 @@ const KN_TOPIC_RE =
  * 仅当用户明确要求生成/更新/重做 HTML 知识网络时走 Hermes 深度任务（正向匹配，不用「提到知识网络」即触发）。
  */
 const KNOWLEDGE_NETWORK_DELIVERY_RE =
-  /(?:全量重做|完整重做|从零生成|重新生成|全部重做|整页重做|重做).{0,20}(?:项目)?知识网络|(?:按板块|增量).{0,24}(?:更新|修改).{0,20}(?:项目)?知识网络|(?:生成|创建|产出|更新|修改|重建|写入).{0,28}(?:项目)?知识网络(?:\s*html)?|(?:项目)?知识网络.{0,16}(?:生成|创建|更新|修改|重做|重建|html|HTML|整页)|生成\s*kb|更新\s*kb|\[AI\][^\n]{0,48}知识网络|```html\s*整页|kb-template|build project profile|organize what we know|(?:generat|creat|updat|rebuild|deliver).{0,32}knowledge\s*network|regenerate\s+from\s+scratch|full\s+rebuild|rebuild\s+from\s+scratch/u;
+  /(?:全量重做|完整重做|从零生成|重新生成|全部重做|整页重做|重做).{0,20}(?:项目)?知识网络|(?:按板块|增量).{0,24}(?:更新|修改).{0,20}(?:项目)?知识网络|(?:生成|创建|产出|更新|修改|重建|写入).{0,28}(?:项目)?知识网络(?:\s*html)?|(?:项目)?知识网络.{0,16}(?:生成|创建|更新|修改|重做|重建|html|HTML|整页)|(?:调整|修改|重排).{0,16}(?:展示顺序|章节顺序|章节排列|知识网络.{0,8}顺序)|(?:把|将).{0,32}(?:移到|放到|提前).{0,32}(?:前面|之后|后面|前)|display[\s-]*order|reset\s+display\s+order|生成\s*kb|更新\s*kb|\[AI\][^\n]{0,48}知识网络|```html\s*整页|kb-template|build project profile|organize what we know|(?:generat|creat|updat|rebuild|deliver).{0,32}knowledge\s*network|regenerate\s+from\s+scratch|full\s+rebuild|rebuild\s+from\s+scratch/u;
 
 /** 阅读/摘要/版本状态：走轻问或同步读库，不生成新 HTML */
 const KN_READ_RE =

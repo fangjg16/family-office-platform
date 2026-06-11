@@ -32,20 +32,25 @@ Do NOT ask the user to fill out a form. Accept whatever they give and work from 
 
 ### Step 2: Sector Identification + Project Scope Determination
 
-#### Step 2.1: Sector
+#### Step 2.1: Project Type Identification
 
-Identify the project's sector from available context:
+Identify the project type. The type code is written to KB-CONFIG and drives the default display order for this project's Knowledge Base.
 
-| Sector | Signals |
-|--------|---------|
-| **Real Estate** | Land, property, development, DA, zoning, FSR, GFA, residential, commercial, industrial park |
-| **Energy / Infrastructure** | BESS, solar, wind, grid, MW/MWh, AEMO, pipeline, transmission, LFP, 构网型逆变器 |
-| **Biosynthetics / Biotech** | Fermentation, synthetic biology, feedstock, GMP, FDA, clinical trial |
-| **Technology** | SaaS, ARR, platform, API, user base, Series A/B/C |
-| **Trade / Commodities** | Supply chain, cold chain, import/export, commodity, logistics, warehouse |
-| **Hospitality / Tourism** | Resort, hotel, ADR, RevPAR, occupancy, island, eco-tourism |
+| Type code | 项目类型 | 关键信号 | 核心分析逻辑 |
+|-----------|---------|---------|------------|
+| `real-estate-dev` | 房地产·开发类 | DA, zoning, FSR, GFA, construction, 在建, 开发 | 审批 + 建设时间线 + 资本支出 |
+| `real-estate-income` | 房地产·持有/收益类 | 租金, occupancy, WALE, cap rate, 已运营 | 租金收益 + 估值倍数 |
+| `energy-operating` | 能源/基础设施·运营类 | 已并网, operational, PPA, dispatch history, revenue | 收入合同 + 历史发电数据 |
+| `energy-dev` | 能源/基础设施·开发类 | BESS, solar, wind, MW/MWh, AEMO, LFP, 构网型逆变器, DA pending | 审批路径 + 并网节点，无运营历史 |
+| `biotech` | 生物科技/生物合成 | fermentation, synthetic biology, GMP, FDA, clinical trial, IP | IP/技术平台 + 监管路径 |
+| `technology` | 科技/SaaS | SaaS, ARR, NRR, CAC, platform, API, Series A/B/C | 产品 + SaaS 指标 |
+| `trade-commodities` | 贸易/大宗商品 | supply chain, cold chain, import/export, logistics, quota, 配额, 牌照 | 关系网络 + 牌照资质 + 单位利润 |
+| `hospitality` | 酒店/旅游/度假 | resort, hotel, ADR, RevPAR, occupancy, island, eco-tourism | 物业资产 + 运营指标 |
 
-If sector is ambiguous, ask one targeted question — do not present a menu.
+**区分 real-estate-dev vs real-estate-income**：项目是否已稳定运营并有租金/收益历史——有则 income，无或在建则 dev。
+**区分 energy-operating vs energy-dev**：是否已商业运营并网——是则 operating，否则 dev。
+
+If type is ambiguous after reading available materials, ask the specific distinguishing question (e.g., "项目目前是已并网运营还是仍在开发阶段？"). Do not present the full 8-type menu.
 
 #### Step 2.2: Jurisdiction (triggers bilingual KB)
 
@@ -84,6 +89,32 @@ A project is multi-asset if Step 2.3 identifies ≥ 2 distinct sub-assets sharin
 - For each sub-asset, note: location / scale / current state / data availability.
 - Set the KB to multi-asset rendering mode (see `STYLE_GUIDE.md` "Multi-Asset Project Rendering").
 - Factor A scoring in Step 3 will be per-asset per-section, then averaged.
+
+#### Step 2.5: KB-CONFIG Determination
+
+Based on Steps 2.1–2.4, determine the KB-CONFIG values to pass to `knowledge-base-generation`:
+
+| Field | Value | Source |
+|-------|-------|--------|
+| `project-type` | 8 类类型码 | Step 2.1 |
+| `rendering-mode` | `bilingual` (海外项目) / `chinese-only` (国内项目) | Step 2.2 |
+| `multi-asset` | `true` / `false` | Step 2.4 |
+| `display-order` | 该类型的默认展示顺序（见下表） | Step 2.1 |
+
+**各类型默认展示顺序**：
+
+| Type code | 默认 display-order | 设计逻辑 |
+|-----------|-------------------|---------|
+| `real-estate-dev` | snapshot, assets, legal-relationships, capital-structure, timeline, business-model, comps, returns, risks, open-questions, decision-framework | 先确认能建什么、审批状态、资本需求和时间线，再谈收益 |
+| `real-estate-income` | snapshot, assets, business-model, comps, legal-relationships, capital-structure, returns, timeline, risks, open-questions, decision-framework | 租金/出租率是估值基础，先看经营再看结构 |
+| `energy-operating` | snapshot, assets, business-model, comps, returns, capital-structure, legal-relationships, timeline, risks, open-questions, decision-framework | 收入合同和历史数据决定价值，法律结构是后置确认项 |
+| `energy-dev` | snapshot, assets, legal-relationships, timeline, capital-structure, business-model, comps, returns, risks, open-questions, decision-framework | 审批状态和里程碑是最大不确定性，前置 |
+| `biotech` | snapshot, assets, legal-relationships, business-model, capital-structure, comps, returns, timeline, risks, open-questions, decision-framework | IP 归属和监管路径决定项目存活，商业模式次之 |
+| `technology` | snapshot, assets, business-model, comps, capital-structure, returns, legal-relationships, timeline, risks, open-questions, decision-framework | 产品 + SaaS 指标是估值核心，法律结构靠后 |
+| `trade-commodities` | snapshot, assets, legal-relationships, business-model, comps, capital-structure, returns, timeline, risks, open-questions, decision-framework | 牌照/配额/关系是核心护城河，前置法律结构 |
+| `hospitality` | snapshot, assets, business-model, legal-relationships, comps, capital-structure, returns, timeline, risks, open-questions, decision-framework | 物业条件 + 运营指标定价值，再看产权和管理合同 |
+
+将以上字段作为 KB-CONFIG 参数随交接块一并传递给 `knowledge-base-generation`，由其在新建 KB 时写入 `<!-- KB-CONFIG -->` 注释块。
 
 ### Step 3: Maturity Diagnosis (two-factor model)
 
@@ -162,8 +193,9 @@ Overall maturity = 0.6 × (mean of 11 section completeness scores) + 0.4 × sour
 
 ### Step 4: Seed Project Knowledge Base (v1)
 
-Immediately invoke `knowledge-base-generation` (handoff, in the same turn) to create or refresh `[AI] <项目名>_知识网络.html` (note `[AI]` prefix — distinguishes from human-uploaded files) with:
-- All 11 sections rendered, populated where evidence exists, otherwise filled with 缺乏资料 callouts
+Immediately invoke `knowledge-base-generation` (handoff, in the same turn) to create `[AI] <项目名>_知识网络.html` (note `[AI]` prefix — distinguishes from human-uploaded files) with:
+- **KB-CONFIG block** (Step 2.5 values) written to `<body>` opening — this is mandatory for all downstream display-order operations
+- All 11 sections rendered in the Step 2.5 default display-order for this project type, populated where evidence exists, otherwise 缺乏资料 callouts
 - **Multi-asset mode** if Step 2.4 detected ≥ 2 sub-assets: every asset-specific section partitions per asset with its own 缺乏资料 callout when data is missing for that specific asset
 - **Bilingual mode** if Step 2.2 detected overseas jurisdiction: zh + en parallel content + language toggle button
 - 附录 A (来源索引) listing every file/URL processed, tagged 📄 user-uploaded vs 🤖 AI-generated
@@ -188,23 +220,31 @@ Return to the user in chat:
 
 If overall maturity is below 40% OR source diversity is below 30%, ask up to 4 targeted questions. Questions should be sector-aware and source-aware:
 
-**Source-diversity questions (any sector):**
+**Source-diversity questions (any type):**
 - "目前的资料是否都来自[卖方/内部分析师]？是否有第三方机构（律所、会计师、估值师）出具的报告？"
 - "卖方对外报价或 indicative pricing 是否有书面记录？"
 
-**Real Estate examples:**
+**real-estate-dev / real-estate-income:**
 - "这是一个收购项目还是合作开发项目？"
-- "目前处于什么阶段——拿地/在建/已建成运营？"
+- "目前处于什么阶段——拿地/在建/已建成运营？"（用于确认 dev vs income）
 - "是否涉及外资审批（如 FIRB）？"
 
-**Energy examples:**
-- "项目是已建成运营还是开发阶段？"
+**energy-operating / energy-dev:**
+- "项目是否已商业运营并网？"（用于确认 operating vs dev）
 - "并网审批走到什么阶段了？"
-- "是出售方还是买方的角色？"
+- "是否已有 PPA 或类似收入合同？"
 
-**Trade / Industrial Park examples:**
-- "目前招商签约率大概是多少？"
+**trade-commodities:**
+- "核心竞争力是牌照/配额/政府关系，还是物流基础设施？"
 - "用地性质是什么（工业/商业/综合）？"
+
+**biotech / technology:**
+- "IP 归属方是目标公司还是创始团队个人？"
+- "目前有没有商业化收入，还是纯研发阶段？"
+
+**hospitality:**
+- "酒店/度假村目前是自营还是委托管理（管理合同）？"
+- "是否有历史运营数据（ADR/RevPAR）？"
 
 ### Step 7: Handoff to Downstream Skills
 
@@ -236,14 +276,17 @@ If multiple files were uploaded, also invoke `document-reorganize` in parallel d
 - **Asymmetric multi-asset data is the rule, not the exception** in opportunistic investing. One asset is always more documented than the others. The plugin must surface this asymmetry loudly, not paper over it. Every section, every callout, every chat response must distinguish "we have data for asset X" from "we have data for the deal".
 
 
-## 持续学习（Self-Evolution）
+## 边界案例提醒
 
-每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+Plugin 安装后 skill 文件只读，Claude 无法在执行过程中自动写入经验。遇到以下情况时，在**本次对话末尾**用固定格式提醒用户，由用户决定是否开启更新会话手动写入 SKILL.md：
 
-触发记录的条件：
-- 遇到当前指令未覆盖的特殊情况或边界案例
+- 当前指令未覆盖的特殊情况或边界案例
 - 用户给出了纠正或更好的建议
-- 发现值得重用的成功经验或模式
-- 原有指令出现歧义或冲突
+- 发现值得复用的成功模式
+- 原有指令存在歧义或冲突
 
-若认为核心指令需要改进，请主动告知用户并说明原因。
+提醒格式：
+```
+💡 建议写入 SKILL.md：[简短描述发现]
+原因：[为什么值得复用]
+```

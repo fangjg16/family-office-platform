@@ -80,6 +80,23 @@
 
 ---
 
+### 5. 调整展示顺序（轻量重排，v2.7）
+
+**入口**：对话里说「调整展示顺序 / 重排章节 / 把 X 移到 Y 前面」等。
+
+**流程**：
+
+1. `detectKnowledgeNetworkUpdateMode(message)` → **`reorder`**。
+2. Hermes 指令要求：
+   - **必须先** `GET ?format=raw` 拉到工作文件。
+   - **仅更新** `<!-- KB-CONFIG -->`（`display-order`、`config-version`、`display-order-history`）、nav 顺序与各 section `<h2>` 编号。
+   - **禁止**重写任何内容面板。
+3. PUT 回传与验收机制同增量/全量。
+
+**注意**：canonical slot 的 key 与锚点 ID 不变；展示顺序由 KB-CONFIG 驱动，非固定章节序号。
+
+---
+
 ## Hermes 专用 API（Bearer `JFO_INTERNAL_KEY`）
 
 | 方法 | 路径 | 说明 |

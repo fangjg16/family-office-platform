@@ -99,14 +99,17 @@ Generate a concise weekly status update:
 - For cross-border projects, flag gaps that require jurisdiction-specific sources (e.g., FIRB status can only be confirmed by the applicant or their lawyer).
 
 
-## 持续学习（Self-Evolution）
+## 边界案例提醒
 
-每次开始任务时，先读取 `knowledge/` 文件夹中已有的学习记录；每次完成任务后，把新学到的内容追加进去。
+Plugin 安装后 skill 文件只读，Claude 无法在执行过程中自动写入经验。遇到以下情况时，在**本次对话末尾**用固定格式提醒用户，由用户决定是否开启更新会话手动写入 SKILL.md：
 
-触发记录的条件：
-- 遇到当前指令未覆盖的特殊情况或边界案例
+- 当前指令未覆盖的特殊情况或边界案例
 - 用户给出了纠正或更好的建议
-- 发现值得重用的成功经验或模式
-- 原有指令出现歧义或冲突
+- 发现值得复用的成功模式
+- 原有指令存在歧义或冲突
 
-若认为核心指令需要改进，请主动告知用户并说明原因。
+提醒格式：
+```
+💡 建议写入 SKILL.md：[简短描述发现]
+原因：[为什么值得复用]
+```

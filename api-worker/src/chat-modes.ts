@@ -37,7 +37,7 @@ const INTENT_RULES: IntentRule[] = [
   { intent: "dd_checklist", re: /dd\s*checklist|尽调清单|diligence request|data room review|尽调跟踪|还要查什么|what do we still need to check|工作流清单/u },
   { intent: "dd_claim_audit", re: /声明审计|claim audit|verify claims|cross check|信息审计|矛盾|contradiction|审计.*声明|可信度|is this true|audit this/u },
   { intent: "risk_matrix", re: /风险矩阵|risk matrix|风险评估|what could go wrong|what are the risks|风险登记/u },
-  { intent: "returns_analysis", re: /回报测算|returns analysis|what'?s the irr|投资回报|financial model|cash flow model|irr|npv|equity multiple/u },
+  { intent: "returns_analysis", re: /回报测算|returns analysis|what'?s the irr|投资回报|financial model|cash flow model|irr|npv|equity multiple|估值测算|valuation model|\/valuation/u },
   { intent: "sensitivity_analysis", re: /敏感性分析|sensitivity|what if|假设变动|tornado|stress test|情景/u },
   { intent: "comp_analysis", re: /可比交易|comp analysis|comparable|估值参照|对标|market positioning|what'?s this worth/u },
   { intent: "background_check", re: /背景调查|background check|对手调查|实控人|counterparty|who is this|check the seller|关联交易/u },
@@ -49,7 +49,7 @@ const INTENT_RULES: IntentRule[] = [
   { intent: "public_info_search", re: /查外部资料|公开信息|public info|搜一下|search for|background on|网上查|联网搜索|what can we find on/u },
   {
     intent: "project_intake",
-    re: /project[-\s]?intake|intake|入驻|五维|覆盖度|尽调(?!清单)|成熟度诊断|资料覆盖|全面分析|完整分析|深度分析|分析.{0,6}项目|项目.{0,6}分析|怎么看.{0,8}项目|帮我看|看下这个项目|new project|look at this deal|投资价值|交易结构|瓶颈|硬实力/u,
+    re: /project[-\s]?intake|intake|入驻|五维|覆盖度|尽调(?!清单)|成熟度诊断|资料覆盖|全面分析|完整分析|深度分析|分析.{0,6}项目|项目.{0,6}分析|怎么看.{0,8}项目|帮我看|看下这个项目|new project|look at this deal|投资价值|交易结构|瓶颈|硬实力|项目类型|project[-\s]?type|maturity\s+diagnosis|两因素|来源多样性|\/intake/u,
   },
 ];
 
@@ -98,11 +98,12 @@ function sharedCorpusLines(): string[] {
 
 const SKILL_PROMPTS: Record<Exclude<SkillIntent, "standard">, string[]> = {
   project_intake: [
-    "【项目入驻/成熟度评估】输出结构化项目分析：核心定位、资产与设施、招商建设、财务要点、主要风险（⚠️）、建议（✅）。",
-    "若涉及五维：区位政策、功能设施、招商进度、建设状态、财务风险——每项 ✅/⚠️/❌ + 依据。",
+    "【项目入驻/成熟度评估】识别 8 类 project-type（real-estate-dev/income、energy-operating/dev、biotech、technology、trade-commodities、hospitality），两因素成熟度（Factor A 分母 11 canonical slots × Factor B 来源多样性）。",
+    "新建 KB 时须写入 KB-CONFIG（display-order、project-type、rendering-mode、multi-asset、config-version、display-order-history）。输出结构化分析：核心定位、资产、法律结构、财务要点、主要风险、建议。",
   ],
   knowledge_network: [
-    "【项目知识网络 HTML】在本条回复末尾附完整单文件 HTML（米色 Portable）于 ```html 代码块（含 <!DOCTYPE>）；前面可写简短摘要。禁止只写磁盘路径、禁止让用户再发一条消息补 HTML。",
+    "【项目知识网络 HTML】读取 KB-CONFIG 驱动展示顺序；canonical slot 锚点固定。在本条回复末尾附完整单文件 HTML（米色 Portable）于 ```html 代码块（含 <!DOCTYPE>）；前面可写简短摘要。",
+    "重排请求：仅更新 KB-CONFIG + nav + 章节编号，不重写内容面板。禁止只写磁盘路径、禁止让用户再发一条消息补 HTML。",
   ],
   ic_memo: [
     "【投资委员会备忘录（草稿）】Markdown：投资概要、标的与交易、投资逻辑、主要风险与缓释、关键条款/交割条件、表决建议（通过/有条件/否决及条件）。",

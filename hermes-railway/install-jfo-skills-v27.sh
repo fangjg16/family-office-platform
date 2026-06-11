@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# [已弃用] 请改用 install-jfo-skills-v27.sh
-# 合域 v2.5 + jfo-r2-materials → Railway Hermes（整目录安装 KB，其余 skill 含 knowledge/）
-# 用法：bash install-jfo-skills-v25.sh
+# 合域 v2.7 + jfo-r2-materials → Railway Hermes（整目录安装 KB，其余 skill 含 knowledge/）
+# 用法：bash install-jfo-skills-v27.sh
 # 前置：git push 后 Raw 可访问；容器内已安装 hermes CLI
 
 set -euo pipefail
@@ -10,13 +9,12 @@ RAW="${JFO_SKILLS_RAW_BASE:-https://raw.githubusercontent.com/fangjg16/family-of
 SKILLS_ROOT="${HERMES_SKILLS_DIR:-$HOME/.hermes/skills}"
 KB="$SKILLS_ROOT/knowledge-base-generation"
 
-echo "=== JFO Hermes skills install (v2.5 layout) ==="
+echo "=== JFO Hermes skills install (v2.7 layout) ==="
 echo "RAW=$RAW"
 echo "SKILLS_ROOT=$SKILLS_ROOT"
 
 uninstall_skill_quiet() {
   local name="$1"
-  # 卷上常有旧版/残缺安装；先卸再装。Hermes CLI 会交互确认，非 TTY 时用 yes 自动选 y。
   if [ -t 0 ]; then
     hermes skills uninstall "$name" 2>/dev/null || true
   else
@@ -35,7 +33,7 @@ install_skill_md() {
   }
 }
 
-# --- knowledge-base-generation：整目录（模板 + assets + references）---
+# --- knowledge-base-generation：整目录（模板 + assets + references + KB-CONFIG）---
 echo "--- knowledge-base-generation (full directory) ---"
 uninstall_skill_quiet knowledge-base-generation
 if hermes skills install "$RAW/skills/knowledge-base-generation" --name knowledge-base-generation 2>/dev/null; then
@@ -51,7 +49,6 @@ else
   curl -fsSL "$RAW/skills/knowledge-base-generation/knowledge/README.md" -o "$KB/knowledge/README.md" 2>/dev/null || true
 fi
 
-# 确保 references 存在（directory install 可能未含 reference 根文件）
 mkdir -p "$KB/references"
 if [ ! -f "$KB/references/STYLE_GUIDE.md" ]; then
   curl -fsSL "$RAW/reference/STYLE_GUIDE.md" -o "$KB/references/STYLE_GUIDE.md"
@@ -78,6 +75,7 @@ echo "=== Verify knowledge-base-generation ==="
 ls -la "$KB"
 ls -la "$KB/references" 2>/dev/null || true
 ls -la "$KB/assets" 2>/dev/null || true
+grep -E "KB-CONFIG|display-order" "$KB/SKILL.md" | head -3 || true
 
 echo ""
 echo "=== Installed skills (grep) ==="
