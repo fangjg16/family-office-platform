@@ -3,7 +3,7 @@ import { isKnowledgeNetworkDeliveryIntent } from "./knowledge-network-intent";
 /**
  * 网站对话 ↔ Hermes 16 skills 意图映射（内部用，用户不可见 skill 名）
  *
- * jfo-r2-materials：由 Worker 注入 package 全文摘录实现，不单独对用户暴露。
+ * jfo-r2-materials：Hermes 版项目资料读取层（manifest + 按需 textUrl）；Worker 可预注入任务相关摘录。
  * public-info-search：与 Tavily 联网配合（index 里强制触发外部检索）。
  */
 
@@ -106,7 +106,9 @@ const SKILL_PROMPTS: Record<Exclude<SkillIntent, "standard">, string[]> = {
     "重排请求：仅更新 KB-CONFIG + nav + 章节编号，不重写内容面板。禁止只写磁盘路径、禁止让用户再发一条消息补 HTML。",
   ],
   ic_memo: [
-    "【投资委员会备忘录（草稿）】Markdown：投资概要、标的与交易、投资逻辑、主要风险与缓释、关键条款/交割条件、表决建议（通过/有条件/否决及条件）。",
+    "【投资委员会备忘录（草稿）】输出 Markdown：投资概要、标的与交易、投资逻辑、主要风险与缓释、关键条款/交割条件、表决建议（通过/有条件/否决及条件）。",
+    "优先基于当前项目知识网络 KB；仅当 KB 缺关键事实时再按需读取相关原始资料。",
+    "禁止声称已生成 Word/.docx 文件——本平台当前仅交付 Markdown 草稿（非 Cowork 本地 .docx 产物）。",
   ],
   dd_checklist: [
     "【尽调清单】按行业与交易类型生成多工作流 checklist 表格，列：工作流 | 检查项 | 状态 | 优先级 | 备注。",

@@ -49,13 +49,25 @@
 
 ---
 
-### 3. 修改知识网络（增量更新）
+### 3. 首次生成知识网络（initial）
+
+**入口**：项目详情「生成知识网络」，或对话首次要求生成 HTML（尚无已发布 KB）。
+
+**流程**：
+
+1. `detectKnowledgeNetworkUpdateMode` → **`initial`**（`hasExisting=false`）。
+2. manifest 确认后读取**主要**项目资料与本对话 session 附件；写入完整 `<!-- KB-CONFIG -->`。
+3. Hermes `PUT` 时建议带 `mode=initial`；入库校验要求 kb-shell、KB-CONFIG、canonical 锚点。
+
+---
+
+### 4. 修改知识网络（增量更新）
 
 **入口**：项目详情「增量更新」，或对话里说「更新知识网络 / 增量更新 …」。
 
 **流程**：
 
-1. `detectKnowledgeNetworkUpdateMode(message)` → **`incremental`**（未命中全量关键词）。
+1. `detectKnowledgeNetworkUpdateMode(message, hasExisting)` → **`incremental`**（已有 KB 且未命中全量/重排关键词）。
 2. 同上 Hermes 任务；指令要求：
    - **必须先** `GET ?format=raw` 拉到工作文件。
    - **只改**用户点名的 section，再 `PUT` 回传。
@@ -66,7 +78,7 @@
 
 ---
 
-### 4. 重新生成知识网络（全量重做）
+### 5. 重新生成知识网络（全量重做）
 
 **入口**：项目详情「全量重做」，或对话含「全量重做 / 重新生成 / 从零生成」等（`FULL_REGENERATE_RE`）。
 
@@ -80,7 +92,7 @@
 
 ---
 
-### 5. 调整展示顺序（轻量重排，v2.7）
+### 6. 调整展示顺序（轻量重排，v2.7）
 
 **入口**：对话里说「调整展示顺序 / 重排章节 / 把 X 移到 Y 前面」等。
 

@@ -1,10 +1,48 @@
+import type { SkillIntent } from "./chat-modes";
 import { getCitationSlots, matchCitationSlot } from "./citations";
 import { loadChunks } from "./chat-data";
+import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import { isPlaceholderChunkText, selectChunksForChat } from "./search";
 
-/** 与深度模式一致：尽量把 package + 本对话 session 正文带给 Hermes */
-const HERMES_DIGEST_MAX_CHARS = 95_000;
-const HERMES_SESSION_DIGEST_MAX_CHARS = 32_000;
+type DigestIntensity = "none" | "light" | "session_priority" | "full";
+
+const INTENSITY_LIMITS: Record<
+  Exclude<DigestIntensity, "none">,
+  { packageMax: number; sessionMax: number; topK: number }
+> = {
+  light: { packageMax: 24_000, sessionMax: 16_000, topK: 20 },
+  session_priority: { packageMax: 42_000, sessionMax: 32_000, topK: 32 },
+  full: { packageMax: 95_000, sessionMax: 32_000, topK: 48 },
+};
+
+export function resolveMaterialsDigestIntensity(
+  intent: SkillIntent,
+  knMode?: KnowledgeNetworkUpdateMode,
+): DigestIntensity {
+  if (intent === "standard") return "none";
+  if (intent === "knowledge_network") {
+    if (knMode === "reorder") return "none";
+    if (knMode === "incremental") return "session_priority";
+    if (knMode === "initial" || knMode === "full") return "full";
+    return "full";
+  }
+  if (intent === "ic_memo") return "light";
+  if (intent === "project_intake") return "full";
+  if (intent === "public_info_search") return "light";
+  if (
+    intent === "dd_checklist" ||
+    intent === "dd_claim_audit" ||
+    intent === "risk_matrix" ||
+    intent === "returns_analysis" ||
+    intent === "sensitivity_analysis" ||
+    intent === "value_creation_plan" ||
+    intent === "comp_analysis" ||
+    intent === "background_check"
+  ) {
+    return "session_priority";
+  }
+  return "session_priority";
+}
 
 function formatDigestSection(
   title: string,
@@ -23,6 +61,10 @@ function formatDigestSection(
   return [`【${title}】`, excerpt].join("\n");
 }
 
+/**
+ * Worker 侧「资料摘录」预注入：按任务强度节选，非机械全文。
+ * Hermes 仍应通过 jfo-r2-materials 先 manifest、再按需 textUrl。
+ */
 export async function buildHermesMaterialsDigest(
   env: { DB: D1Database },
   projectId: string,
@@ -30,7 +72,12 @@ export async function buildHermesMaterialsDigest(
   conversationId?: string,
   userMessage?: string,
   prioritizeFilenames?: string[],
+  intent: SkillIntent = "project_intake",
+  knMode?: KnowledgeNetworkUpdateMode,
 ): Promise<string> {
+  const intensity = resolveMaterialsDigestIntensity(intent, knMode);
+  if (intensity === "none") return "";
+
   let allChunks: Awaited<ReturnType<typeof loadChunks>>;
   try {
     allChunks = await loadChunks(env, projectId, userId, conversationId);
@@ -39,6 +86,7 @@ export async function buildHermesMaterialsDigest(
   }
   if (allChunks.length === 0) return "";
 
+  const limits = INTENSITY_LIMITS[intensity];
   const searchQuery = (userMessage ?? "").trim() || "项目尽调 资料包 商业模式 时间轴 区位 财务";
   const priorities = (prioritizeFilenames ?? []).filter(Boolean);
   const slots = getCitationSlots(projectId);
@@ -47,29 +95,40 @@ export async function buildHermesMaterialsDigest(
   const packageChunks = allChunks.filter((c) => c.scope !== "session");
 
   const sessionHits = selectChunksForChat(sessionChunks, searchQuery, {
-    deep: true,
-    maxChars: HERMES_SESSION_DIGEST_MAX_CHARS,
-    topK: 48,
+    deep: intensity === "full",
+    maxChars: limits.sessionMax,
+    topK: limits.topK,
     prioritizeFilenames: priorities,
   });
-  const packageHits = selectChunksForChat(packageChunks, searchQuery, {
-    deep: true,
-    maxChars: HERMES_DIGEST_MAX_CHARS,
-    topK: 48,
-    prioritizeFilenames: priorities,
-  });
+
+  const packageHits =
+    intensity === "light" && sessionHits.length > 0
+      ? []
+      : selectChunksForChat(packageChunks, searchQuery, {
+          deep: intensity === "full",
+          maxChars: limits.packageMax,
+          topK: limits.topK,
+          prioritizeFilenames: priorities,
+        });
 
   const sessionBlock = formatDigestSection("本对话上传附件摘录", sessionHits, slots);
   const packageBlock = formatDigestSection("项目资料包摘录", packageHits, slots);
 
   if (!sessionBlock && !packageBlock) return "";
 
+  const intensityNote =
+    intensity === "light"
+      ? "本预注入为轻量节选（优先对话附件）；缺事实时请 manifest 后按需 GET 相关 textUrl，勿无差别拉全文。"
+      : intensity === "session_priority"
+        ? "本预注入为任务相关节选；完整 manifest 仍须确认，正文按任务按需拉取。"
+        : "本预注入为主要资料节选；仍须 manifest 确认清单，勿只凭文件名下结论。";
+
   const parts = [
     "",
     "【Worker 预注入 · 项目资料摘录（事实依据，非版式依据）】",
-    "以下正文来自 Cloudflare D1/R2 已解析资料。",
-    "「本对话上传附件」优先于「项目资料包」；若用户刚上传文件，必须纳入分析，勿仅列 package manifest。",
-    "版式与组件：仍须以 knowledge-base-generation skill 目录中的 kb-template.html + STYLE_GUIDE 为准。",
+    intensityNote,
+    "「本对话上传附件」优先于「项目资料包」；若用户刚上传文件，必须纳入分析。",
+    "版式与组件：以 knowledge-base-generation 目录中 kb-template.html + STYLE_GUIDE 为准。",
   ];
   if (sessionBlock) parts.push("", sessionBlock);
   if (packageBlock) parts.push("", packageBlock);

@@ -5,6 +5,8 @@
 
 set -euo pipefail
 
+# Pin a tag/commit to avoid half-updated main, e.g.:
+#   export JFO_SKILLS_RAW_BASE="https://raw.githubusercontent.com/fangjg16/family-office-platform/c9343a0/hermes-railway"
 RAW="${JFO_SKILLS_RAW_BASE:-https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway}"
 SKILLS_ROOT="${HERMES_SKILLS_DIR:-$HOME/.hermes/skills}"
 KB="$SKILLS_ROOT/knowledge-base-generation"

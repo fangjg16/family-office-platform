@@ -1,4 +1,4 @@
-/** 项目知识网络：对话预填话术（与 Worker detectKnowledgeNetworkUpdateMode / 交付意图正则对齐，v2.7） */
+/** 项目知识网络：对话预填话术（与 Worker detectKnowledgeNetworkUpdateMode 四类模式对齐：initial / incremental / full / reorder） */
 
 /** 进入对话后请用户在【】内写明要改/删的 slot，再发送 */
 export const KNOWLEDGE_NETWORK_INCREMENTAL_PROMPT = `请对项目知识网络进行增量更新（按 canonical slot 调整，未列明的 slot 均保持不变）。

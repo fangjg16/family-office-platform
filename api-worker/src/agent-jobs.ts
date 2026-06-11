@@ -1,6 +1,7 @@
 import type { SkillIntent } from "./chat-modes";
 import { extractKnowledgeNetworkHtmlLoose } from "./chat-modes";
 import { syncCompletedAgentJobToChat } from "./chat-sync";
+import { validateKnowledgeNetworkHtml } from "./knowledge-network-html-validation";
 import { formatKnVersionDisplay } from "./knowledge-network-version";
 import {
   getProjectKnowledgeNetworkMeta,
@@ -83,6 +84,10 @@ async function writeKnowledgeNetworkFromHtml(
   html: string,
   answerSummary: string,
 ): Promise<{ meta: Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>; html: string } | null> {
+  const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+  const validation = validateKnowledgeNetworkHtml(html, { previousHtml });
+  if (!validation.ok) return null;
+
   await upsertProjectKnowledgeNetwork(env, {
     projectId: row.project_id,
     userId: row.user_id,

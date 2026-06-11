@@ -8,6 +8,7 @@
 
 set -euo pipefail
 
+# Pin tag/commit: export JFO_SKILLS_RAW_BASE="https://raw.githubusercontent.com/fangjg16/family-office-platform/<sha>/hermes-railway"
 RAW="${JFO_SKILLS_RAW_BASE:-https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway}"
 SKILLS_ROOT="${HERMES_SKILLS_DIR:-/opt/data/.hermes/skills}"
 KB="$SKILLS_ROOT/knowledge-base-generation"

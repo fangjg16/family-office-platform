@@ -739,6 +739,18 @@ async function handleChatViaHermes(
   }
 
   const sessionId = `jfo-${params.projectId}-${params.conversationId || "default"}`;
+  let hasExistingKb = false;
+  let knMode: ReturnType<typeof detectKnowledgeNetworkUpdateMode> | undefined;
+  if (params.chatMode === "knowledge_network") {
+    try {
+      const existingMeta = await getProjectKnowledgeNetworkMeta(env, params.projectId);
+      hasExistingKb = Boolean(existingMeta);
+      knMode = detectKnowledgeNetworkUpdateMode(params.message, hasExistingKb);
+    } catch {
+      knMode = detectKnowledgeNetworkUpdateMode(params.message, false);
+    }
+  }
+
   let instructions = buildHermesAgentInstructions(
     env,
     params.chatMode,
@@ -749,20 +761,12 @@ async function handleChatViaHermes(
       conversationId: params.conversationId,
       jobId,
       userMessage: params.message,
+      hasExistingKb,
     },
   );
 
-  if (params.chatMode === "knowledge_network") {
-    try {
-      const knMode = detectKnowledgeNetworkUpdateMode(params.message);
-      const existingMeta = await getProjectKnowledgeNetworkMeta(env, params.projectId);
-      instructions += buildKnowledgeNetworkModeInstructions(
-        knMode,
-        Boolean(existingMeta),
-      );
-    } catch {
-      /* 无表时仍依赖 Hermes 文件回路说明 */
-    }
+  if (params.chatMode === "knowledge_network" && knMode) {
+    instructions += buildKnowledgeNetworkModeInstructions(knMode, hasExistingKb);
   }
 
   if (usesFullPackageCorpus(params.chatMode)) {
@@ -774,6 +778,8 @@ async function handleChatViaHermes(
         params.conversationId,
         params.message,
         params.files,
+        params.chatMode,
+        knMode,
       );
       if (digest) instructions += digest;
     } catch {

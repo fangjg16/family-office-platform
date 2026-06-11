@@ -58,6 +58,8 @@ railway.cmd ssh -s hermes-agent
 
 ## 第 3 步：容器内安装（推荐脚本）
 
+**固定版本（避免 main 半更新）**：安装前可 `export JFO_SKILLS_RAW_BASE="https://raw.githubusercontent.com/fangjg16/family-office-platform/<git-sha>/hermes-railway"`（将 `<git-sha>` 换为已 push 的 commit）。
+
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/install-jfo-skills-v27.sh" -o /tmp/install-jfo-skills-v27.sh
 bash /tmp/install-jfo-skills-v27.sh

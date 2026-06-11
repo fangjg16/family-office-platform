@@ -10,6 +10,8 @@
 
 参考文档：`reference/STYLE_GUIDE.md`、`reference/skills_reference.md`。
 
+`jfo-r2-materials` 是 Hermes 版「项目资料读取层」：先 manifest + 当前 KB，再**按任务按需**拉 textUrl（非机械全文）。Worker 指令与 SOUL 已对齐。
+
 ## 1. 创建 Railway 项目
 
 1. 登录 [Railway](https://railway.app)。

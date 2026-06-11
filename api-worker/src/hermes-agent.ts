@@ -7,6 +7,7 @@ import {
   buildHermesKnowledgeNetworkFileProtocol,
   buildHermesKnowledgeNetworkRequiredReads,
 } from "./hermes-knowledge-network";
+import { buildJfoMaterialsInstructions } from "./hermes-materials-instructions";
 import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
   listHermesRunApprovalUrls,
@@ -190,11 +191,24 @@ export function buildHermesAgentInstructions(
   intent: SkillIntent,
   projectId: string,
   projectTitleHint: string,
-  ctx?: { userId?: string; conversationId?: string; jobId?: string; userMessage?: string },
+  ctx?: {
+    userId?: string;
+    conversationId?: string;
+    jobId?: string;
+    userMessage?: string;
+    hasExistingKb?: boolean;
+  },
 ): string {
   const jfoBase = (env.JFO_API_PUBLIC_BASE || "https://jfo-api.jfo-api.workers.dev").trim();
   const userId = (ctx?.userId ?? "").trim();
   const conversationId = (ctx?.conversationId ?? "").trim();
+  const knMode =
+    intent === "knowledge_network"
+      ? detectKnowledgeNetworkUpdateMode(
+          ctx?.userMessage ?? "",
+          Boolean(ctx?.hasExistingKb),
+        )
+      : undefined;
   const intentSkillMap: Record<Exclude<SkillIntent, "standard">, string> = {
     project_intake: "project-intake",
     knowledge_network: "knowledge-base-generation",
@@ -218,32 +232,40 @@ export function buildHermesAgentInstructions(
     intent === "standard" ? "project-intake" : intentSkillMap[intent] ?? "project-intake";
 
   const lines = [
-    "你是联合家办平台的后台分析引擎。用户在网站对话中提需求，你的回复将直接展示在家办平台（用户不知道 Hermes、skill 等实现细节）。",
+    "你是联合家办平台的后台分析引擎。用户在网站对话中提需求，你的回复将直接展示在家办平台（用户不知道后台 Agent、插件或技能包等实现细节）。",
     `当前项目 projectId=${projectId}（${projectTitleHint}）。`,
     "",
-    "【必须执行的工作顺序】",
-    `1. 先执行 skill「jfo-r2-materials」：用 bash/curl 拉取网站资料 manifest 与全文。`,
-    `   a) 项目资料包（全项目共享）：GET ${jfoBase}/api/hermes/projects/${projectId}/manifest?scope=package`,
-    ...(userId && conversationId
-      ? [
-          `   b) 本对话内上传的附件（须纳入，勿忽略）：GET ${jfoBase}/api/hermes/projects/${projectId}/manifest?scope=session&userId=${encodeURIComponent(userId)}&conversationId=${encodeURIComponent(conversationId)}`,
-          `   或一次拉取资料包+本对话附件：GET ${jfoBase}/api/hermes/projects/${projectId}/manifest?scope=all&userId=${encodeURIComponent(userId)}&conversationId=${encodeURIComponent(conversationId)}`,
-        ]
-      : []),
-    "   Header: Authorization: Bearer $JFO_INTERNAL_KEY",
-    "   对每个 parsed=true 的文件 GET textUrl 拉正文。",
-    `2. 再执行 skill「${primarySkill}」完成用户任务。`,
+    "【工作顺序】",
+    `1. jfo-r2-materials：先确认资料清单与当前 KB，再按任务按需读取正文（见下方策略；非机械全文拉取）。`,
+    `2. 执行主任务（内部 skill：${primarySkill}）完成用户交付。`,
+    buildJfoMaterialsInstructions(
+      jfoBase,
+      projectId,
+      intent,
+      userId,
+      conversationId,
+      knMode,
+    ),
     "",
     "【对用户输出的要求】",
     "- 用简体中文，Markdown 表格与结构化正文。",
-    "- 禁止提及 Hermes、skill 名、Opportunistic、JSON Schema、导出到其它系统。",
+    "- 禁止提及 Hermes、skill 名、Opportunistic、JSON Schema、Cowork 本地文件夹、导出到其它系统。",
     "- 不要元叙述开场（如「我们以尽调视角」），直接交付分析结果。",
-    "- 不要结尾推销「如需 Hermes 模板」。",
+    "- 不要结尾推销后台模板或工具名。",
   ];
+
+  if (intent === "ic_memo") {
+    lines.push(
+      "",
+      "【IC 备忘录 · 平台交付】",
+      "- 输出 Markdown 草稿（投资概要、逻辑、风险、条款、表决建议）。",
+      "- 优先基于当前知识网络 KB；仅当 KB 缺关键事实时再按需拉原始资料。",
+      "- 禁止声称已生成 Word/.docx 或「文件已保存到磁盘」——本平台当前不产出 .docx。",
+    );
+  }
 
   if (intent === "knowledge_network") {
     const jobId = (ctx?.jobId ?? "").trim() || "unknown-job";
-    const knMode = detectKnowledgeNetworkUpdateMode(ctx?.userMessage ?? "");
     lines.push(
       buildHermesKnowledgeNetworkRequiredReads(),
       buildHermesKnowledgeNetworkFileProtocol(
@@ -252,9 +274,9 @@ export function buildHermesAgentInstructions(
         userId || "system",
         jobId,
         projectTitleHint,
-        knMode,
+        knMode ?? "initial",
       ),
-      "若上方有【Worker 预注入 · 项目资料摘录】：摘录只供事实与细节，写入工作文件时勿破坏 kb-template 结构。",
+      "预注入摘录只供事实依据；写入 HTML 时须保留 kb-template 结构与 <!-- KB-CONFIG -->。",
     );
   }
 
