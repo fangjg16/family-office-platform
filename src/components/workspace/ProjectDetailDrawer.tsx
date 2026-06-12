@@ -249,15 +249,15 @@ export function ProjectDetailDrawer({
                 canManage={chatOk && detailTier !== "guest"}
                 canDownload={canDownloadMaterials}
               />
-              {canManagePerms ? (
-                <ProjectPermissionsSection project={project} userId={userId} />
-              ) : null}
               {detailTier !== "guest" ? (
                 <ProjectKnowledgeNetworkSection
                   projectId={project.id}
                   userId={userId}
                   project={project}
                 />
+              ) : null}
+              {canManagePerms ? (
+                <ProjectPermissionsSection project={project} userId={userId} />
               ) : null}
             </>
           ) : userCreated ? (
@@ -293,15 +293,15 @@ export function ProjectDetailDrawer({
                 canManage={chatOk && detailTier !== "guest"}
                 canDownload={canDownloadMaterials}
               />
-              {canManagePerms ? (
-                <ProjectPermissionsSection project={project} userId={userId} />
-              ) : null}
               {detailTier !== "guest" ? (
                 <ProjectKnowledgeNetworkSection
                   projectId={project.id}
                   userId={userId}
                   project={project}
                 />
+              ) : null}
+              {canManagePerms ? (
+                <ProjectPermissionsSection project={project} userId={userId} />
               ) : null}
             </>
           ) : (
