@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { FileText, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
+import { Download, FileText, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ENABLE_LIVE_CHAT,
   AI_CHAT_ENDPOINT,
   deleteProjectFile,
   fetchProjectFiles,
+  projectFileDownloadUrl,
   uploadProjectPackageFile,
   type ProjectFileRecord,
 } from "@/lib/project-api";
@@ -15,6 +16,8 @@ type ProjectMaterialsSectionProps = {
   userId: string;
   /** 有对话权限时允许上传、删除项目级资料包 */
   canManage?: boolean;
+  /** Admin / Core / 创建人可下载原文件 */
+  canDownload?: boolean;
 };
 
 function formatFileDate(iso: string): string {
@@ -40,6 +43,7 @@ export function ProjectMaterialsSection({
   projectId,
   userId,
   canManage = true,
+  canDownload = false,
 }: ProjectMaterialsSectionProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [liveFiles, setLiveFiles] = useState<ProjectFileRecord[] | null>(null);
@@ -175,6 +179,9 @@ export function ProjectMaterialsSection({
           title="项目资料包"
           items={packageLive}
           canDelete={useLive && canManage}
+          canDownload={useLive && canDownload}
+          projectId={projectId}
+          userId={userId}
           deletingId={deletingId}
           onDelete={onDeleteFile}
         />
@@ -203,12 +210,18 @@ function MaterialsList({
   title,
   items,
   canDelete,
+  canDownload,
+  projectId,
+  userId,
   deletingId,
   onDelete,
 }: {
   title: string;
   items: ProjectFileRecord[];
   canDelete: boolean;
+  canDownload: boolean;
+  projectId: string;
+  userId: string;
   deletingId: string | null;
   onDelete: (file: ProjectFileRecord) => void;
 }) {
@@ -233,27 +246,40 @@ function MaterialsList({
                   <p className="mt-0.5 text-[10px] text-muted-foreground">{row.meta}</p>
                 ) : null}
               </div>
-              {canDelete ? (
-                <button
-                  type="button"
-                  disabled={Boolean(deletingId)}
-                  onClick={() => void onDelete(file)}
-                  className={cn(
-                    "inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600",
-                    isDeleting && "pointer-events-none opacity-50",
-                  )}
-                  aria-label={`删除 ${row.name}`}
-                  title="从资料包删除"
-                >
-                  {isDeleting ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                  ) : (
-                    <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                  )}
-                </button>
-              ) : (
-                <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" aria-hidden />
-              )}
+              <div className="flex shrink-0 items-center gap-0.5">
+                {canDownload ? (
+                  <a
+                    href={projectFileDownloadUrl(projectId, file.id, userId)}
+                    download={file.filename}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-[hsl(var(--wine-deep)/0.25)] hover:bg-[hsl(var(--wine-deep)/0.06)] hover:text-[hsl(var(--wine-deep))]"
+                    aria-label={`下载 ${row.name}`}
+                    title="下载原文件"
+                  >
+                    <Download className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                  </a>
+                ) : null}
+                {canDelete ? (
+                  <button
+                    type="button"
+                    disabled={Boolean(deletingId)}
+                    onClick={() => void onDelete(file)}
+                    className={cn(
+                      "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600",
+                      isDeleting && "pointer-events-none opacity-50",
+                    )}
+                    aria-label={`删除 ${row.name}`}
+                    title="从资料包删除"
+                  >
+                    {isDeleting ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+                    ) : (
+                      <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                    )}
+                  </button>
+                ) : !canDownload ? (
+                  <Paperclip className="h-3.5 w-3.5 text-muted-foreground/50" aria-hidden />
+                ) : null}
+              </div>
             </li>
           );
         })}

@@ -1,4 +1,5 @@
 import { auditAllMessagesInConversationDeleted } from "./chat-audit";
+import { deleteProjectMemberRolesForProject } from "./project-member-roles-db";
 import { deleteProjectKnowledgeNetwork } from "./project-knowledge-network";
 
 export type ProjectPhase =
@@ -220,6 +221,11 @@ export async function deleteProjectCascade(
     await deleteProjectKnowledgeNetwork(env, projectId);
   } catch {
     /* R2/D1 缺失时仍删除项目行 */
+  }
+  try {
+    await deleteProjectMemberRolesForProject(env, projectId);
+  } catch {
+    /* 表未迁移时仍删除项目 */
   }
   await env.DB.prepare(`DELETE FROM projects WHERE id = ?`).bind(projectId).run();
   return true;

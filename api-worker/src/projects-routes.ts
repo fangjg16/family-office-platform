@@ -1,3 +1,4 @@
+import { seedProjectMemberRoles } from "./project-member-roles-db";
 import { canManageProjectRecord } from "./projects-auth";
 import {
   createProject,
@@ -7,6 +8,7 @@ import {
   normalizeProjectPhase,
   updateProject,
 } from "./projects-db";
+import type { WorkspaceRole } from "./workspace-roles";
 import { decodePathProjectId, resolveProjectForManage } from "./projects-resolve";
 
 type Env = { DB: D1Database; FILES: R2Bucket };
@@ -48,6 +50,7 @@ export async function handleCreateProject(request: Request, env: Env): Promise<R
     phase?: string;
     createdBy?: string;
     userId?: string;
+    participants?: { userId?: string; role?: string }[];
   };
   try {
     body = (await request.json()) as typeof body;
@@ -74,6 +77,28 @@ export async function handleCreateProject(request: Request, env: Env): Promise<R
       phase: body.phase as Parameters<typeof createProject>[1]["phase"],
       createdBy,
     });
+
+    const participants = (body.participants ?? [])
+      .map((p) => ({
+        userId: (p.userId ?? "").trim(),
+        role: (p.role ?? "mid").trim() as WorkspaceRole,
+      }))
+      .filter((p) => p.userId.length > 0);
+
+    if (createdBy) {
+      try {
+        await seedProjectMemberRoles(
+          env,
+          project.id,
+          createdBy,
+          participants,
+          createdBy,
+        );
+      } catch {
+        /* project_member_roles 表未迁移时不阻断创建 */
+      }
+    }
+
     return json({ project }, 201);
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

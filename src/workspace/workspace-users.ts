@@ -1,9 +1,22 @@
 import type { WorkspaceRole, WorkspaceUser } from "./types";
+import { readCachedProjectRole } from "./project-role-cache";
 
 /** 内部预览环境统一密码 */
 export const MOCK_PASSWORD = "jfo2026";
 
 export const GUEST_USER_ID = "janice-hi";
+
+const ROLE_RANK: Record<WorkspaceRole, number> = {
+  guest: 0,
+  low: 1,
+  mid: 2,
+  core: 3,
+  admin: 4,
+};
+
+function higherRole(a: WorkspaceRole, b: WorkspaceRole): WorkspaceRole {
+  return ROLE_RANK[a] >= ROLE_RANK[b] ? a : b;
+}
 
 /** 无种子项目后的默认档位（云端 proj-* 未单独配置时使用） */
 const DEFAULT_ROLE_BY_USER: Record<string, WorkspaceRole> = {
@@ -11,16 +24,8 @@ const DEFAULT_ROLE_BY_USER: Record<string, WorkspaceRole> = {
   "jimmy-huang": "core",
   "jessica-hu": "mid",
   "jensen-fang": "low",
+  "binghe-su": "low",
   "janice-hi": "guest",
-};
-
-/** 按项目 id 覆盖（仅云端项目需要时再增） */
-const PROJECT_ROLES: Record<string, Record<string, WorkspaceRole>> = {
-  "candice-guo": {},
-  "jimmy-huang": {},
-  "jessica-hu": {},
-  "jensen-fang": {},
-  "janice-hi": {},
 };
 
 export const WORKSPACE_USERS: Record<string, WorkspaceUser> = {
@@ -61,6 +66,13 @@ export const WORKSPACE_USERS: Record<string, WorkspaceUser> = {
     avatarChar: "J",
     avatarClass: "bg-slate-300 text-slate-800 shadow-sm",
   },
+  "binghe-su": {
+    id: "binghe-su",
+    displayName: "BingheSu",
+    orgTitle: "研究部 · Low",
+    avatarChar: "B",
+    avatarClass: "bg-stone-400 text-stone-900 shadow-sm",
+  },
 };
 
 /** 登录名 → 用户 id（不区分大小写；键均为 normalizeLoginKey 归一化后的小写串） */
@@ -79,6 +91,8 @@ const LOGIN_ALIASES: Record<string, string> = {
   guestjanicehi: "janice-hi",
   janicehi: "janice-hi",
   "janice-hi": "janice-hi",
+  binghesu: "binghe-su",
+  "binghe-su": "binghe-su",
 };
 
 function normalizeAliasKey(raw: string): string {
@@ -112,13 +126,23 @@ export function getUserById(id: string | null): WorkspaceUser | undefined {
 
 export function getProjectRole(
   userId: string,
-  projectId: string
+  projectId: string,
+  createdBy?: string | null,
 ): WorkspaceRole {
   const uid = userId.trim();
   if (!uid) return "guest";
-  const override = PROJECT_ROLES[uid]?.[projectId];
-  if (override) return override;
-  return DEFAULT_ROLE_BY_USER[uid] ?? "guest";
+
+  const cached = readCachedProjectRole(projectId);
+  if (cached) return cached;
+
+  if (uid === "candice-guo") return "admin";
+
+  let role: WorkspaceRole = DEFAULT_ROLE_BY_USER[uid] ?? "guest";
+  const creator = (createdBy ?? "").trim();
+  if (creator && creator === uid) {
+    role = higherRole(role, "core");
+  }
+  return role;
 }
 
 /** 对话区与表格的展示档位（与旧 core/secondary/broker 对齐） */

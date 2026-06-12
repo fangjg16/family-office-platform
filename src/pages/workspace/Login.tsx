@@ -18,6 +18,7 @@ const QUICK_USERS = [
   { id: "jimmy-huang" },
   { id: "jessica-hu" },
   { id: "jensen-fang" },
+  { id: "binghe-su" },
   { id: "janice-hi", hint: "Guest" },
 ] as const;
 

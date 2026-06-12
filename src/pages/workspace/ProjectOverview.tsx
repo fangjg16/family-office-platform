@@ -31,6 +31,7 @@ import {
 import {
   createProjectViaApi,
   ENABLE_LIVE_CHAT,
+  fetchMyProjectRoles,
   fetchProjectsFromApi,
   uploadProjectPackageFile,
 } from "@/lib/project-api";
@@ -43,7 +44,9 @@ import {
   upsertApiProject,
 } from "@/workspace/project-registry";
 import { workspaceRoleToDetailTier } from "@/workspace/project-details";
+import { useMyProjectRoles } from "@/hooks/use-my-project-roles";
 import { loadSessionUserId } from "@/workspace/session";
+import { setMyProjectRoles } from "@/workspace/project-role-cache";
 import { getProjectRole, getUserById, WORKSPACE_USERS } from "@/workspace/workspace-users";
 import type { WorkspaceRole } from "@/workspace/types";
 
@@ -174,7 +177,7 @@ function ProjectCard({
   onOpenDetail: () => void;
 }) {
   const Icon = CATEGORY_ICON[project.category] ?? Layers;
-  const role = getProjectRole(userId, project.id);
+  const role = getProjectRole(userId, project.id, project.createdBy);
   const roleLabel = roleFootnote(role);
   const previewText = role === "guest" ? project.guestSummary : project.summary;
 
@@ -269,6 +272,8 @@ export default function ProjectOverview() {
     setUserId(id);
   }, [navigate]);
 
+  useMyProjectRoles(userId);
+
   useEffect(() => {
     if (!userId || !ENABLE_LIVE_CHAT) return;
     let cancelled = false;
@@ -306,13 +311,13 @@ export default function ProjectOverview() {
   const roleOptions = userId
     ? Array.from(
         new Set(
-          visibleProjects.map((p) => getProjectRole(userId, p.id))
+          visibleProjects.map((p) => getProjectRole(userId, p.id, p.createdBy))
         )
       )
     : [];
   const filteredProjects = userId
     ? visibleProjects.filter((p) => {
-        const role = getProjectRole(userId, p.id);
+        const role = getProjectRole(userId, p.id, p.createdBy);
         if (phaseFilter !== "all" && p.phase !== phaseFilter) return false;
         if (roleFilter !== "all" && role !== roleFilter) return false;
         return true;
@@ -347,7 +352,17 @@ export default function ProjectOverview() {
           name,
           detail: newProjectDetail.trim() || undefined,
           userId,
+          participants: participants.map((p) => ({
+            userId: p.userId,
+            role: p.permission,
+          })),
         });
+        try {
+          const roles = await fetchMyProjectRoles(userId);
+          setMyProjectRoles(roles);
+        } catch {
+          /* 角色缓存刷新失败不阻断 */
+        }
         upsertApiProject(project);
         const files = [...newProjectFiles];
         const uploadErrors: string[] = [];
@@ -826,7 +841,7 @@ export default function ProjectOverview() {
           project={detailProject}
           userId={userId}
           detailTier={workspaceRoleToDetailTier(
-            getProjectRole(userId, detailProject.id),
+            getProjectRole(userId, detailProject.id, detailProject.createdBy),
           )}
           onClose={() => setDetailProject(null)}
           onGuestTryChat={() => setGuestDialog(true)}

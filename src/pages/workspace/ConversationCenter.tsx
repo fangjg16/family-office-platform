@@ -89,6 +89,7 @@ import {
   loadSessionUserId,
   saveLastChatProjectId,
 } from "@/workspace/session";
+import { useMyProjectRoles } from "@/hooks/use-my-project-roles";
 import type { WorkspaceRole } from "@/workspace/types";
 import {
   getProjectRole,
@@ -1586,6 +1587,8 @@ export default function ConversationCenter() {
     setUser(u);
   }, [navigate]);
 
+  useMyProjectRoles(userId);
+
   useEffect(() => {
     return () => {
       if (newConversationTimerRef.current !== null) {
@@ -1647,8 +1650,8 @@ export default function ConversationCenter() {
 
   const projectRole = useMemo(() => {
     if (!userId || !projectId) return null;
-    return getProjectRole(userId, projectId);
-  }, [userId, projectId]);
+    return getProjectRole(userId, projectId, project?.createdBy);
+  }, [userId, projectId, project?.createdBy, apiProjectsTick]);
 
   const tier = projectRole
     ? workspaceRoleToUiTier(projectRole)
@@ -1656,11 +1659,12 @@ export default function ConversationCenter() {
 
   useEffect(() => {
     if (!userId || !projectId || !projectLookupDone) return;
-    if (getProjectRole(userId, projectId) === "guest") {
+    const p = getProjectById(projectId);
+    if (getProjectRole(userId, projectId, p?.createdBy) === "guest") {
       navigate("/app/projects", { replace: true });
       return;
     }
-    if (!getProjectById(projectId)) {
+    if (!p) {
       navigate("/app/projects", { replace: true });
     }
   }, [userId, projectId, projectLookupDone, navigate, apiProjectsTick]);

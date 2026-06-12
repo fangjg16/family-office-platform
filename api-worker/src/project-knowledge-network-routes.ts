@@ -66,7 +66,7 @@ export async function handlePutProjectKnowledgeNetwork(
   if (!project) {
     return json({ error: "项目不存在" }, 404);
   }
-  if (!canPublishProjectKnowledgeNetwork(userId, projectId, project.createdBy)) {
+  if (!(await canPublishProjectKnowledgeNetwork(env, userId, projectId, project.createdBy))) {
     return json(
       { error: "当前角色无权上传或覆盖项目知识网络", code: "PUBLISH_FORBIDDEN" },
       403,
@@ -137,7 +137,7 @@ export async function handleGetProjectKnowledgeNetwork(
     return json({ error: "项目不存在" }, 404);
   }
 
-  if (!canViewProjectKnowledgeNetwork(userId, projectId)) {
+  if (!(await canViewProjectKnowledgeNetwork(env, userId, projectId, project.createdBy))) {
     return json({ error: "访客无权查看项目知识网络", code: "GUEST_FORBIDDEN" }, 403);
   }
 
@@ -215,7 +215,7 @@ export async function handleGetProjectKnowledgeNetworkVersion(
   if (!project) {
     return json({ error: "项目不存在" }, 404);
   }
-  if (!canViewProjectKnowledgeNetwork(userId, projectId)) {
+  if (!(await canViewProjectKnowledgeNetwork(env, userId, projectId, project.createdBy))) {
     return json({ error: "访客无权查看项目知识网络", code: "GUEST_FORBIDDEN" }, 403);
   }
 

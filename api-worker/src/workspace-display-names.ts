@@ -4,6 +4,7 @@ const DISPLAY_NAMES: Record<string, string> = {
   "jessica-hu": "JessicaHu",
   "jensen-fang": "JensenFang",
   "janice-hi": "JaniceHi",
+  "binghe-su": "BingheSu",
 };
 
 export function workspaceUserDisplayName(userId: string): string {

@@ -12,3 +12,4 @@ INSERT OR IGNORE INTO d1_migrations (name) VALUES ('0009_user_hidden_chat_messag
 INSERT OR IGNORE INTO d1_migrations (name) VALUES ('0010_chat_message_audit_log.sql');
 INSERT OR IGNORE INTO d1_migrations (name) VALUES ('0011_project_knowledge_networks.sql');
 INSERT OR IGNORE INTO d1_migrations (name) VALUES ('0012_project_kn_versions.sql');
+INSERT OR IGNORE INTO d1_migrations (name) VALUES ('0014_project_member_roles.sql');

@@ -28,8 +28,29 @@ export function canUserManageProjectMetadata(
   project: WorkspaceProject,
 ): boolean {
   if (!isPersistedUserProject(project)) return false;
-  if (getProjectRole(userId, project.id) === "admin") return true;
+  if (getProjectRole(userId, project.id, project.createdBy) === "admin") return true;
   return Boolean(project.createdBy && project.createdBy === userId);
+}
+
+/** 权限管理：平台管理员或项目创建人 */
+export function canManageProjectPermissions(
+  userId: string,
+  project: WorkspaceProject,
+): boolean {
+  return canUserManageProjectMetadata(userId, project);
+}
+
+/** 下载项目资料包：Admin / Core / 创建人 */
+export function canDownloadProjectMaterials(
+  userId: string,
+  project: Pick<WorkspaceProject, "id" | "createdBy">,
+): boolean {
+  const uid = userId.trim();
+  if (!uid) return false;
+  const role = getProjectRole(uid, project.id, project.createdBy);
+  if (role === "admin" || role === "core") return true;
+  const creator = (project.createdBy ?? "").trim();
+  return Boolean(creator && creator === uid);
 }
 
 /** 项目详情：上传/覆盖知识网络 HTML（与 Worker canPublishProjectKnowledgeNetwork 对齐） */
@@ -39,7 +60,7 @@ export function canPublishProjectKnowledgeNetwork(
 ): boolean {
   const uid = userId.trim();
   if (!uid) return false;
-  const role = getProjectRole(uid, project.id);
+  const role = getProjectRole(uid, project.id, project.createdBy);
   if (role === "admin" || role === "core") return true;
   const creator = (project.createdBy ?? "").trim();
   return Boolean(creator && creator === uid);

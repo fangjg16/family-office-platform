@@ -51,7 +51,13 @@ import { embedDocumentChunks } from "./embeddings";
 import { chunkPlainText, isGenericProjectQuestion } from "./search";
 import { getProjectById as getDbProjectById } from "./projects-db";
 import { LIST_FILES_SQL, packageR2Key, sessionR2Key } from "./documents-access";
+import { handleDownloadProjectFile } from "./documents-download";
 import { handleDeleteProjectFile } from "./documents-routes";
+import {
+  handleGetProjectPermissions,
+  handleGetUserProjectRoles,
+  handlePutProjectPermissions,
+} from "./project-permissions-routes";
 import { tryHandleHermesRoutes } from "./hermes-bridge";
 import {
   handleCreateProject,
@@ -1326,6 +1332,32 @@ export default {
       ) {
         const projectId = decodePathProjectId(path.split("/")[3] ?? "");
         response = await handleCitations(projectId);
+      } else if (/^\/api\/projects\/[^/]+\/permissions$/u.test(path)) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        if (request.method === "GET") {
+          response = await handleGetProjectPermissions(
+            env,
+            projectId,
+            url.searchParams.get("userId"),
+          );
+        } else if (request.method === "PUT") {
+          response = await handlePutProjectPermissions(
+            request,
+            env,
+            projectId,
+            url.searchParams.get("userId"),
+          );
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
+      } else if (/^\/api\/projects\/[^/]+\/files\/[^/]+\/download$/u.test(path)) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        const docId = path.split("/")[5] ?? "";
+        if (request.method === "GET") {
+          response = await handleDownloadProjectFile(request, env, projectId, docId);
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
       } else if (/^\/api\/projects\/[^/]+\/files\/[^/]+$/u.test(path)) {
         const projectId = decodePathProjectId(path.split("/")[3] ?? "");
         const docId = path.split("/")[5] ?? "";
@@ -1370,6 +1402,16 @@ export default {
         }
       } else if (path === "/api/admin/chat-audit" && request.method === "GET") {
         response = await handleGetChatAudit(request, env, url);
+      } else if (
+        /^\/api\/users\/[^/]+\/project-roles$/u.test(path) &&
+        request.method === "GET"
+      ) {
+        const routeUserId = normalizeUserId(path.split("/")[3]);
+        if (!routeUserId) {
+          response = json({ error: "无效 userId" }, 400);
+        } else {
+          response = await handleGetUserProjectRoles(env, routeUserId);
+        }
       } else if (/^\/api\/users\/[^/]+\/chat-state$/u.test(path)) {
         const routeUserId = normalizeUserId(path.split("/")[3]);
         if (!routeUserId) {

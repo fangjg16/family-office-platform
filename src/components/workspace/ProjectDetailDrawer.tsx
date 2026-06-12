@@ -11,7 +11,10 @@ import {
 } from "@/workspace/project-details";
 import { ProjectMaterialsSection } from "@/components/workspace/ProjectMaterialsSection";
 import { ProjectKnowledgeNetworkSection } from "@/components/workspace/ProjectKnowledgeNetworkSection";
+import { ProjectPermissionsSection } from "@/components/workspace/ProjectPermissionsSection";
 import {
+  canDownloadProjectMaterials,
+  canManageProjectPermissions,
   canUserManageProjectMetadata,
   formatProjectCreatedAt,
   isPersistedUserProject,
@@ -87,10 +90,12 @@ export function ProjectDetailDrawer({
 
   if (!project) return null;
 
-  const role = getProjectRole(userId, project.id);
+  const role = getProjectRole(userId, project.id, project.createdBy);
   const chatOk = canEnterChat(role);
   const detail = getProjectDetailContent(project.id, detailTier);
   const canManage = canUserManageProjectMetadata(userId, project);
+  const canManagePerms = canManageProjectPermissions(userId, project);
+  const canDownloadMaterials = canDownloadProjectMaterials(userId, project);
   const userCreated = isPersistedUserProject(project);
   const createdLabel = isCloudProject(project)
     ? formatProjectCreatedAt(project.createdAt)
@@ -146,7 +151,11 @@ export function ProjectDetailDrawer({
             </h2>
             <p className="mt-2 text-[11px] font-medium text-muted-foreground">
               本项目视角：{roleLabelForProject(role)}
-              {canManage ? " · 你是创建人，可编辑或删除" : null}
+              {canManage && project.createdBy === userId
+                ? " · 你是创建人，可编辑或删除"
+                : canManage
+                  ? " · 平台管理员"
+                  : null}
             </p>
           </div>
           <div className="flex shrink-0 items-center gap-1">
@@ -238,7 +247,11 @@ export function ProjectDetailDrawer({
                 projectId={project.id}
                 userId={userId}
                 canManage={chatOk && detailTier !== "guest"}
+                canDownload={canDownloadMaterials}
               />
+              {canManagePerms ? (
+                <ProjectPermissionsSection project={project} userId={userId} />
+              ) : null}
               {detailTier !== "guest" ? (
                 <ProjectKnowledgeNetworkSection
                   projectId={project.id}
@@ -278,7 +291,11 @@ export function ProjectDetailDrawer({
                 projectId={project.id}
                 userId={userId}
                 canManage={chatOk && detailTier !== "guest"}
+                canDownload={canDownloadMaterials}
               />
+              {canManagePerms ? (
+                <ProjectPermissionsSection project={project} userId={userId} />
+              ) : null}
               {detailTier !== "guest" ? (
                 <ProjectKnowledgeNetworkSection
                   projectId={project.id}
@@ -296,6 +313,7 @@ export function ProjectDetailDrawer({
                 projectId={project.id}
                 userId={userId}
                 canManage={chatOk}
+                canDownload={canDownloadMaterials}
               />
             </>
           )}

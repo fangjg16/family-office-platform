@@ -78,12 +78,110 @@ export async function fetchProjectByIdFromApi(
   return data.project ? mapApiProject(data.project) : null;
 }
 
+export async function fetchMyProjectRoles(
+  userId: string,
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<Record<string, import("@/workspace/types").WorkspaceRole>> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  if (!base) return {};
+  const res = await fetch(
+    `${base}/api/users/${encodeURIComponent(userId)}/project-roles`,
+  );
+  if (!res.ok) {
+    const err = await res.text().catch(() => "");
+    throw new Error(err || `角色加载失败（${res.status}）`);
+  }
+  const data = (await res.json()) as {
+    roles?: Record<string, import("@/workspace/types").WorkspaceRole>;
+  };
+  return data.roles ?? {};
+}
+
+export type ProjectPermissionMember = {
+  userId: string;
+  displayName: string;
+  defaultRole: import("@/workspace/types").WorkspaceRole;
+  overrideRole: import("@/workspace/types").WorkspaceRole | null;
+  effectiveRole: import("@/workspace/types").WorkspaceRole;
+  isCreator: boolean;
+  isPlatformAdmin: boolean;
+};
+
+export async function fetchProjectPermissions(
+  projectId: string,
+  userId: string,
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<{
+  projectId: string;
+  createdBy: string | null;
+  canManage: boolean;
+  members: ProjectPermissionMember[];
+}> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
+  const q = new URLSearchParams({ userId });
+  const res = await fetch(
+    `${base}/api/projects/${encodeURIComponent(projectId)}/permissions?${q}`,
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    projectId?: string;
+    createdBy?: string | null;
+    canManage?: boolean;
+    members?: ProjectPermissionMember[];
+  };
+  if (!res.ok) throw new Error(data.error || `权限加载失败（${res.status}）`);
+  return {
+    projectId: data.projectId ?? projectId,
+    createdBy: data.createdBy ?? null,
+    canManage: Boolean(data.canManage),
+    members: data.members ?? [],
+  };
+}
+
+export async function updateProjectPermissions(
+  projectId: string,
+  userId: string,
+  updates: { userId: string; role: import("@/workspace/types").WorkspaceRole }[],
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<ProjectPermissionMember[]> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
+  const q = new URLSearchParams({ userId });
+  const res = await fetch(
+    `${base}/api/projects/${encodeURIComponent(projectId)}/permissions?${q}`,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ updates }),
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    members?: ProjectPermissionMember[];
+  };
+  if (!res.ok) throw new Error(data.error || `权限保存失败（${res.status}）`);
+  return data.members ?? [];
+}
+
+export function projectFileDownloadUrl(
+  projectId: string,
+  documentId: string,
+  userId: string,
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): string {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  const q = new URLSearchParams({ userId });
+  return `${base}/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(documentId)}/download?${q}`;
+}
+
 export async function createProjectViaApi(
   input: {
     name: string;
     detail?: string;
     category?: string;
     userId?: string;
+    participants?: { userId: string; role: "core" | "mid" | "low" }[];
   },
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<import("@/workspace/projects").WorkspaceProject> {
@@ -98,6 +196,7 @@ export async function createProjectViaApi(
       category: input.category,
       userId: input.userId,
       createdBy: input.userId,
+      participants: input.participants,
     }),
   });
   const data = (await res.json().catch(() => ({}))) as {

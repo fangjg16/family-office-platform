@@ -1,49 +1,85 @@
 /** 与前端 workspace-users.ts 对齐的演示权限（Worker 侧校验） */
 
+import { getProjectMemberRoleOverride } from "./project-member-roles-db";
+import { DEFAULT_ROLE_BY_USER } from "./workspace-known-users";
+import { isPlatformAdmin } from "./projects-auth";
+
 export type WorkspaceRole = "admin" | "core" | "mid" | "low" | "guest";
 
-export const GUEST_USER_ID = "janice-hi";
-
-const DEFAULT_ROLE_BY_USER: Record<string, WorkspaceRole> = {
-  "candice-guo": "admin",
-  "jimmy-huang": "core",
-  "jessica-hu": "mid",
-  "jensen-fang": "low",
-  "janice-hi": "guest",
+const ROLE_RANK: Record<WorkspaceRole, number> = {
+  guest: 0,
+  low: 1,
+  mid: 2,
+  core: 3,
+  admin: 4,
 };
 
-const PROJECT_ROLES: Record<string, Record<string, WorkspaceRole>> = {
-  "candice-guo": {},
-  "jimmy-huang": {},
-  "jessica-hu": {},
-  "jensen-fang": {},
-  "janice-hi": {},
-};
-
-export function getProjectRole(userId: string, projectId: string): WorkspaceRole {
-  const uid = userId.trim();
-  if (!uid) return "guest";
-  const override = PROJECT_ROLES[uid]?.[projectId];
-  if (override) return override;
-  return DEFAULT_ROLE_BY_USER[uid] ?? "guest";
+function higherRole(a: WorkspaceRole, b: WorkspaceRole): WorkspaceRole {
+  return ROLE_RANK[a] >= ROLE_RANK[b] ? a : b;
 }
 
-export function canViewProjectKnowledgeNetwork(
-  userId: string,
-  projectId: string,
-): boolean {
-  return getProjectRole(userId, projectId) !== "guest";
-}
+type RoleEnv = { DB: D1Database };
 
-/** 上传/覆盖项目知识网络 HTML：admin / core / 项目创建人 */
-export function canPublishProjectKnowledgeNetwork(
+/** 解析用户在项目上的有效角色（含 DB 覆盖与创建人 Core 下限） */
+export async function resolveProjectRole(
+  env: RoleEnv,
   userId: string,
   projectId: string,
   createdBy?: string | null,
-): boolean {
+): Promise<WorkspaceRole> {
+  const uid = userId.trim();
+  if (!uid) return "guest";
+  if (isPlatformAdmin(uid)) return "admin";
+
+  const override = await getProjectMemberRoleOverride(env, projectId, uid);
+  let role: WorkspaceRole = override ?? DEFAULT_ROLE_BY_USER[uid] ?? "guest";
+
+  const creator = (createdBy ?? "").trim();
+  if (creator && creator === uid) {
+    role = higherRole(role, "core");
+  }
+  return role;
+}
+
+/** @deprecated 仅作无 DB 时的同步回退；生产路径请用 resolveProjectRole */
+export function getProjectRole(userId: string, _projectId: string): WorkspaceRole {
+  const uid = userId.trim();
+  if (!uid) return "guest";
+  if (isPlatformAdmin(uid)) return "admin";
+  return DEFAULT_ROLE_BY_USER[uid] ?? "guest";
+}
+
+export async function canViewProjectKnowledgeNetwork(
+  env: RoleEnv,
+  userId: string,
+  projectId: string,
+  createdBy?: string | null,
+): Promise<boolean> {
+  const role = await resolveProjectRole(env, userId, projectId, createdBy);
+  return role !== "guest";
+}
+
+/** 上传/覆盖项目知识网络 HTML：admin / core（创建人自动为 core） */
+export async function canPublishProjectKnowledgeNetwork(
+  env: RoleEnv,
+  userId: string,
+  projectId: string,
+  createdBy?: string | null,
+): Promise<boolean> {
+  const role = await resolveProjectRole(env, userId, projectId, createdBy);
+  return role === "admin" || role === "core";
+}
+
+/** 下载项目资料包原文件：admin / core / 项目创建人 */
+export async function canDownloadProjectFile(
+  env: RoleEnv,
+  userId: string,
+  projectId: string,
+  createdBy?: string | null,
+): Promise<boolean> {
   const uid = userId.trim();
   if (!uid) return false;
-  const role = getProjectRole(uid, projectId);
+  const role = await resolveProjectRole(env, uid, projectId, createdBy);
   if (role === "admin" || role === "core") return true;
   const creator = (createdBy ?? "").trim();
   return Boolean(creator && creator === uid);
