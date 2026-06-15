@@ -25,8 +25,8 @@ export function isBlankConversationId(projectId: string, conversationId: string)
 }
 
 /**
- * URL 未带 conversationId 时，选中该项目下「有消息」的会话（避免刷新后落到空的 -main）。
- * 若 URL 为显式 blank 线程（可无消息），尊重用户选择，不抢跳回旧对话。
+ * URL 未带 conversationId，或落在空的 `-main` 时，自动选该项目下有消息的会话。
+ * 用户显式打开的子线程（`/chat/:projectId/:conversationId`）一律尊重，不因本地暂无消息而抢跳。
  */
 export function pickConversationIdForProject(
   projectId: string,
@@ -35,10 +35,12 @@ export function pickConversationIdForProject(
 ): string {
   const mainId = `${projectId}-main`;
   const urlId = conversationIdFromUrl?.trim();
+
   if (urlId && conversationBelongsToProject(urlId, projectId)) {
-    if (isBlankConversationId(projectId, urlId)) return urlId;
-    const urlMsgs = messagesByConversation[urlId];
-    if (Array.isArray(urlMsgs) && urlMsgs.length > 0) return urlId;
+    const isMainAlias = urlId === projectId || urlId === mainId;
+    if (!isMainAlias) {
+      return urlId;
+    }
   }
 
   let bestId = mainId;

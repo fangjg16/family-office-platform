@@ -1879,7 +1879,7 @@ export default function ConversationCenter() {
     };
   }, [userId, isLiveAiMode]);
 
-  /** URL 落在空的 -main 时，自动切到有消息的会话（如 blank- 线程） */
+  /** URL 落在空的 -main（或无 conversationId）时，自动切到有消息的会话；显式子线程 URL 不抢跳 */
   useEffect(() => {
     if (!projectId || !chatSyncReady) return;
     const picked = pickConversationIdForProject(
