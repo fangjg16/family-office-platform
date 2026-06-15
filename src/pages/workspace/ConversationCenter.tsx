@@ -127,13 +127,40 @@ function conversationHasMessages(
   return Array.isArray(msgs) && msgs.length > 0;
 }
 
+/** 每个有子线程或消息的项目都保留一条 `-main` 全局分析入口（Live 侧栏） */
+function ensureProjectMainThreads(
+  convs: SessionConversation[],
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+  focusProjectId?: string,
+): SessionConversation[] {
+  const byId = new Map(convs.map((c) => [c.id, c]));
+  const projectIds = new Set<string>();
+  for (const c of convs) projectIds.add(c.projectId);
+  for (const [convId, msgs] of Object.entries(messagesByConversation)) {
+    if (!Array.isArray(msgs) || msgs.length === 0) continue;
+    const pid = inferProjectIdFromConvId(convId);
+    if (pid) projectIds.add(pid);
+  }
+  if (focusProjectId) projectIds.add(focusProjectId);
+
+  for (const pid of projectIds) {
+    const mainId = `${pid}-main`;
+    if (byId.has(mainId)) continue;
+    const built = buildConversationFromProject(pid);
+    if (built) byId.set(mainId, built);
+  }
+  return Array.from(byId.values());
+}
+
 function pruneEmptyLiveConversations(
   convs: SessionConversation[],
   messagesByConversation: Record<string, LiveChatMessage[]>,
 ): SessionConversation[] {
   return convs.filter(
     (c) =>
-      c.variant === "blank" || conversationHasMessages(c, messagesByConversation),
+      c.id === `${c.projectId}-main` ||
+      c.variant === "blank" ||
+      conversationHasMessages(c, messagesByConversation),
   );
 }
 
@@ -254,15 +281,18 @@ function mergeConversationsForBootstrap(
     : base;
   const reconciled = reconcileConversationsWithMessages(cleaned, messagesByConversation);
   const withTimes = applyConversationMetadataFromMessages(reconciled, messagesByConversation);
+  const withMain = isLiveAiMode
+    ? ensureProjectMainThreads(withTimes, messagesByConversation, focusProjectId)
+    : withTimes;
   if (isLiveAiMode) {
-    return withTimes;
+    return withMain;
   }
-  if (!focusProjectId) return withTimes;
+  if (!focusProjectId) return withMain;
   const currentConversation = buildConversationFromProject(focusProjectId);
-  if (!currentConversation) return withTimes;
-  const hasCurrent = withTimes.some((item) => item.projectId === focusProjectId);
-  if (hasCurrent) return withTimes;
-  return [withCurrentPreviewTime(currentConversation), ...withTimes];
+  if (!currentConversation) return withMain;
+  const hasCurrent = withMain.some((item) => item.projectId === focusProjectId);
+  if (hasCurrent) return withMain;
+  return [withCurrentPreviewTime(currentConversation), ...withMain];
 }
 
 function projectDisplayName(projectId: string): string {
@@ -1786,8 +1816,16 @@ export default function ConversationCenter() {
 
   const sidebarGroups = useMemo(
     () =>
-      groupSidebarByProject(conversations, liveMessagesByConversation, isLiveAiMode),
-    [conversations, liveMessagesByConversation, isLiveAiMode],
+      groupSidebarByProject(
+        ensureProjectMainThreads(
+          conversations,
+          liveMessagesByConversation,
+          projectId,
+        ),
+        liveMessagesByConversation,
+        isLiveAiMode,
+      ),
+    [conversations, liveMessagesByConversation, isLiveAiMode, projectId],
   );
 
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(
