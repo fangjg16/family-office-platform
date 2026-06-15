@@ -72,6 +72,7 @@ import {
 import {
   conversationRoutePath,
   inferProjectIdFromConversationId as inferProjectIdFromConvId,
+  isExplicitSubThreadRoute,
   pickConversationIdForProject,
 } from "@/workspace/chat-conversation-id";
 import {
@@ -1686,6 +1687,9 @@ export default function ConversationCenter() {
 
   const effectiveConversationId = useMemo(() => {
     if (!projectId) return "";
+    if (isExplicitSubThreadRoute(projectId, conversationId)) {
+      return conversationId!.trim();
+    }
     return pickConversationIdForProject(
       projectId,
       conversationId,
@@ -1882,16 +1886,15 @@ export default function ConversationCenter() {
   /** URL 落在空的 -main（或无 conversationId）时，自动切到有消息的会话；显式子线程 URL 不抢跳 */
   useEffect(() => {
     if (!projectId || !chatSyncReady) return;
+    if (isExplicitSubThreadRoute(projectId, conversationId)) return;
+
     const picked = pickConversationIdForProject(
       projectId,
       conversationId,
       liveMessagesByConversation,
     );
     const path = conversationRoutePath(projectId, picked);
-    const currentPath =
-      conversationId && conversationId !== `${projectId}-main`
-        ? `/app/chat/${projectId}/${conversationId}`
-        : `/app/chat/${projectId}`;
+    const currentPath = `/app/chat/${projectId}`;
     if (path !== currentPath) {
       navigate(path, { replace: true });
     }
@@ -2203,14 +2206,48 @@ export default function ConversationCenter() {
   }, [isLiveAiMode, AI_CHAT_ENDPOINT]);
 
   useEffect(() => {
-    if (!projectId || !userId) return;
+    if (!projectId || !userId || !chatSyncReady) return;
     if (!conversationId) return;
+
+    if (isExplicitSubThreadRoute(projectId, conversationId)) {
+      const id = conversationId.trim();
+      const inList = conversations.some((c) => c.id === id);
+      if (!inList && project) {
+        const msgs = liveMessagesByConversation[id];
+        const hasMsgs = Array.isArray(msgs) && msgs.length > 0;
+        setConversations((prev) => {
+          if (prev.some((c) => c.id === id)) return prev;
+          return [
+            {
+              ...buildBlankSessionConversation(projectId, id, project.name),
+              preview: hasMsgs ? topicFromFirstUserMessage(msgs) : "尚未发送消息",
+              updatedAt: hasMsgs
+                ? latestMessageTimeLabel(msgs) || getCurrentDateTimeLabel()
+                : getCurrentDateTimeLabel(),
+              variant: hasMsgs ? undefined : ("blank" as const),
+            },
+            ...prev,
+          ];
+        });
+      }
+      return;
+    }
+
     if (conversations.length === 0) return;
     const exists = conversations.some((item) => item.id === conversationId);
     if (!exists) {
       navigate(`/app/chat/${projectId}`, { replace: true });
     }
-  }, [projectId, conversationId, conversations, userId, navigate]);
+  }, [
+    projectId,
+    conversationId,
+    conversations,
+    userId,
+    chatSyncReady,
+    liveMessagesByConversation,
+    project,
+    navigate,
+  ]);
 
   useEffect(() => {
     setShowHistoryMenu(false);

@@ -19,6 +19,26 @@ function conversationBelongsToProject(conversationId: string, projectId: string)
   );
 }
 
+/** URL 是否为「裸项目 / -main」别名（非显式子线程） */
+export function isMainConversationAlias(
+  projectId: string,
+  conversationIdFromUrl: string | undefined,
+): boolean {
+  const urlId = conversationIdFromUrl?.trim();
+  if (!urlId) return true;
+  return urlId === projectId || urlId === `${projectId}-main`;
+}
+
+/** `/chat/:projectId/:conversationId` 且 conversationId 不是 -main 别名 */
+export function isExplicitSubThreadRoute(
+  projectId: string,
+  conversationIdFromUrl: string | undefined,
+): boolean {
+  const urlId = conversationIdFromUrl?.trim();
+  if (!urlId || !projectId) return false;
+  return !isMainConversationAlias(projectId, urlId);
+}
+
 /** 用户点击「新增对话」生成的空白线程 id */
 export function isBlankConversationId(projectId: string, conversationId: string): boolean {
   return conversationId.startsWith(`${projectId}-blank-`);
