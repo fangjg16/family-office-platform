@@ -11,7 +11,10 @@ export function inferProjectIdFromConversationId(
   return null;
 }
 
-function conversationBelongsToProject(conversationId: string, projectId: string): boolean {
+export function conversationBelongsToProject(
+  conversationId: string,
+  projectId: string,
+): boolean {
   return (
     conversationId === projectId ||
     conversationId === `${projectId}-main` ||
@@ -19,24 +22,11 @@ function conversationBelongsToProject(conversationId: string, projectId: string)
   );
 }
 
-/** URL 是否为「裸项目 / -main」别名（非显式子线程） */
-export function isMainConversationAlias(
-  projectId: string,
+/** URL 是否带 conversationId 段（`/chat/:projectId/:conversationId`） */
+export function hasConversationIdInUrl(
   conversationIdFromUrl: string | undefined,
 ): boolean {
-  const urlId = conversationIdFromUrl?.trim();
-  if (!urlId) return true;
-  return urlId === projectId || urlId === `${projectId}-main`;
-}
-
-/** `/chat/:projectId/:conversationId` 且 conversationId 不是 -main 别名 */
-export function isExplicitSubThreadRoute(
-  projectId: string,
-  conversationIdFromUrl: string | undefined,
-): boolean {
-  const urlId = conversationIdFromUrl?.trim();
-  if (!urlId || !projectId) return false;
-  return !isMainConversationAlias(projectId, urlId);
+  return Boolean(conversationIdFromUrl?.trim());
 }
 
 /** 用户点击「新增对话」生成的空白线程 id */
@@ -45,24 +35,28 @@ export function isBlankConversationId(projectId: string, conversationId: string)
 }
 
 /**
- * URL 未带 conversationId，或落在空的 `-main` 时，自动选该项目下有消息的会话。
- * 用户显式打开的子线程（`/chat/:projectId/:conversationId`）一律尊重，不因本地暂无消息而抢跳。
+ * 解析当前应展示的会话 id：
+ * - URL 已带 conversationId 且属于该项目 → 原样使用（含 `-main` 与 blank 线程）
+ * - 仅 `/chat/:projectId` 裸路由 → 选该项目下有消息的会话
  */
-export function pickConversationIdForProject(
+export function resolveConversationIdFromUrl(
   projectId: string,
   conversationIdFromUrl: string | undefined,
   messagesByConversation: Record<string, LiveChatMessage[]>,
 ): string {
-  const mainId = `${projectId}-main`;
   const urlId = conversationIdFromUrl?.trim();
-
   if (urlId && conversationBelongsToProject(urlId, projectId)) {
-    const isMainAlias = urlId === projectId || urlId === mainId;
-    if (!isMainAlias) {
-      return urlId;
-    }
+    return urlId;
   }
+  return pickConversationIdForProject(projectId, messagesByConversation);
+}
 
+/** 裸项目路由：选该项目下消息最多（同量取最近）的会话 */
+export function pickConversationIdForProject(
+  projectId: string,
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+): string {
+  const mainId = `${projectId}-main`;
   let bestId = mainId;
   let bestCount = messagesByConversation[mainId]?.length ?? 0;
   let bestLast = lastMessageSortKey(messagesByConversation[mainId]);
@@ -91,12 +85,10 @@ function lastMessageSortKey(msgs: LiveChatMessage[] | undefined): number {
   return idx * 1e15 + (Number.isFinite(ts) ? ts : 0);
 }
 
+/** 始终带 conversationId，避免 `-main` 裸路由被自动抢跳到其它线程 */
 export function conversationRoutePath(
   projectId: string,
   conversationId: string,
 ): string {
-  if (conversationId === `${projectId}-main`) {
-    return `/app/chat/${projectId}`;
-  }
   return `/app/chat/${projectId}/${conversationId}`;
 }

@@ -70,10 +70,13 @@ import {
   subscribeApiProjects,
 } from "@/workspace/project-registry";
 import {
+  conversationBelongsToProject,
   conversationRoutePath,
+  hasConversationIdInUrl,
   inferProjectIdFromConversationId as inferProjectIdFromConvId,
-  isExplicitSubThreadRoute,
+  isBlankConversationId,
   pickConversationIdForProject,
+  resolveConversationIdFromUrl,
 } from "@/workspace/chat-conversation-id";
 import {
   appendMessageWithSortIndex,
@@ -926,10 +929,7 @@ function buildConversationFromProject(projectId: string): SessionConversation | 
 }
 
 function conversationPath(c: SessionConversation): string {
-  if (c.id === `${c.projectId}-main`) {
-    return `/app/chat/${c.projectId}`;
-  }
-  return `/app/chat/${c.projectId}/${c.id}`;
+  return conversationRoutePath(c.projectId, c.id);
 }
 
 async function copyPlainTextToClipboard(text: string): Promise<boolean> {
@@ -1687,10 +1687,7 @@ export default function ConversationCenter() {
 
   const effectiveConversationId = useMemo(() => {
     if (!projectId) return "";
-    if (isExplicitSubThreadRoute(projectId, conversationId)) {
-      return conversationId!.trim();
-    }
-    return pickConversationIdForProject(
+    return resolveConversationIdFromUrl(
       projectId,
       conversationId,
       liveMessagesByConversation,
@@ -1883,21 +1880,16 @@ export default function ConversationCenter() {
     };
   }, [userId, isLiveAiMode]);
 
-  /** URL 落在空的 -main（或无 conversationId）时，自动切到有消息的会话；显式子线程 URL 不抢跳 */
+  /** 裸 `/chat/:projectId` 时，自动跳到带 conversationId 的 canonical URL */
   useEffect(() => {
     if (!projectId || !chatSyncReady) return;
-    if (isExplicitSubThreadRoute(projectId, conversationId)) return;
+    if (hasConversationIdInUrl(conversationId)) return;
 
     const picked = pickConversationIdForProject(
       projectId,
-      conversationId,
       liveMessagesByConversation,
     );
-    const path = conversationRoutePath(projectId, picked);
-    const currentPath = `/app/chat/${projectId}`;
-    if (path !== currentPath) {
-      navigate(path, { replace: true });
-    }
+    navigate(conversationRoutePath(projectId, picked), { replace: true });
   }, [
     projectId,
     conversationId,
@@ -2209,34 +2201,51 @@ export default function ConversationCenter() {
     if (!projectId || !userId || !chatSyncReady) return;
     if (!conversationId) return;
 
-    if (isExplicitSubThreadRoute(projectId, conversationId)) {
-      const id = conversationId.trim();
-      const inList = conversations.some((c) => c.id === id);
-      if (!inList && project) {
-        const msgs = liveMessagesByConversation[id];
-        const hasMsgs = Array.isArray(msgs) && msgs.length > 0;
-        setConversations((prev) => {
-          if (prev.some((c) => c.id === id)) return prev;
-          return [
-            {
-              ...buildBlankSessionConversation(projectId, id, project.name),
-              preview: hasMsgs ? topicFromFirstUserMessage(msgs) : "尚未发送消息",
-              updatedAt: hasMsgs
-                ? latestMessageTimeLabel(msgs) || getCurrentDateTimeLabel()
-                : getCurrentDateTimeLabel(),
-              variant: hasMsgs ? undefined : ("blank" as const),
-            },
-            ...prev,
-          ];
-        });
-      }
+    const id = conversationId.trim();
+    if (!conversationBelongsToProject(id, projectId)) {
+      const picked = pickConversationIdForProject(
+        projectId,
+        liveMessagesByConversation,
+      );
+      navigate(conversationRoutePath(projectId, picked), { replace: true });
+      return;
+    }
+
+    const inList = conversations.some((c) => c.id === id);
+    if (!inList && project) {
+      const msgs = liveMessagesByConversation[id];
+      const hasMsgs = Array.isArray(msgs) && msgs.length > 0;
+      setConversations((prev) => {
+        if (prev.some((c) => c.id === id)) return prev;
+        const isBlank = isBlankConversationId(projectId, id);
+        const builtMain = buildConversationFromProject(projectId);
+        if (!isBlank && !builtMain) return prev;
+        return [
+          {
+            ...(isBlank
+              ? buildBlankSessionConversation(projectId, id, project.name)
+              : { ...builtMain!, id }),
+            preview: hasMsgs ? topicFromFirstUserMessage(msgs) : "尚未发送消息",
+            updatedAt: hasMsgs
+              ? latestMessageTimeLabel(msgs) || getCurrentDateTimeLabel()
+              : getCurrentDateTimeLabel(),
+            variant: hasMsgs && !isBlank ? undefined : ("blank" as const),
+          },
+          ...prev,
+        ];
+      });
       return;
     }
 
     if (conversations.length === 0) return;
-    const exists = conversations.some((item) => item.id === conversationId);
-    if (!exists) {
-      navigate(`/app/chat/${projectId}`, { replace: true });
+    if (!inList) {
+      // URL 已指向合法会话时勿抢跳到其它线程（例如项目元数据尚未载入）
+      if (conversationBelongsToProject(id, projectId)) return;
+      const picked = pickConversationIdForProject(
+        projectId,
+        liveMessagesByConversation,
+      );
+      navigate(conversationRoutePath(projectId, picked), { replace: true });
     }
   }, [
     projectId,
@@ -2420,7 +2429,9 @@ export default function ConversationCenter() {
         return;
       }
       if (projectId) {
-        navigate(`/app/chat/${projectId}`, { replace: true });
+        navigate(conversationRoutePath(projectId, `${projectId}-main`), {
+          replace: true,
+        });
       }
     }
   };

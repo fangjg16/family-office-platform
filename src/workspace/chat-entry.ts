@@ -1,5 +1,9 @@
 import { loadChatStateForUser } from "@/workspace/chat-persistence";
-import { inferProjectIdFromConversationId } from "@/workspace/chat-conversation-id";
+import {
+  conversationRoutePath,
+  inferProjectIdFromConversationId,
+  pickConversationIdForProject,
+} from "@/workspace/chat-conversation-id";
 import {
   getMergedProjects,
   getProjectById,
@@ -8,26 +12,23 @@ import {
 import { loadLastChatProjectId } from "@/workspace/session";
 
 function pathForConversation(projectId: string, conversationId: string): string {
-  if (conversationId === `${projectId}-main`) {
-    return `/app/chat/${projectId}`;
-  }
-  return `/app/chat/${projectId}/${conversationId}`;
+  return conversationRoutePath(projectId, conversationId);
 }
 
 function pickFirstProjectChatPath(): string | null {
   const sorted = sortProjectsForOverview(getMergedProjects());
   const first = sorted[0];
-  return first ? `/app/chat/${first.id}` : null;
+  return first ? conversationRoutePath(first.id, `${first.id}-main`) : null;
 }
 
 function resolveFromLastChatOrSeed(): string {
   const lastChat = loadLastChatProjectId();
   if (lastChat) {
     if (getProjectById(lastChat)) {
-      return `/app/chat/${lastChat}`;
+      return conversationRoutePath(lastChat, `${lastChat}-main`);
     }
     if (lastChat.startsWith("proj-")) {
-      return `/app/chat/${lastChat}`;
+      return conversationRoutePath(lastChat, `${lastChat}-main`);
     }
   }
   return pickFirstProjectChatPath() ?? "/app/projects";
@@ -65,7 +66,8 @@ function resolveFromChatState(
     }
   }
   if (bestProjectId) {
-    return `/app/chat/${bestProjectId}`;
+    const picked = pickConversationIdForProject(bestProjectId, msgs);
+    return conversationRoutePath(bestProjectId, picked);
   }
   return null;
 }
