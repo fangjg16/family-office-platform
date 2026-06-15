@@ -5,8 +5,8 @@ description: "Track external events and decision points whose outcomes would mat
 
 # Decision Node Monitoring
 
-> **v2.8**：timeline 写入须读 `../knowledge-base-generation/references/timeline-rules.md`（三区块：已发生/正在推进/未来关键节点）。KB 结构见 `../knowledge-base-generation/references/kb-schema.md`。
-> **v0.4 change**: This skill writes rows into the **unified timeline table** in KB section 八 — it does NOT produce its own separate section or sub-blocks. Every decision node becomes one row tagged as either `推进中`, `外部依赖`, or `截止`. See `../knowledge-base-generation/references/timeline-rules.md` and `../knowledge-base-generation/references/style-guide-v2.7.md` "Unified Timeline". For multi-asset projects, each row also carries the `asset` attribute so users can filter the timeline by asset.
+> **v2.8**：节点写入 KB 须经 `../knowledge-base-generation/references/timeline-rules.md` **eligibility gate**（`scope` / `timelineEligible` / `reason`）。仅 `timelineEligible=true` 的节点进入 slot `timeline`（三区块：已发生 / 正在推进 / 未来关键节点）。KB 结构见 `../knowledge-base-generation/references/kb-schema.md`。
+> **Macro / policy / market nodes** do **not** default to `timeline`. They go to `risks` or `decision-framework` unless they become **this project's** external dependency, future gate, or deadline — then register with explicit project link and `timelineEligible: true`.
 
 ## Workflow
 
@@ -14,12 +14,30 @@ description: "Track external events and decision points whose outcomes would mat
 
 Scan all analysis outputs for events that represent binary or branching outcomes:
 
-| Source | Node Type | Example |
-|--------|-----------|---------|
-| L1 Knowledge Base (Timeline) | Scheduled events | DA approval hearing date, FIRB decision deadline |
-| L3 Risk Matrix | Risk resolution events | GPS review result, rezoning outcome |
-| L6 Gap Tracking | Information arrival events | Valuation report delivery, seller response |
-| External environment | Macro / policy events | Interest rate decision, policy announcement |
+| Source | Node Type | Example | Default KB route |
+|--------|-----------|---------|------------------|
+| L1 Knowledge Base (Timeline) | Scheduled **project** events | DA hearing for **this** site, FIRB deadline for **this** buyer | `timeline` (if `timelineEligible: true`) |
+| L3 Risk Matrix | Risk resolution events | GPS review result for **this** connection | `timeline` when dated project gate |
+| L6 Gap Tracking | Information arrival events | Valuation report delivery for **this** deal | Usually `open-questions` / `正在推进`; timeline only if milestone gates execution |
+| External environment | Macro / policy / market | RBA rate decision, sector policy announcement | **`risks` or `decision-framework`** — not timeline unless tied to **this project's** gate |
+
+### Eligibility gate (every node)
+
+| Field | Description |
+|-------|-------------|
+| `scope` | `project` \| `target` \| `counterparty` \| `asset` \| `regulator` \| `market` \| `industry` \| `internal` |
+| `timelineEligible` | `true` only for nodes that gate **this project's** execution, valuation, or IC decision |
+| `reason` | Why it is or is not a project timeline node |
+| `kbRoute` | `timeline` \| `risks` \| `decision-framework` \| `open-questions` |
+
+**Examples:**
+
+| Node | timelineEligible | kbRoute |
+|------|------------------|---------|
+| FIRB decision deadline for **this** acquisition | true | `timeline` → 未来关键节点 |
+| RBA cash rate announcement (macro) | false | `risks` / `decision-framework` (financing sensitivity) |
+| National housing policy headline | false | `decision-framework` thesis context |
+| GPS review for **this** BESS project | true | `timeline` → 正在推进 or 未来关键节点 |
 
 ### Step 2: Node Registration
 
@@ -139,19 +157,20 @@ Maintain a real-time view:
 ## Output Format
 
 - **Chat**: Markdown — upcoming nodes (next 30 days) + any overdue
-- **KB update**: writes to the following Project Knowledge Base section(s) of `[AI] <项目名>_知识网络.html`:
-  - 八 项目时间轴（进展、依赖与外部窗口）
+- **KB update** (via `knowledge-base-generation` handoff — no direct HTML):
+  - `timeline`: only nodes with `timelineEligible: true` → map to 8.1 / 8.2 / 8.3
+  - `risks`: macro/policy/market nodes that affect thesis but do not gate a dated project action
+  - `decision-framework`: strategic implications and scenario branches for uncontrollable externals
 - **Section details**:
-  - 八: 已发生事件、当前推进事项、外部依赖节点 (审批/市场窗口/对方决策)、不可逆事件提示
-  - 每个节点带场景分支预案 (通过/部分通过/不通过)
-  - 节点 resolution 后自动触发下游 section 更新 (例: 审批通过 → 二 资产构成更新)
-- All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
+  - 八: project execution nodes only — 已发生 / 正在推进 / 未来关键节点
+  - Each **timeline** node: scenario branches (positive / mixed / negative) and cascade triggers
+  - **Non-timeline** nodes: document monitoring method + impact in `risks` or `decision-framework`
+- All KB writes go through `knowledge-base-generation` (single source of truth).
 ## Important Notes
 
 - Nodes are NOT the same as gaps. A gap is missing information; a node is a future event whose outcome is uncertain.
-- Pre-analyzing scenarios is the key value — when the event happens, the team already knows what it means and what to do.
-- Some nodes are **controllable** (e.g., submitting a FIRB application) and some are **uncontrollable** (e.g., RBA rate decision). Track both but manage differently.
+- **Do not register macro/policy/market nodes in `timeline` by default** — pre-analyze scenarios in chat, then route per eligibility gate.
+- Some nodes are **controllable** (e.g., submitting a FIRB application) and some are **uncontrollable** (e.g., RBA rate decision). Track both; uncontrollable externals usually land in `risks` / `decision-framework`.
 - For cascading nodes (Node B only matters if Node A resolves positively), document the dependency chain.
 - Node monitoring should be reviewed weekly in the project review cadence.
 - When a critical node's expected date passes without resolution, escalate — silence is a signal.

@@ -247,7 +247,9 @@ export function buildHermesKnowledgeNetworkRequiredReads(
   add("references/content-rules.md");
   add("references/slot-specific-rules.md");
   add("references/slot-rendering-rules.md");
-  if (touchesTimeline) {
+  const needsTimelineRules =
+    mode === "initial" || mode === "full" || Boolean(touchesTimeline);
+  if (needsTimelineRules) {
     add("references/timeline-rules.md");
   }
   add("assets/kb-template.html");
@@ -265,6 +267,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     "- 11 个 canonical slot 锚点固定；展示顺序由 <!-- KB-CONFIG --> display-order 驱动。",
     "- 资料仅经 jfo-r2-materials：manifest/digest → 按需 textUrl，禁止机械全文拉取。",
     "- 正文 citation（如 #source-U-1）须对应 appendix id；保留 assets/kb-template.html 内 revealAnchor。",
+    "- **timeline** 仅写项目推进节点；每条候选先过 eligibility gate（scope / timelineEligible / reason）；行业/市场/政策背景写 comps/risks/decision-framework，不得填充 timeline。",
     "- **禁止** skills_reference.md、根目录 kb-template.html、旧 STYLE_GUIDE.md。",
     "- **禁止**每次 read_file examples-kb-data.json、scripts/（仅本地开发调试）。",
     "- 非视觉调试任务：**不要** read_file style-guide-v2.7.md / components.html（版式以 kb-template 为准）。",
@@ -280,7 +283,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
 }
 
 export function messageTouchesTimeline(message: string): boolean {
-  return /timeline|时间轴|#timeline|节点监控|推进中|未来关键/i.test(message);
+  return /timeline|时间轴|#timeline|节点监控|未来关键节点|项目时间轴/i.test(message);
 }
 
 function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
@@ -298,7 +301,7 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
           "资料：jfo-r2-materials manifest 后读取主要项目资料与本对话 session 附件（按需）。",
         getStep: "全量可跳过 GET；或 curl GET … || echo NO_CURRENT_KB",
         editStep:
-          "从 assets/kb-template.html 填充各 slot；保留 kb-shell、revealAnchor、KB-CONFIG。",
+          "从 assets/kb-template.html 填充各 slot；保留 kb-shell、revealAnchor、KB-CONFIG。timeline 须经 eligibility gate；无项目级事件则三区块 stub，勿用行业新闻填充。",
       };
     case "reorder":
       return {
@@ -317,7 +320,7 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
           "资料：当前 KB + 点名 slot 相关资料片段 + session 附件（按需 textUrl）。",
         getStep: "必做：curl GET 当前版到工作文件",
         editStep:
-          "局部编辑点名 slot；timeline 遵守 references/timeline-rules.md。",
+          "局部编辑点名 slot；若含 timeline 须读 timeline-rules.md 并过 eligibility gate。",
       };
     case "initial":
     default:

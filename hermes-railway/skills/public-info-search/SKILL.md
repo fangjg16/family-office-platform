@@ -81,7 +81,7 @@ Search across 7 categories. Sources vary by jurisdiction:
 For each item found, assess:
 - **Source authority**: Government / independent body / media / forum
 - **Recency**: How current is the information
-- **Relevance**: Direct (about the project) vs. contextual (about the market/area)
+- **Relevance**: Direct (about **this project/target/counterparty/asset**) vs. contextual (about the market/area/industry)
 - **Conflicts**: Does this contradict other sources → flag for `dd-claim-audit`
 
 ### Step 4: Output — Search Results Dossier
@@ -101,24 +101,41 @@ For each item found, assess:
 ## Output Format
 
 - **Chat**: Markdown — key findings summary by category + top gaps
-- **KB update**: writes to the following Project Knowledge Base section(s) of `[AI] <项目名>_知识网络.html`:
-  - 一 项目快照
-  - 二 资产构成
-  - 三 法律结构与关键关系网
-  - 四 业务模式与收入假设
-  - 五 融资结构与资本结构
-  - 八 项目时间轴
-- **Section details**:
-  - 根据搜索结果性质分别落地: 政府审批 → 二; 工商登记 → 三; 目标公司客户/定价/单位经济 → 四; 资金来源/融资轮次/债务安排 → 五; 历史事件/新闻 → 八
-  - **宏观背景信息（Category 4 Market Data / Category 6 Policy & Regulation 中属于行业大势、口岸概况、区域政策等环境性数据）不单独写入任何 section 作为独立子块**。处理规则：① 若某条数据用于支撑 section 二 的某个资产/资源条目，作为该行表格来源列的内联引用；② 若属于投资论点层面的宏观支撑，归入 section 十一 决策框架的论据；③ 若两者均不符合，仅登记至附录 A 备查，不强行塞入正文。
-  - **不写 七 投资回报**: 投资人 IRR / MOIC 是 returns-analysis 的产物, 不是公开信息搜集的结果。即使 OM 中写了 'projected IRR 18%', 也只能作为'卖方声称'录入 七 的对比项, 不能作为投资回报本身。
-  - 每条新增内容标注 certainty (默认 ⚪ 待确认 或 🔵 分析师推论)
-  - 新增的 URL/文献来源同步登记到 附录 A
+- **KB update**: writes to Project Knowledge Base section(s) of `[AI] <项目名>_知识网络.html` via `knowledge-base-generation` handoff (this skill does **not** edit HTML directly):
+  - 一 项目快照 · 二 资产构成 · 三 法律结构 · 四 业务模式 · 五 融资结构 · **八 项目时间轴（仅 eligible 项目事件）**
+- **Section routing** (default — **not** “everything with a date → timeline”):
+
+| Finding type | Target slot(s) | timeline? |
+|---|---|---|
+| Regulatory approval **on this project/asset** | `assets`, `legal-relationships` | Only if dated **project** action (permit granted, hearing held, filing submitted) |
+| Corporate registry **of target/counterparty** | `legal-relationships`, `snapshot` | Rarely — only entity events tied to **this deal** (e.g. ownership change affecting transaction) |
+| Land/title **of project asset** | `assets`, `legal-relationships` | Only project-specific encumbrance/closing events |
+| Market data, industry stats, pricing windows | `comps`, `business-model` | **No** — never default to timeline |
+| Comparable transactions | `comps` (+ handoff to `comp-analysis`) | **No** |
+| Policy / regulation (generic background) | `risks`, `decision-framework`, Appendix A | **No**, unless creates **this project's** filing deadline or approval path |
+| News & sentiment | `risks`, `decision-framework`, `snapshot` (if about **target**) | **No** for industry/platform/sector news |
+
+- **宏观背景**（行业大盘、技术趋势、口岸概况、区域政策环境）**不得**写入 `timeline`。处理：① 支撑 `business-model` / `comps` 表格内联引用；② 投资论点层面 → `decision-framework`；③ 监管/宏观风险 → `risks`；④ 仅备查 → Appendix A `new-sources`。
+- **不写 七 投资回报**: 投资人 IRR / MOIC 是 returns-analysis 的产物, 不是公开信息搜集的结果。
 ## KB Handoff (mandatory — do not skip)
 
 This skill does **not** write HTML or edit the KB file directly. After Step 4, output the following Handoff Block in the chat response, then invoke `knowledge-base-generation` to render it. Omit any slot key that has no new findings.
 
-**Target slots** (subset, based on what was found): `snapshot`, `assets`, `legal-relationships`, `business-model`, `capital-structure`, `timeline`
+**Target slots** (subset, based on what was found): `snapshot`, `assets`, `legal-relationships`, `business-model`, `capital-structure`, `comps`, `risks`, `decision-framework`, `timeline` (**only when ≥1 handoff item has `timelineEligible: true`**)
+
+**Timeline eligibility (mandatory for every dated finding):**
+
+Before adding a `timeline` block, classify each candidate:
+
+```yaml
+scope: project | target | counterparty | asset | regulator | market | industry | internal | data
+timelineEligible: true | false
+reason: <one sentence>
+```
+
+- **Include `timeline` in `target-slots` only if at least one item has `timelineEligible: true`.**
+- Category 4 Market Data, Category 6 generic policy, Category 7 industry/platform news → `timelineEligible: false` → route to `comps`, `business-model`, `risks`, `decision-framework`, or `new-sources`.
+- Category 7 with **direct** relevance to **this project/target/counterparty** (e.g. DA approved for **this** site, FIRB filing for **this** buyer) → may be `timelineEligible: true` with `scope: regulator` or `project`.
 
 ```
 ---KB-HANDOFF---
@@ -153,9 +170,30 @@ findings:
       value: <value>
       certainty: ...
       source: [...]
-  timeline:                    # project-entity events only; no industry history
-    - date: <YYYY-MM-DD or YYYY-MM>
-      event: <event description>
+  comps:                       # market data, comparables — never timeline
+    - item: <comparable or dataset>
+      signal: <price/multiple/volume>
+      limitation: <why not identical to this project>
+      certainty: ...
+      source: [...]
+  risks:                       # macro/policy/industry risk context
+    - scenario: <concrete failure mode>
+      evidence: <...>
+      certainty: ...
+      source: [...]
+  decision-framework:          # macro thesis support
+    - thesis: <argument>
+      evidence: <...>
+      certainty: ...
+      source: [...]
+  timeline:                    # ONLY items with timelineEligible: true — omit entire key if none
+    - date: <YYYY-MM-DD or YYYY-MM or 待定>
+      scope: project | target | counterparty | asset | regulator
+      timelineEligible: true
+      reason: <why this is a project execution node, not industry background>
+      block: 已发生 | 正在推进 | 未来关键节点
+      event: <project-specific description>
+      controller: <who controls next step>
       relevance: 关键 | 重要 | 一般
       certainty: ...
       source: [...]
@@ -169,7 +207,7 @@ new-terms: [<any new technical/regulatory terms introduced>]
 ---END-HANDOFF---
 ```
 
-> Never write KB section HTML directly from this skill. **宏观背景数据**（行业大盘、政策环境等）只作为 `new-sources` 登记到附录 A，不写入任何 slot 的 findings 中。
+> Never write KB section HTML directly from this skill. **宏观/行业/市场背景** 写入 `comps`, `business-model`, `risks`, `decision-framework`, or `new-sources` — **not** `timeline` unless `timelineEligible: true` with explicit project/target link.
 
 ## Important Notes
 

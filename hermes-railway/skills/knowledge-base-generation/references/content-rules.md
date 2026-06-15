@@ -38,8 +38,10 @@ Overseas target assets use bilingual mode. Chinese and English content should be
 
 ## Timeline Classification
 
-- `timeline` uses three vertical sub-blocks: `已发生关键事件`, `正在推进`, and `未来关键节点`.
-- Only project-entity events, current workstreams, dependencies, and decision nodes belong in `timeline`.
-- `已发生关键事件` means target/project/counterparty/regulator/asset dynamics that already happened. It does not include Codex generation, AI structuring, analyst workflow, source coverage windows, or internal research actions.
-- Data coverage windows, public datasets, transaction sample periods, and market statistics are evidence, not timeline events.
-- Example: official customs data covering a period should support `business-model`, `comps`, `risks`, `decision-framework`, or Appendix A unless a dated customs rule directly changes this project's execution path.
+- `timeline` = **project execution nodes only** (not “all dated information”). See `references/timeline-rules.md` eligibility gate.
+- Three sub-blocks: `已发生关键事件`, `正在推进`, `未来关键节点`.
+- Before writing any timeline row, set `scope`, `timelineEligible`, `reason`. Only `timelineEligible=true` rows may render in `timeline`.
+- `timelineEligible=false` items go to `comps`, `business-model`, `risks`, `decision-framework`, or Appendix A — never padded into timeline as industry filler.
+- `已发生关键事件` = target/project/counterparty/regulator/**on-this-deal** dynamics. Excludes Codex/AI workflow, source coverage windows, internal research.
+- Data coverage windows, market statistics, industry milestones = evidence, not timeline events.
+- If no eligible project events exist, keep `timeline` as stub (three headings + missing callout); do not backfill with industry news.

@@ -34,7 +34,15 @@ Must cover: investor cash-flow logic, entry assumptions, exit/repayment assumpti
 
 ## `timeline` - 项目时间轴
 
-Use the three-block structure in `references/timeline-rules.md`: 已发生关键事件 / 正在推进 / 未来关键节点. Only include project dynamics, current workstreams, external dependencies, and future decision gates. Exclude AI/internal workflow actions and evidence windows such as customs data coverage or transaction sample periods.
+**Not a dated-news dump.** Apply `references/timeline-rules.md` eligibility gate on every candidate (`scope` / `timelineEligible` / `reason`).
+
+Three blocks: 已发生关键事件 / 正在推进 / 未来关键节点. Only **project / target / counterparty / asset / regulator-on-this-deal** dynamics, current workstreams, and future **project** gates.
+
+**Exclude from timeline:** industry trends, tech trends, market size, platform launches, generic news/policy background, data sample periods, internal/AI workflow.
+
+**Redirect when ineligible:** industry/market → `comps`, `business-model`, `decision-framework`; policy background → `risks`, `legal-relationships`; sources → Appendix A.
+
+**Stub:** if zero `timelineEligible=true` events, keep slot + three headings + `callout missing` (project-specific gap); do not fill with industry events.
 
 ## `risks` - 关键风险与缓释
 

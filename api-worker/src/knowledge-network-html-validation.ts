@@ -48,6 +48,47 @@ function stripHtmlComments(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/g, "");
 }
 
+/**
+ * 轻量防线：timeline 疑似纯行业/市场背景（warning only，不阻断入库）。
+ * 根本约束在 generation rules + public-info-search / node-monitoring handoff。
+ */
+export function detectSuspiciousIndustryTimeline(uncommented: string): string | undefined {
+  const sectionMatch = uncommented.match(
+    /<section[^>]*\bid=["']timeline["'][\s\S]*?<\/section>/i,
+  );
+  if (!sectionMatch) return undefined;
+  const section = sectionMatch[0];
+
+  const isStub =
+    /暂无.{0,16}项目级|暂无已核实|待项目方|待项目资料|无项目级时间轴/i.test(section) &&
+    !/<div class="tl-item"/i.test(section);
+  if (isStub) return undefined;
+
+  const hasSubstantiveItems =
+    /<div class="tl-item"/i.test(section) ||
+    (/<h3[^>]*>8\.3/i.test(section) && (section.match(/<tr\b/gi) ?? []).length > 2);
+
+  if (!hasSubstantiveItems) return undefined;
+
+  const industryPattern =
+    /行业(?:趋势|格局|爆发|洗牌)|市场规模|技术趋势|技术跃升|宏观背景|大盘|渗透率|爆款率|算力成本|赛道|全体行业|平台发布|巨头入场|产能爆发|sector\s+trend|market\s+size/gi;
+  const projectPattern =
+    /项目方|标的|交易对手|卖方|买方|签约|尽调|立项|交割|审批|KYC|投资方|授权协议|本项目|此项目|此标的|资产权属|配额|平台接入|FIRB|hearing|term\s+sheet|LOI|closing|卖方介绍|拟交易/i;
+
+  const industryHits = (section.match(industryPattern) ?? []).length;
+  const projectHits = (section.match(projectPattern) ?? []).length;
+
+  if (industryHits >= 2 && projectHits === 0) {
+    return "timeline 疑似填入行业/市场/技术趋势而非项目推进节点；请按 timeline-rules.md eligibility gate 复核，并将 ineligible 内容移至 comps/risks/decision-framework";
+  }
+
+  if (industryHits >= 3 && projectHits <= 1) {
+    return "timeline 行业/市场信号偏多、项目级节点偏少；请确认每条已过 eligibility gate（timelineEligible=true）";
+  }
+
+  return undefined;
+}
+
 function normalizeReorderBody(html: string): string {
   let t = html;
   t = t.replace(/<!--\s*KB-CONFIG[\s\S]*?-->/gi, "");
@@ -283,15 +324,20 @@ function validateStrictV28(t: string, options: KnHtmlValidationOptions): KnHtmlV
     options.touchesTimeline ||
     (mode !== "reorder" && /id=["']timeline["']/i.test(uncommented))
   ) {
+    const warnings: string[] = [];
     const hasTimelineStructure =
       /已发生关键事件/.test(uncommented) &&
       (/正在推进|当前正在推进/.test(uncommented) || /8\.2/.test(uncommented)) &&
       (/未来关键节点|8\.3/.test(uncommented));
     if (!hasTimelineStructure && mode !== "reorder") {
-      return {
-        ok: true,
-        warning: "timeline slot 存在但未检测到 v2.8 三区块结构（已发生/正在推进/未来关键节点）",
-      };
+      warnings.push(
+        "timeline slot 存在但未检测到 v2.8 三区块结构（已发生/正在推进/未来关键节点）",
+      );
+    }
+    const industryWarn = detectSuspiciousIndustryTimeline(uncommented);
+    if (industryWarn) warnings.push(industryWarn);
+    if (warnings.length > 0) {
+      return { ok: true, warning: warnings.join("；") };
     }
   }
 
