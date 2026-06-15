@@ -601,8 +601,8 @@ function buildApiHealthProbeUrl(chatEndpoint: string): string | null {
 }
 
 const AGENT_JOB_POLL_MS = 3000;
-/** 深度任务最长轮询约 12 分钟（与 Worker waitForHermesRun 10 分钟 + 缓冲对齐） */
-const AGENT_JOB_MAX_POLLS = 240;
+/** 知识网络任务最长轮询约 26 分钟（与 Worker waitForHermesRun 25 分钟 + 缓冲对齐） */
+const AGENT_JOB_MAX_POLLS = 520;
 /** 合并连续编辑后再 PUT；发消息/任务完成会立即 flush */
 const CHAT_PERSIST_DEBOUNCE_MS = 300;
 
@@ -613,6 +613,7 @@ type AgentJobPollPayload = {
   projectKnowledgeNetworkVersion?: number;
   error?: string | null;
   progressLabel?: string;
+  jobStage?: string;
   hermesStatus?: string | null;
   elapsedSec?: number;
   deepPath?: string | null;

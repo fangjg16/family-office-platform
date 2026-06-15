@@ -204,14 +204,24 @@ function readLine(n: number, relPath: string): string {
 export type HermesKnRequiredReadsOptions = {
   mode: KnowledgeNetworkUpdateMode;
   touchesTimeline?: boolean;
+  /** 视觉/版式调试任务才读 style-guide */
   includeStyleGuide?: boolean;
+  /** 视觉/版式调试任务才读 components.html */
+  includeComponents?: boolean;
 };
+
+/** 用户明确要求版式/CSS 调试时 */
+export function isVisualDebugKnRequest(message: string): boolean {
+  return /视觉|版式|样式|css|style[\s-]*guide|components\.html|debug|调试|渲染问题|布局/i.test(
+    message,
+  );
+}
 
 /** Worker 注入：按 KB 任务模式列出 Hermes read_file 清单 */
 export function buildHermesKnowledgeNetworkRequiredReads(
   options: HermesKnRequiredReadsOptions,
 ): string {
-  const { mode, touchesTimeline, includeStyleGuide } = options;
+  const { mode, touchesTimeline, includeStyleGuide, includeComponents } = options;
   const lines: string[] = ["", "【知识网络 · v2.8 必读（read_file，按模式）】"];
 
   if (mode === "reorder") {
@@ -221,6 +231,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
       "",
       "重排模式：必须先 GET 当前 KB HTML；**禁止** read_file 项目资料包/session 全文。",
       "仅更新 <!-- KB-CONFIG -->、nav 顺序、各 section <h2> 编号；禁止改内容面板。",
+      "**禁止** read_file style-guide-v2.7.md、components.html、examples-kb-data.json。",
     );
     return lines.join("\n");
   }
@@ -240,8 +251,10 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     add("references/timeline-rules.md");
   }
   add("assets/kb-template.html");
-  add("assets/components.html");
 
+  if (includeComponents) {
+    lines.push(readLine(n++, "assets/components.html"));
+  }
   if (includeStyleGuide) {
     lines.push(readLine(n++, "references/style-guide-v2.7.md"));
   }
@@ -253,7 +266,8 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     "- 资料仅经 jfo-r2-materials：manifest/digest → 按需 textUrl，禁止机械全文拉取。",
     "- 正文 citation（如 #source-U-1）须对应 appendix id；保留 assets/kb-template.html 内 revealAnchor。",
     "- **禁止** skills_reference.md、根目录 kb-template.html、旧 STYLE_GUIDE.md。",
-    "- examples-kb-data.json 仅结构参考，非每次必读。",
+    "- **禁止**每次 read_file examples-kb-data.json、scripts/（仅本地开发调试）。",
+    "- 非视觉调试任务：**不要** read_file style-guide-v2.7.md / components.html（版式以 kb-template 为准）。",
   );
 
   if (mode === "full" || mode === "initial") {
@@ -339,11 +353,12 @@ export function buildHermesKnowledgeNetworkFileProtocol(
 ${modeLine}
 ${materialsLine}
 
-**对用户可见回复（最高优先级，不得省略）**
+**对用户可见回复**
 1. 先写 3–8 行简体中文摘要（改了哪些 slot、Populated/Stub；重排则说明新 display-order）。
-2. **同一条回复末尾**必须附完整整页 HTML：\\\`\\\`\\\`html … \\\`\\\`\\\`（含 <!DOCTYPE html> 与 <!-- KB-CONFIG -->）。
-3. **禁止**只写「已保存到 ${workFile}」而不附代码块。
-4. **不要**要求用户「再发一条」补 HTML。
+2. **curl PUT 成功且返回 ok**：摘要即可，**勿**在回复末尾重复附整页 \\\`\\\`\\\`html（平台已入库）。
+3. **PUT 失败或未执行**：同一条回复末尾须附完整整页 \\\`\\\`\\\`html … \\\`\\\`\\\`（含 <!DOCTYPE> 与 <!-- KB-CONFIG -->）。
+4. PUT 返回 400 校验失败：说明错误要点，**最多再修正并 PUT 一次**；仍失败则停止并报告，**禁止**多轮整页重写。
+5. **禁止**只写「已保存到 ${workFile}」而不交付（PUT 或代码块二选一）。
 
 **容器内工作流（有 bash 时并行执行）**
 工作文件：\`${workFile}\`（\`mkdir -p ./kb/${projectId}\`）

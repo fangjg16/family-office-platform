@@ -23,6 +23,7 @@ import {
   markAgentJobRunning,
   type AgentJobRow,
 } from "./agent-jobs";
+import { buildAgentJobProgressLabel } from "./agent-job-progress";
 import {
   buildHermesAgentInstructions,
   finalizeHermesOutput,
@@ -638,7 +639,7 @@ async function processHermesJobBackground(
   intent: SkillIntent,
 ): Promise<void> {
   try {
-    const maxWaitMs = intent === "knowledge_network" ? 18 * 60_000 : 10 * 60_000;
+    const maxWaitMs = intent === "knowledge_network" ? 25 * 60_000 : 12 * 60_000;
     const result = await waitForHermesRun(env, runId, {
       maxWaitMs,
       pollIntervalMs: 3000,
@@ -845,43 +846,6 @@ async function handleChatViaHermes(
   });
 }
 
-function formatJobElapsedLabel(elapsedSec: number): string {
-  if (elapsedSec < 60) return `${elapsedSec} 秒`;
-  const m = Math.floor(elapsedSec / 60);
-  const s = elapsedSec % 60;
-  return s > 0 ? `${m} 分 ${s} 秒` : `${m} 分钟`;
-}
-
-function buildAgentJobProgressLabel(
-  row: {
-    status: string;
-    hermes_run_id: string | null;
-    created_at: string;
-  },
-  hermesStatus: string | null,
-): string {
-  const elapsedSec = Math.max(
-    0,
-    Math.floor((Date.now() - Date.parse(row.created_at)) / 1000),
-  );
-  const waited = formatJobElapsedLabel(elapsedSec);
-  if (row.status === "pending") return `任务排队中（已等待 ${waited}）`;
-  const runId = row.hermes_run_id || "";
-  if (runId.startsWith("chat-fallback-")) {
-    return `长对话生成中（已等待 ${waited}，兼容模式）`;
-  }
-  const hs = (hermesStatus || "").toLowerCase();
-  if (hs === "queued") return `已排队，等待引擎启动（已等待 ${waited}）`;
-  if (hs === "running" || hs === "started") return `引擎执行中（已等待 ${waited}）`;
-  if (hs === "waiting_for_approval") {
-    return `已自动放行工具命令，引擎继续执行（已等待 ${waited}）`;
-  }
-  if (hs === "completed") return `引擎已完成，正在写入对话结果（已等待 ${waited}）`;
-  if (hs === "failed" || hs === "cancelled") return `引擎已结束：${hs}（已等待 ${waited}）`;
-  if (hs) return `后台处理中 · ${hs}（已等待 ${waited}）`;
-  return `后台处理中（已等待 ${waited}）`;
-}
-
 /** Worker waitUntil 可能先于 Hermes 结束；轮询时发现 Run 已终态则回写 D1 */
 async function syncAgentJobFromHermesRun(env: Env, row: AgentJobRow): Promise<{
   row: AgentJobRow;
@@ -946,12 +910,22 @@ async function handleAgentJobPoll(
     Math.floor((Date.now() - Date.parse(row.created_at)) / 1000),
   );
 
-  const progressLabel =
-    row.status === "completed"
-      ? "已完成"
-      : row.status === "failed"
-        ? "失败"
-        : buildAgentJobProgressLabel(row, hermesStatus);
+  let knPutReceived = false;
+  if (row.skill_intent === "knowledge_network" && row.status === "running") {
+    try {
+      const knMeta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+      knPutReceived = knMeta?.lastJobId === row.id;
+    } catch {
+      knPutReceived = false;
+    }
+  }
+
+  const { progressLabel, jobStage } = buildAgentJobProgressLabel({
+    row,
+    hermesStatus,
+    knPutReceived,
+    elapsedSec,
+  });
 
   let projectKnowledgeNetworkVersion: number | undefined;
   if (
@@ -982,6 +956,7 @@ async function handleAgentJobPoll(
     hermesStatus,
     deepPath,
     progressLabel,
+    jobStage,
   });
 }
 

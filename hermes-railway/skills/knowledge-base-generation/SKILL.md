@@ -23,20 +23,21 @@ Establish evidence first, then analyze, then render or update HTML. Do not analy
 6. `references/slot-rendering-rules.md` — Revenue Tree, Value Chain, Flywheel, etc.
 7. `references/timeline-rules.md` — when touching `#timeline`
 8. `assets/kb-template.html` — **only** shell; do not rewrite CSS/JS
-9. `assets/components.html` — component patterns
+9. `assets/components.html` — **visual/debug only** (not default generation)
 
 **Optional (visual / debug only):** `references/style-guide-v2.7.md`  
-**Optional (structure example):** `examples-kb-data.json`  
+**Do NOT read on each run:** `examples-kb-data.json`, `scripts/`  
 **Do NOT use:** `skills_reference.md`, root `kb-template.html`, old `STYLE_GUIDE.md`, `README-hermes.md`
 
 ## Task Routing
 
 | User intent | Read | Materials |
 |---|---|---|
-| First KB / full rebuild | kb-schema, kb-config, content-rules, slot-specific, slot-rendering, template, components | jfo-r2-materials 主要资料 |
+| First KB / full rebuild | kb-schema, kb-config, content-rules, slot-specific, slot-rendering, **kb-template** | jfo-r2-materials manifest → 按需 textUrl |
 | Incremental slot update | above + current KB HTML | 当前 KB + 点名 slot 相关资料 |
-| Reorder display order | **kb-config only** + current KB HTML | **禁止**拉项目资料全文 |
+| Reorder display order | **kb-config + SKILL** + current KB HTML | **禁止**拉项目资料全文 |
 | Timeline slot | + timeline-rules | 按需 |
+| Visual / CSS debug only | + style-guide-v2.7, components.html | 非默认 |
 
 ## 11 Canonical Slots (data layer — never rename)
 

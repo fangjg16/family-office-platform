@@ -85,16 +85,16 @@ function taskReadingGuidance(
       return {
         summary: "full · 主要资料 + 从零写 KB",
         bullets: [
-          "manifest 后读取主要项目资料（必要时覆盖完整资料包）",
+          "manifest 后读取主要项目资料（核心尽调文件，非机械全文）",
           "本对话 session 附件全部纳入",
           "按 kb-template 写入完整 KB-CONFIG",
         ],
       };
     }
     return {
-      summary: "initial · 主要资料 + 首次 KB",
+      summary: "initial · manifest + 核心资料 + 首次 KB",
       bullets: [
-        "manifest 后读取主要项目资料（入驻/尽调核心文件）",
+        "manifest 后读取核心入驻/尽调文件（按需 textUrl，非全文灌入）",
         "本对话 session 附件全部纳入",
         "project-intake 识别 project-type 后写入 KB-CONFIG",
       ],

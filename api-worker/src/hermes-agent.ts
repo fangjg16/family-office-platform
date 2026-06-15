@@ -6,6 +6,7 @@ import {
 import {
   buildHermesKnowledgeNetworkFileProtocol,
   buildHermesKnowledgeNetworkRequiredReads,
+  isVisualDebugKnRequest,
   messageTouchesTimeline,
 } from "./hermes-knowledge-network";
 import { buildJfoMaterialsInstructions } from "./hermes-materials-instructions";
@@ -269,10 +270,13 @@ export function buildHermesAgentInstructions(
     const jobId = (ctx?.jobId ?? "").trim() || "unknown-job";
     const userMessage = ctx?.userMessage ?? "";
     const mode = knMode ?? "initial";
+    const visualDebug = isVisualDebugKnRequest(userMessage);
     lines.push(
       buildHermesKnowledgeNetworkRequiredReads({
         mode,
         touchesTimeline: messageTouchesTimeline(userMessage),
+        includeStyleGuide: visualDebug,
+        includeComponents: visualDebug,
       }),
       buildHermesKnowledgeNetworkFileProtocol(
         jfoBase,

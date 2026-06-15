@@ -110,7 +110,10 @@ async function writeKnowledgeNetworkFromHtml(
   html: string,
   answerSummary: string,
   knMode?: KnowledgeNetworkUpdateMode,
-): Promise<{ meta: Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>; html: string } | null> {
+): Promise<
+  | { ok: true; meta: NonNullable<Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>>; html: string }
+  | { ok: false; error: string }
+> {
   const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id);
   const mode =
     knMode ??
@@ -123,7 +126,9 @@ async function writeKnowledgeNetworkFromHtml(
     strict: true,
     touchesTimeline: mode !== "reorder" && /id=["']timeline["']/i.test(html),
   });
-  if (!validation.ok) return null;
+  if (!validation.ok) {
+    return { ok: false, error: validation.error ?? "HTML 校验失败" };
+  }
 
   await upsertProjectKnowledgeNetwork(env, {
     projectId: row.project_id,
@@ -134,8 +139,10 @@ async function writeKnowledgeNetworkFromHtml(
   });
   const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
   const stored = await readProjectKnowledgeNetworkHtml(env, row.project_id);
-  if (!meta || !stored) return null;
-  return { meta, html: stored };
+  if (!meta || !stored) {
+    return { ok: false, error: "知识网络写入后读取失败" };
+  }
+  return { meta, html: stored, ok: true };
 }
 
 async function finalizeKnowledgeNetworkJobResult(
@@ -190,13 +197,21 @@ async function finalizeKnowledgeNetworkJobResult(
       "从 Hermes 回复提取 HTML",
       knMode,
     );
-    if (written?.meta) {
+    if (written.ok) {
       const note = `\n\n已写入**项目知识网络 v${formatKnVersionDisplay(written.meta.version, written.meta.versionLabel)}**${knowledgeNetworkExtractFallbackNote(env)}`;
       const answer = result.answer.includes("项目知识网络 v")
         ? result.answer
         : `${result.answer}${note}`;
       return { status: "ok", answer, knowledgeNetworkHtml: written.html };
     }
+    return {
+      status: "failed",
+      error: written.error,
+      answer:
+        `${result.answer.trim() || "Hermes 已结束，但知识网络未通过校验。"}\n\n` +
+        `**知识网络校验未通过**：${written.error}\n` +
+        "（Worker 不会自动多轮重写；请按错误修正相关 slot 后重试，勿重复整页生成。）",
+    };
   }
 
   const answerTrim = result.answer.trim();
