@@ -120,7 +120,7 @@ Report section contents:
   - 100天 / 1年 / 出售前 三档执行 roadmap
   - 桥接 '我们买了什么' → '我们能让它值多少'
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
 ## Important Notes
 
 - Value creation is where family offices differentiate from passive investors — this plan should reflect what THIS investor can uniquely do.

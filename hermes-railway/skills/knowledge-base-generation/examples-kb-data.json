@@ -1,0 +1,374 @@
+﻿{
+  "version": "v1.0",
+  "date": "2026-06-12",
+  "project": {
+    "name": "示例机会型投资项目",
+    "subtitle": "Codex v2.8 sample",
+    "jurisdiction": "中国大陆",
+    "type": "real-estate-dev",
+    "status": "Draft",
+    "lead": "这是一个用于测试 renderer 和 validator 的最小示例。"
+  },
+  "kbConfig": {
+    "displayOrder": ["snapshot", "assets", "legal-relationships", "capital-structure", "timeline", "business-model", "comps", "returns", "risks", "open-questions", "decision-framework"],
+    "projectType": "real-estate-dev",
+    "renderingMode": "chinese-only",
+    "multiAsset": false,
+    "configVersion": 1,
+    "displayOrderHistory": ["2026-06-12 | intake | 初始顺序"]
+  },
+  "maturity": { "factorA": "38%", "factorB": "10%", "combined": "27%", "tier": "Early stage" },
+  "summary": "资料仍处于早期阶段，当前样本用于验证 11 个 canonical slot 的结构化渲染。",
+  "slots": {
+    "snapshot": {
+      "state": "populated",
+      "facts": [
+        { "label": "项目阶段", "value": "早期线索，尚未形成可执行交易结构", "source": "[U-1]" },
+        { "label": "研究方向", "value": "以换货交付平台为主，铜和石油作为备用货物池", "source": "[U-1]" },
+        { "label": "关键阻塞", "value": "配额、交易政策、数字口岸接入路径待确认", "source": "[U-1]" }
+      ]
+    },
+    "assets": {
+      "state": "populated",
+      "rows": [
+        { "asset": "换货交付平台路径", "type": "平台能力", "status": "待确认", "control": "项目方声称可协调", "evidence": "尚无平台接入证明 [U-1]", "gap": "需书面说明和过往成交样本" },
+        { "asset": "铜/石油备用货物池", "type": "备选资产/货物", "status": "概念阶段", "control": "待确认供应方与买方", "evidence": "仅在项目介绍中出现 [U-1]", "gap": "需货源、买方名单和价格发现路径" }
+      ]
+    },
+    "legal-relationships": {
+      "state": "populated",
+      "entities": [
+        { "name": "示例项目平台", "role": "拟交易平台" },
+        { "name": "项目方", "role": "资源协调方" },
+        { "name": "潜在买方/供应方", "role": "待确认交易对手" }
+      ],
+      "relationships": [
+        { "relationship": "项目方 → 平台", "rights": "声称可协调平台接入", "control": "需项目方提供证明", "evidence": "[U-1]" },
+        { "relationship": "平台 → 买方/供应方", "rights": "换货交付与转售安排", "control": "交易对手待确认", "gap": "缺少正式合同或意向书" }
+      ]
+    },
+    "business-model": {
+      "state": "populated",
+      "journey": {
+        "stages": ["货源/配额确认", "平台接入", "换货交付", "转售/回款"],
+        "paths": [
+          { "label": "路径 A · 换货", "nodes": [
+            { "text": "铜/石油货源", "note": "供应方待确认" },
+            { "text": "数字口岸/平台接入", "priority": true, "note": "核心阻塞" },
+            { "text": "换货交付安排" },
+            { "text": "国内变现/回款", "priority": true }
+          ]},
+          { "label": "路径 B · 现汇", "nodes": [
+            { "text": "同一货源" },
+            { "text": "配额不适用", "empty": true },
+            { "text": "直接采购/销售" },
+            { "text": "现金结算", "priority": true }
+          ]}
+        ]
+      },
+      "revenueTree": {
+        "label": "潜在收入拆解",
+        "groups": [
+          {
+            "name": "换货交易服务",
+            "items": [
+              { "name": "平台撮合/服务费", "revenue": "待测算", "share": "核心", "certainty": "🔵 AI推论", "source": "[U-1]" },
+              { "name": "价差/折扣收益", "revenue": "待测算", "share": "高弹性", "certainty": "⚪ 待确认", "source": "[U-1]" }
+            ]
+          },
+          {
+            "name": "贸易配套",
+            "items": [
+              { "name": "物流/仓储协同", "revenue": "待确认", "share": "辅助", "certainty": "⚪ 待确认" }
+            ]
+          }
+        ],
+        "total": { "value": "待测算", "note": "需买方、货源和价格指引后才能合计" }
+      },
+      "valueChain": {
+        "label": "换货交付价值链",
+        "steps": [
+          { "stage": "货源", "capability": "铜/石油货物池待确认", "benchmark": "需货权和供应方证明", "moat": "中", "moatNote": "货源广度可能形成议价空间", "certainty": "⚪ 待确认", "source": "[U-1]" },
+          { "stage": "平台接入", "capability": "声称可协调数字口岸/平台路径", "benchmark": "需正式接入资格", "moat": "强", "moatNote": "若真实，是核心护城河", "certainty": "🟡 项目方", "source": "[U-1]" },
+          { "stage": "买方/回款", "capability": "买方名单和回款路径缺失", "benchmark": "需闭环交易对手", "moat": "弱", "moatNote": "当前是主要短板", "certainty": "⚪ 待确认" }
+        ]
+      },
+      "flywheel": {
+        "title": "平台型换货交易飞轮",
+        "nodes": [
+          { "stage": "起点", "text": "平台接入证明增强交易可信度" },
+          { "stage": "强化", "text": "更多货源/买方愿意进入同一通道" },
+          { "stage": "变现", "text": "交易记录沉淀后降低后续撮合成本" }
+        ],
+        "assumption": "飞轮成立的前提是平台接入和交易合规路径可重复，而不是一次性个案。",
+        "certainty": "🔵 AI推论",
+        "source": "[U-1]"
+      },
+      "ecosystemMap": {
+        "center": "换货交付平台 / 项目方",
+        "actors": [
+          { "actor": "项目方", "gives": "资源协调、平台路径", "receives": "融资与交易推进", "strength": "强" },
+          { "actor": "供应方", "gives": "货源与权属文件", "receives": "销售/换货通道", "strength": "中" },
+          { "actor": "买方", "gives": "采购付款或回款承诺", "receives": "稳定货源和价格", "strength": "中" },
+          { "actor": "监管/口岸平台", "gives": "接入和合规边界", "receives": "合规交易记录", "strength": "强" }
+        ],
+        "valueCapture": "当前最大价值捕获点取决于平台接入权是否真实可用。"
+      },
+      "rows": [
+        { "factor": "客户/买方", "analysis": "买方名单尚未形成，价格发现路径待补充", "source": "[U-1]", "gap": "需项目方提供潜在买方清单" },
+        { "factor": "瓶颈", "analysis": "平台接入和配额政策决定商业模式是否成立", "source": "[U-1]", "gap": "需政策和平台证明" }
+      ]
+    },
+    "capital-structure": {
+      "state": "populated",
+      "sourcesUses": [
+        { "item": "拟投资金额", "amount": "待确认", "type": "资金用途", "notes": "无价格指引，暂不能测算 [U-1]" },
+        { "item": "前期尽调预算", "amount": "待确认", "type": "成本", "notes": "需确认资料包完整度后估算" }
+      ],
+      "capitalStack": [
+        { "layer": "股权/合作款", "provider": "家办或 SPV", "amount": "待定", "priority": "劣后", "terms": "需 term sheet" },
+        { "layer": "贸易融资", "provider": "银行/保理方", "amount": "待定", "priority": "优先", "gap": "需货权、合同和回款路径证明" }
+      ]
+    },
+    "comps": {
+      "state": "populated",
+      "rows": [
+        { "name": "第三方哈萨克精炼铜交易样本", "rationale": "同属跨境大宗商品交易记录", "signal": "覆盖 3026 条记录，其中正金额交易 2896 条", "caveat": "不能直接证明本项目可执行", "source": "[U-1]" },
+        { "name": "官方海关进口数据", "rationale": "可作为市场规模和流向证据", "signal": "覆盖 2024-01 至 2026-04", "caveat": "属于数据参考，不是项目事件", "source": "[U-1]" }
+      ]
+    },
+    "returns": {
+      "state": "populated",
+      "valuationBox": {
+        "label": "基准回报可测算性",
+        "value": "暂不测算",
+        "note": "缺少入场金额、买方、价格折扣和回款路径；先以条件门槛管理，而非输出伪 IRR。",
+        "certainty": "🔵 AI推论",
+        "source": "[U-1]"
+      },
+      "scenarios": [
+        { "label": "Downside", "irr": "待测算", "detail": "无法确认配额/平台接入，项目停留观察" },
+        { "label": "Base", "irr": "待测算", "detail": "补齐资料后形成单笔换货交付路径" },
+        { "label": "Upside", "irr": "待测算", "detail": "形成多货物池和稳定买方通道" }
+      ],
+      "assumptions": [
+        { "assumption": "入场金额", "base": "待确认", "downside": "不入场", "upside": "分阶段入场", "gap": "缺价格指引" },
+        { "assumption": "回款路径", "base": "项目方确认后测算", "downside": "无法闭环", "upside": "多买方分散", "source": "[U-1]" }
+      ],
+      "sensitivities": [
+        { "driver": "配额可用性", "downside": "不可用", "base": "单次可用", "upside": "可重复使用", "impact": "决定项目是否成立" },
+        { "driver": "价格折扣", "downside": "折扣不足", "base": "待确认", "upside": "形成套利空间", "impact": "决定毛利" }
+      ]
+    },
+    "timeline": {
+      "state": "populated",
+      "rows": [
+        {
+          "date": "2026-05-21",
+          "sortDate": "2026-05-21",
+          "kind": "已发生",
+          "item": "项目方首次正式介绍项目设想，并提出以换货交付平台为主要研究方向",
+          "yearSummary": "形成项目研究方向，进入资料补充阶段",
+          "monthSummary": "首次正式项目讨论",
+          "importance": "关键",
+          "certainty": "🟡 项目方",
+          "materiality": "形成项目初始研究范围，但尚未构成可执行交易结构",
+          "source": "[U-1]"
+        },
+        {
+          "date": "2026-05-28",
+          "sortDate": "2026-05-28",
+          "kind": "已发生",
+          "item": "项目方说明拟以数字口岸/平台路径承接换货交付安排",
+          "monthSummary": "围绕平台路径补充口头说明",
+          "importance": "重要",
+          "certainty": "🟡 项目方",
+          "materiality": "把商业模式从普通商品贸易转向平台接入能力验证",
+          "source": "[U-1]"
+        },
+        {
+          "date": "2026-06-03",
+          "sortDate": "2026-06-03",
+          "kind": "已发生",
+          "item": "项目方提出铜/石油可作为备用货物池",
+          "yearSummary": "项目进入可执行性验证，但关键证据仍缺失",
+          "monthSummary": "货物池和交易路径讨论",
+          "importance": "重要",
+          "certainty": "🟡 项目方",
+          "materiality": "扩展潜在货物范围，但尚未形成货权、买方或定价证明",
+          "source": "[U-1]"
+        },
+        {
+          "date": "2026-06-06",
+          "sortDate": "2026-06-06",
+          "kind": "已发生",
+          "item": "资料审阅显示尚缺卖方介绍材料、价格指引和资产权属文件",
+          "monthSummary": "资料缺口被识别",
+          "importance": "关键",
+          "certainty": "🔵 AI推论",
+          "materiality": "决定当前不能进入回报测算和 IC 判断",
+          "source": "[U-1]"
+        },
+        {
+          "date": "2026-06-10",
+          "sortDate": "2026-06-10",
+          "kind": "已发生",
+          "item": "初步判断项目仍处于 Early stage，需要先补齐可执行性证明",
+          "monthSummary": "形成首轮成熟度判断",
+          "importance": "关键",
+          "certainty": "🔵 AI推论",
+          "materiality": "决定后续动作应为资料补齐，而非直接进入交易条款",
+          "source": "[U-1]"
+        },
+        {
+          "date": "2026-06-12",
+          "sortDate": "2026-06-12",
+          "kind": "推进中",
+          "item": "补充卖方介绍材料、价格指引、资产权属文件",
+          "importance": "关键",
+          "certainty": "⚪ 待确认",
+          "controller": "项目方 / 卖方",
+          "materiality": "决定能否从线索阶段进入可执行尽调",
+          "trigger": "补齐：启动 DD checklist；未补齐：保持观察，不进入 IC",
+          "source": "[U-1]"
+        },
+        {
+          "date": "待定",
+          "sortDate": "9999-01-01",
+          "kind": "未来关键节点",
+          "item": "取得项目方对配额、交易政策和数字口岸接入路径的书面确认",
+          "impactLevel": "极高",
+          "blocker": true,
+          "controller": "项目方 / 平台方",
+          "materiality": "决定平台型换货交付是否具备真实落地路径",
+          "trigger": "确认：进入结构化条款讨论；无法确认：降级为观察项目",
+          "source": "[U-1]"
+        }
+      ]
+    },
+    "risks": {
+      "state": "populated",
+      "rows": [
+        {
+          "id": "R-001",
+          "category": "执行可行性",
+          "level": "高",
+          "risk": "配额、交易政策和数字口岸接入路径无法确认，导致换货交付平台无法落地",
+          "evidence": "当前材料只提出以换货交付平台为研究方向，未提供可执行政策文件或平台接入证明",
+          "certainty": "⚪ 待确认",
+          "source": "[U-1]",
+          "mitigation": "要求项目方提供配额/交易政策依据、平台接入说明和过往成交样本",
+          "owner": "项目方",
+          "trigger": "若无法提供书面证明，项目降级为观察"
+        },
+        {
+          "id": "R-002",
+          "category": "资料完整性",
+          "level": "中",
+          "risk": "卖方介绍材料、价格指引和权属文件缺失，无法判断资产边界和交易价格合理性",
+          "evidence": "当前仅有早期项目简介，交易对手和指引价待确认",
+          "certainty": "⚪ 待确认",
+          "source": "[U-1]",
+          "mitigation": "补齐卖方材料、价格指引、资产/权属证明后再进入回报测算",
+          "owner": "卖方 / 项目方",
+          "trigger": "补齐后进入 DD checklist；未补齐则不进入 IC"
+        }
+      ]
+    },
+    "open-questions": {
+      "state": "populated",
+      "groups": [
+        {
+          "priority": "P1",
+          "title": "紧急 — 可执行性确认",
+          "items": [
+            {
+              "question": "项目方是否能提供配额、交易政策和数字口岸接入路径的书面证明？",
+              "owner": "项目方 / 平台方",
+              "why": "决定换货交付平台是否具备真实落地路径",
+              "action": "索取政策依据、接入说明和过往成交样本",
+              "source": "[U-1]"
+            },
+            {
+              "question": "拟交易标的、买方名单和价格发现路径分别是什么？",
+              "owner": "卖方 / 项目方",
+              "why": "决定是否能进入交易结构和回报测算",
+              "action": "补充卖方介绍材料和价格指引",
+              "source": "[U-1]"
+            }
+          ]
+        },
+        {
+          "priority": "P2",
+          "title": "重要 — 尽调前置条件",
+          "items": [
+            {
+              "question": "资产或平台资源的权属、授权和使用边界是否清晰？",
+              "owner": "项目方",
+              "why": "影响法律结构、风险矩阵和交易文件路径",
+              "action": "补充权属文件、授权文件或平台合作协议",
+              "source": "[U-1]"
+            }
+          ]
+        }
+      ]
+    },
+    "decision-framework": {
+      "state": "populated",
+      "recommendation": "当前不建议进入 IC；应先作为 Early stage 项目补齐可执行性证明和交易条款。",
+      "recommendationReason": "核心原因不是市场空间不足，而是平台接入、配额/政策依据、买方和价格机制尚未形成可核实闭环。",
+      "valuationBox": {
+        "label": "当前决策姿态",
+        "value": "Hold / 补资料",
+        "note": "不是否决项目，而是把进入 IC 的前置条件收窄到 P1 可执行性证明。",
+        "certainty": "🔵 AI推论"
+      },
+      "theses": [
+        { "thesis": "若数字口岸/平台接入真实，项目可能具备非标换货交付通道价值", "evidence": "项目方向材料中提出以换货交付平台为主要研究方向", "implication": "先验证平台权利和政策依据，再讨论融资或收益", "source": "[U-1]" },
+        { "thesis": "铜/石油货物池可以扩大交易适配性，但目前仍是待验证假设", "evidence": "货物池仅在项目材料中被提出，未见货权和买方证明", "implication": "需要货源、买方名单和价格发现路径", "source": "[U-1]" },
+        { "thesis": "当前资料完整度不足以支持回报测算或 IC 提案", "evidence": "卖方材料、价格指引、权属证明和融资条款均待补充", "implication": "应以资料补齐作为下一阶段 gate", "source": "[U-1]" }
+      ],
+      "valueLevers": [
+        { "lever": "平台接入权验证", "value": "把线索从概念性机会推进为可执行交易路径", "probability": "待确认", "window": "P1 资料补齐前", "condition": "取得平台接入说明、政策依据和过往成交样本 [U-1]" },
+        { "lever": "买方/货源池固化", "value": "形成价格发现和回款闭环", "probability": "中低", "window": "尽调早期", "condition": "取得买方清单、货权证明和指引价 [U-1]" },
+        { "lever": "分阶段资金安排", "value": "降低一次性资金暴露", "probability": "待测算", "window": "term sheet 前", "condition": "需明确融资金额、担保、优先级和回款路径" }
+      ],
+      "options": [
+        { "option": "A 继续观察", "conditions": "项目方无法提供平台/配额证明", "upside": "保留线索", "risk": "机会成本低", "action": "30 天后复核" },
+        { "option": "B 条件推进", "conditions": "取得书面证明和价格指引", "upside": "可进入 DD", "risk": "仍需验证买方与回款", "action": "启动 DD checklist" },
+        { "option": "C 暂停", "conditions": "交易路径无法闭环", "upside": "避免资源投入", "risk": "错过潜在机会", "action": "归档为观察项目" }
+      ],
+      "blockers": [
+        { "item": "平台/配额/政策依据", "why": "未确认前无法判断换货交付是否合法、可重复、可落地", "source": "[U-1]" },
+        { "item": "货权、买方和价格指引", "why": "未确认前无法进行回报测算、风险定价和融资结构设计", "source": "[U-1]" }
+      ],
+      "pros": ["存在跨境商品交易数据可作为市场参考 [U-1]", "若平台接入真实，可能形成非标交易路径"],
+      "cons": ["缺少可执行政策和平台证明", "缺少价格、买方、权属和融资条款"],
+      "nextActions": [
+        { "action": "索取平台接入证明、配额/政策依据和过往成交样本", "owner": "项目方", "deadline": "下一轮会议前", "trigger": "P1 问题未解前不进入 IC" },
+        { "action": "补齐卖方材料、价格指引和权属文件", "owner": "卖方/项目方", "deadline": "资料包 v2 前", "trigger": "资料齐备后重算成熟度" },
+        { "action": "形成一页式交易路径 memo：货源、平台、买方、回款、融资五段闭环", "owner": "内部分析", "deadline": "收到 P1 资料后 3 个工作日", "trigger": "决定是否进入 DD checklist" }
+      ]
+    }
+  },
+  "sources": [
+    {
+      "id": "U-1",
+      "type": "用户上传",
+      "title": "示例项目简介.pdf",
+      "excerpt": "用户上传材料中提到项目仍处于早期沟通阶段，交易对手和指引价待确认。"
+    }
+  ],
+  "terms": [
+    {
+      "term": "KB-CONFIG",
+      "definition": "知识网络 HTML 内的展示层配置块，用于控制章节顺序、项目类型、渲染模式和重排历史。",
+      "context": "用于 v2.8 的展示顺序控制。"
+    },
+    {
+      "term": "Factor B",
+      "definition": "来源多样性评分，用于衡量资料是否来自多个独立视角，而非单一文件数量。",
+      "context": "成熟度评分。"
+    }
+  ]
+}

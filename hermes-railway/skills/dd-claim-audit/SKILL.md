@@ -109,7 +109,7 @@ Feed sensitivity flags into `sensitivity-analysis` skill for detailed modeling.
   - 九: 由审计发现的新增风险 (虚报、矛盾、关键假设错误)
   - 十: 待补证的具体声明列表
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
 ## Important Notes
 
 - This skill is the **intellectual core** of the analysis framework. It's where analyst judgment matters most.

@@ -1,32 +1,41 @@
 #!/usr/bin/env bash
-# Railway 推荐：纯 curl 写入 /opt/data/.hermes/skills，不走 hermes skills install。
-# 避免：Uninstall 交互、Pick category、jfo-r2-materials 被安全扫描误拦（SKILL 里的 curl 示例）。
-# 用法：
-#   export HERMES_HOME=/opt/data
-#   export HERMES_SKILLS_DIR=/opt/data/.hermes/skills
-#   bash install-jfo-skills-railway-curl-only.sh
+# Railway 纯 curl 安装 v2.8（不走 hermes skills install 交互）
+# export HERMES_HOME=/opt/data
+# export HERMES_SKILLS_DIR=/opt/data/.hermes/skills
+# bash install-jfo-skills-railway-curl-only.sh
 
 set -euo pipefail
 
-# Pin tag/commit: export JFO_SKILLS_RAW_BASE="https://raw.githubusercontent.com/fangjg16/family-office-platform/<sha>/hermes-railway"
 RAW="${JFO_SKILLS_RAW_BASE:-https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway}"
 SKILLS_ROOT="${HERMES_SKILLS_DIR:-/opt/data/.hermes/skills}"
 KB="$SKILLS_ROOT/knowledge-base-generation"
 
-echo "=== JFO skills (curl-only, Railway, v2.7) ==="
+echo "=== JFO skills (curl-only, Railway, v2.8) ==="
 echo "RAW=$RAW"
 echo "SKILLS_ROOT=$SKILLS_ROOT"
 
 mkdir -p "$SKILLS_ROOT" /opt/data/kb /opt/data/logs
 
-echo "--- knowledge-base-generation (full directory via curl) ---"
-mkdir -p "$KB/assets" "$KB/references" "$KB/knowledge"
-curl -fsSL "$RAW/skills/knowledge-base-generation/SKILL.md" -o "$KB/SKILL.md"
-curl -fsSL "$RAW/skills/knowledge-base-generation/kb-template.html" -o "$KB/kb-template.html"
-curl -fsSL "$RAW/skills/knowledge-base-generation/assets/components.html" -o "$KB/assets/components.html"
-curl -fsSL "$RAW/reference/STYLE_GUIDE.md" -o "$KB/references/STYLE_GUIDE.md"
-curl -fsSL "$RAW/reference/README-hermes.md" -o "$KB/references/README-hermes.md"
-curl -fsSL "$RAW/skills/knowledge-base-generation/knowledge/README.md" -o "$KB/knowledge/README.md" 2>/dev/null || true
+curl_kb() {
+  local rel="$1"
+  local dest="$2"
+  mkdir -p "$(dirname "$dest")"
+  curl -fsSL "$RAW/skills/knowledge-base-generation/$rel" -o "$dest"
+}
+
+echo "--- knowledge-base-generation (full v2.8 via curl) ---"
+mkdir -p "$KB/assets" "$KB/references" "$KB/scripts" "$KB/examples" "$KB/knowledge"
+curl_kb "SKILL.md" "$KB/SKILL.md"
+curl_kb "examples-kb-data.json" "$KB/examples-kb-data.json"
+curl_kb "assets/kb-template.html" "$KB/assets/kb-template.html"
+curl_kb "assets/components.html" "$KB/assets/components.html"
+for ref in kb-schema.md kb-config.md content-rules.md slot-specific-rules.md slot-rendering-rules.md timeline-rules.md style-guide-v2.7.md handoff-schema.md; do
+  curl_kb "references/$ref" "$KB/references/$ref"
+done
+curl_kb "kb-template.html" "$KB/kb-template.html" 2>/dev/null || true
+curl_kb "knowledge/README.md" "$KB/knowledge/README.md" 2>/dev/null || true
+curl_kb "examples/sample-output.html" "$KB/examples/sample-output.html" 2>/dev/null || true
+curl_kb "examples/sample-output-reordered.html" "$KB/examples/sample-output-reordered.html" 2>/dev/null || true
 
 install_skill_curl() {
   local name="$1"
@@ -48,14 +57,13 @@ for s in $OTHER; do
 done
 
 echo ""
-echo "=== Verify (must all exist) ==="
-test -f "$KB/kb-template.html"
-test -f "$KB/references/STYLE_GUIDE.md"
+echo "=== Verify v2.8 required files ==="
+test -f "$KB/SKILL.md"
+test -f "$KB/references/kb-schema.md"
+test -f "$KB/references/slot-specific-rules.md"
+test -f "$KB/references/slot-rendering-rules.md"
+test -f "$KB/references/timeline-rules.md"
+test -f "$KB/assets/kb-template.html"
 test -f "$KB/assets/components.html"
-test -f "$SKILLS_ROOT/jfo-r2-materials/SKILL.md"
-ls -la "$KB"
-ls -la "$KB/references"
-ls -la "$SKILLS_ROOT/jfo-r2-materials"
-
-echo ""
-echo "Done (curl-only). Railway Restart gateway, then re-test 知识网络 until 文件 API 回传."
+grep -q revealAnchor "$KB/assets/kb-template.html"
+echo "OK: v2.8 KB skill layout verified"

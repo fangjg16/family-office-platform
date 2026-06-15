@@ -4,6 +4,10 @@ import { syncCompletedAgentJobToChat } from "./chat-sync";
 import { validateKnowledgeNetworkHtml } from "./knowledge-network-html-validation";
 import { formatKnVersionDisplay } from "./knowledge-network-version";
 import {
+  detectKnowledgeNetworkUpdateMode,
+  type KnowledgeNetworkUpdateMode,
+} from "./knowledge-network-mode";
+import {
   getProjectKnowledgeNetworkMeta,
   readProjectKnowledgeNetworkHtml,
   upsertProjectKnowledgeNetwork,
@@ -78,14 +82,47 @@ function extractKnHtmlFromResult(result: {
   return extractKnowledgeNetworkHtmlLoose(result.answer);
 }
 
+async function resolveKnModeForJob(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+): Promise<KnowledgeNetworkUpdateMode> {
+  let message = "";
+  const msgRow = await env.DB.prepare(
+    `SELECT content FROM user_chat_messages
+     WHERE user_id = ? AND pending_job_id = ?
+     ORDER BY sort_index DESC LIMIT 1`,
+  )
+    .bind(row.user_id, row.id)
+    .first<{ content: string }>();
+  if (msgRow?.content) message = msgRow.content;
+
+  const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+  const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+  const hadKbBeforeThisJob = Boolean(
+    previousHtml?.trim() && meta?.lastJobId && meta.lastJobId !== row.id,
+  );
+  return detectKnowledgeNetworkUpdateMode(message, hadKbBeforeThisJob);
+}
+
 async function writeKnowledgeNetworkFromHtml(
   env: AgentJobEnv,
   row: AgentJobRow,
   html: string,
   answerSummary: string,
+  knMode?: KnowledgeNetworkUpdateMode,
 ): Promise<{ meta: Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>; html: string } | null> {
   const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id);
-  const validation = validateKnowledgeNetworkHtml(html, { previousHtml });
+  const mode =
+    knMode ??
+    (row.skill_intent === "knowledge_network"
+      ? await resolveKnModeForJob(env, row)
+      : "incremental");
+  const validation = validateKnowledgeNetworkHtml(html, {
+    mode,
+    previousHtml,
+    strict: true,
+    touchesTimeline: mode !== "reorder" && /id=["']timeline["']/i.test(html),
+  });
   if (!validation.ok) return null;
 
   await upsertProjectKnowledgeNetwork(env, {
@@ -148,7 +185,7 @@ async function finalizeKnowledgeNetworkJobResult(
       extracted,
       "从 Hermes 回复提取 HTML",
     );
-    if (written) {
+    if (written?.meta) {
       const note = `\n\n已写入**项目知识网络 v${formatKnVersionDisplay(written.meta.version, written.meta.versionLabel)}**${knowledgeNetworkExtractFallbackNote(env)}`;
       const answer = result.answer.includes("项目知识网络 v")
         ? result.answer

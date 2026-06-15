@@ -105,7 +105,7 @@ Report section contents:
 - **Section details**:
   - 六: 可比交易表 (日期/规模/对价/倍数)、行业基准数据、估值参照区间、项目差异化定位
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
 ## Important Notes
 
 - Perfect comps rarely exist for non-standard investments. Acknowledge imperfections explicitly.

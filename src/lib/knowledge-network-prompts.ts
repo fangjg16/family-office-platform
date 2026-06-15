@@ -20,9 +20,9 @@ export const KNOWLEDGE_NETWORK_REORDER_PROMPT = `请调整项目知识网络的�
 4. 同一条回复末尾附完整 \`\`\`html 整页。`;
 
 export const KNOWLEDGE_NETWORK_FULL_REGENERATE_PROMPT =
-  "请全量重做项目知识网络：依 kb-template 从零生成，写入完整 KB-CONFIG，不沿用旧版 HTML。请在**本条回复末尾**附完整 ```html 整页。";
+  "请全量重做项目知识网络：依 v2.8 assets/kb-template.html 从零生成，写入完整 KB-CONFIG，不沿用旧版 HTML。请在**本条回复末尾**附完整 ```html 整页。";
 
-export const KNOWLEDGE_NETWORK_INITIAL_PROMPT = `请基于当前项目资料包，生成本项目的知识网络单页 HTML（首次发布，遵循 kb-template + v2.7 KB-CONFIG）。
+export const KNOWLEDGE_NETWORK_INITIAL_PROMPT = `请基于当前项目资料包，生成本项目的知识网络单页 HTML（首次发布，遵循 v2.8 assets/kb-template.html + KB-CONFIG）。
 
 交付说明：
 1. 按 project-intake 识别 project-type，在 <body> 开头写入 <!-- KB-CONFIG -->（含 display-order、project-type、rendering-mode、multi-asset、config-version、display-order-history）。

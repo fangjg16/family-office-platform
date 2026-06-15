@@ -25,7 +25,7 @@
 2. 创建 `agent_jobs`（`skill_intent = knowledge_network`），走 Hermes Runs。
 3. Hermes 指令（文件回路）：
    - `GET .../knowledge-network/current?format=raw` → 404 表示尚无 KB，在容器内新建 `./kb/{projectId}/[AI]_xxx_知识网络.html`。
-   - 执行 `knowledge-base-generation` + `kb-template.html` 写入工作文件。
+   - 执行 `knowledge-base-generation` + `assets/kb-template.html` 写入工作文件。
    - **`PUT .../current?userId=&jobId=`** 回传（`jobId` 可省略，服务端绑到本任务）。
 4. **P0 失败闭环**：任务结束时若 `project_knowledge_networks.last_job_id ≠ 本 jobId` → 任务 **failed**，对话显示失败原因；**不会**标 completed。
 5. 成功：从 R2 读 HTML 写入助手消息，附「已同步至项目知识网络 vN」。
@@ -85,14 +85,14 @@
 **流程**：
 
 1. `detectKnowledgeNetworkUpdateMode` → **`full`**。
-2. Hermes 指令：**可跳过 GET 旧版**，按 `kb-template` 从零写工作文件，再 `PUT`。
+2. Hermes 指令：**可跳过 GET 旧版**，按 `assets/kb-template.html` 从零写工作文件，再 `PUT`。
 3. 归档旧版、写入新版本号，项目详情展示最新 `current.html`。
 
 与增量的差别仅在 Hermes 是否拉取旧文件、是否允许整页重写；**回传与验收机制相同**（必须 PUT + `last_job_id` 匹配）。
 
 ---
 
-### 6. 调整展示顺序（轻量重排，v2.7）
+### 6. 调整展示顺序（轻量重排，v2.8）
 
 **入口**：对话里说「调整展示顺序 / 重排章节 / 把 X 移到 Y 前面」等。
 

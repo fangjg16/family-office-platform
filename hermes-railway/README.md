@@ -4,11 +4,13 @@
 
 ## Skills（GitHub Raw 安装）
 
-合域 **v2.7** 的 16 个 skill + 家办桥接 `jfo-r2-materials` 已放在 `hermes-railway/skills/`。  
-`knowledge-base-generation` 为**整目录**（含 `kb-template.html`、`KB-CONFIG`、`assets/components.html`、`references/STYLE_GUIDE.md`）。  
-安装见 **[INSTALL-SKILLS-FROM-GITHUB.md](./INSTALL-SKILLS-FROM-GITHUB.md)** 或容器内 **`install-jfo-skills-v27.sh`**；SOUL 见 **[SOUL-JFO-KB.md](./SOUL-JFO-KB.md)**。
+合域 **v2.8** 的 16 个 skill + 家办桥接 `jfo-r2-materials` 已放在 `hermes-railway/skills/`。  
+`knowledge-base-generation` 为**整目录**（含 `assets/kb-template.html`、`KB-CONFIG`、`assets/components.html`、`references/kb-schema.md` 等）。  
+安装见 **[INSTALL-SKILLS-FROM-GITHUB.md](./INSTALL-SKILLS-FROM-GITHUB.md)** 或容器内 **`install-jfo-skills-v28.sh`**；SOUL 见 **[SOUL-JFO-KB.md](./SOUL-JFO-KB.md)**。
 
-参考文档：`reference/STYLE_GUIDE.md`、`reference/skills_reference.md`。
+**运行时模板路径**：`knowledge-base-generation/assets/kb-template.html`（根目录 `kb-template.html` 仅为 deprecated 占位，勿作入口）。
+
+`reference/` 目录为 v2.7 历史归档，见 `reference/DEPRECATED.md`，**不得**引入运行链路。
 
 `jfo-r2-materials` 是 Hermes 版「项目资料读取层」：先 manifest + 当前 KB，再**按任务按需**拉 textUrl（非机械全文）。Worker 指令与 SOUL 已对齐。
 

@@ -128,7 +128,7 @@ export async function buildHermesMaterialsDigest(
     "【Worker 预注入 · 项目资料摘录（事实依据，非版式依据）】",
     intensityNote,
     "「本对话上传附件」优先于「项目资料包」；若用户刚上传文件，必须纳入分析。",
-    "版式与组件：以 knowledge-base-generation 目录中 kb-template.html + STYLE_GUIDE 为准。",
+    "版式与组件：以 knowledge-base-generation/assets/kb-template.html + assets/components.html 为准；视觉调试可读 references/style-guide-v2.7.md。",
   ];
   if (sessionBlock) parts.push("", sessionBlock);
   if (packageBlock) parts.push("", packageBlock);

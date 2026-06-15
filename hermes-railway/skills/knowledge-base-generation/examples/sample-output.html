@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>示例机会型投资项目</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f5f0e8;--ink:#2d241e;--ink-soft:#4a4540;--ink-faint:#888;--burgundy:#722f37;--serif:"Playfair Display","Noto Serif SC",Georgia,serif;--sans:"Inter","Noto Sans SC","PingFang SC",system-ui,sans-serif}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);font-size:15px;line-height:1.65;color:var(--ink);background:var(--paper);background-image:url("https://www.transparenttextures.com/patterns/natural-paper.png");-webkit-font-smoothing:antialiased}
+.kb-shell{display:grid;grid-template-columns:15.5rem minmax(0,1fr);gap:0;max-width:84rem;margin:0 auto;align-items:start}
+.kb-nav{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:2.5rem 1rem 2.5rem 2rem;background:rgba(114,47,55,.04);border-right:1px solid rgba(114,47,55,.14)}
+.kb-nav-title{font-family:var(--serif);font-size:.95rem;font-style:italic;color:var(--burgundy);margin-bottom:1.1rem;line-height:1.3}
+.kb-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem}
+.kb-nav-btn{display:flex;align-items:center;gap:.55rem;width:100%;text-align:left;font-family:var(--sans);font-size:.78rem;font-weight:600;line-height:1.3;color:var(--burgundy);background:transparent;border:1px solid rgba(114,47,55,.28);border-radius:4px;padding:.5rem .7rem;cursor:pointer;transition:background .12s,color .12s}
+.kb-nav-btn:hover{background:rgba(114,47,55,.1)}
+.kb-nav-btn .kb-nav-num{flex-shrink:0;width:1.4rem;height:1.4rem;border-radius:50%;border:1px solid rgba(114,47,55,.4);display:inline-flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:700}
+.kb-nav-btn.active{background:var(--burgundy);color:#fff;border-color:var(--burgundy)}
+.kb-nav-btn.active .kb-nav-num{border-color:rgba(255,255,255,.55);color:#fff}
+.kb-content{padding:4rem 2.5rem;min-width:0}
+.kb-panel{display:none}
+.kb-panel.active{display:block}
+@media(max-width:860px){
+  .kb-shell{grid-template-columns:1fr}
+  .kb-nav{position:static;height:auto;border-right:none;border-bottom:1px solid rgba(114,47,55,.14);padding:1rem 1.25rem}
+  .kb-nav ul{flex-direction:row;flex-wrap:wrap;gap:.4rem}
+  .kb-nav-btn{width:auto}
+  .kb-content{padding:2.5rem 1.25rem}
+}
+.kb-summary{background:#efe7da;border-left:4px solid var(--burgundy);border-radius:0 6px 6px 0;padding:1.25rem 1.5rem;margin:0 0 2.5rem}
+.kb-summary .kb-summary-label{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(114,47,55,.7);margin-bottom:.45rem}
+.kb-summary p{font-size:.92rem;line-height:1.7;color:var(--ink);margin:0}
+.masthead{border-bottom:2px solid var(--burgundy);padding-bottom:3rem;margin-bottom:3rem}
+.masthead-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(10.5rem,14rem);gap:2.5rem 3rem;align-items:start;margin-bottom:2rem}
+@media(max-width:760px){.masthead-split{grid-template-columns:1fr;gap:1.75rem}.masthead-meta{max-width:16rem}}
+.masthead-badges{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1.1rem}
+.conf-badge{display:inline-block;background:var(--burgundy);color:#fff;font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.58rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:.32rem .6rem;border-radius:2px}
+.ai-badge{display:inline-block;font-size:.58rem;color:var(--burgundy);border:1px solid rgba(114,47,55,.28);padding:2px 6px;border-radius:2px;font-weight:600;letter-spacing:.04em;background:rgba(255,255,255,.4)}
+.masthead h1{font-family:var(--serif);font-size:clamp(1.85rem,4.2vw,3rem);color:var(--burgundy);line-height:1.12;margin-bottom:.65rem;max-width:28rem}
+.masthead h1 .sub{font-size:clamp(1.25rem,3vw,2rem);opacity:.85;font-style:italic;font-weight:400;display:block;margin-top:.35rem}
+.masthead-subtitle{font-size:.78rem;color:var(--ink-faint);font-weight:400;letter-spacing:.02em;line-height:1.45;margin-bottom:1.1rem;max-width:32rem}
+.masthead-lead{font-size:.92rem;color:var(--ink-soft);font-weight:400;line-height:1.7;max-width:36rem}
+.masthead-meta{margin:0;padding-top:.15rem}
+.masthead-meta dl{margin:0}
+.meta-row{display:grid;grid-template-columns:1fr auto;gap:.75rem 1.25rem;padding:.6rem 0;border-bottom:1px solid rgba(114,47,55,.12);align-items:center}
+.meta-row:first-child{padding-top:0}
+.meta-row:last-child{border-bottom:none;padding-bottom:0}
+.meta-row dt{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.56rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#999;margin:0}
+.meta-row dd{font-size:.78rem;font-weight:600;color:var(--ink);text-align:right;margin:0;white-space:nowrap}
+.stage-pill{display:inline-block;background:#1a1a1a;color:#fff;font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .55rem;border-radius:2px}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:2rem;background:rgba(114,47,55,.18)}
+@media(max-width:800px){.stat-row{grid-template-columns:1fr}}
+.stat-item{padding:1.25rem 1.35rem;min-height:6.5rem;display:flex;flex-direction:column;justify-content:center}
+.stat-item-a{background:#e6ddd1;color:var(--ink)}
+.stat-item-a .stat-label{color:rgba(45,36,30,.62)}
+.stat-item-a .stat-value{color:var(--burgundy)}
+.stat-item-a .stat-note{color:rgba(45,36,30,.58);font-style:italic}
+.stat-item-b{background:#8f4a52;color:#fff}
+.stat-item-b .stat-label{color:rgba(255,255,255,.78)}
+.stat-item-b .stat-value{color:#fff}
+.stat-item-b .stat-note{color:rgba(255,255,255,.82)}
+.stat-item-c{background:var(--burgundy);color:#fff}
+.stat-item-c .stat-label{color:rgba(255,255,255,.78)}
+.stat-item-c .stat-value{color:#fff}
+.stat-item-c .stat-note{color:rgba(255,255,255,.92);font-weight:700;font-style:normal;text-transform:uppercase;letter-spacing:.06em;font-size:.62rem}
+.stat-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:.35rem}
+.stat-value{font-family:var(--serif);font-size:clamp(2rem,4vw,2.75rem);font-weight:700;line-height:1;margin:.2rem 0 .55rem}
+.stat-note{font-size:.65rem;margin:0}
+.kb-lang-toggle{display:flex;gap:.5rem;align-items:center;margin-top:.75rem}
+.lang-btn{background:none;border:none;font-family:var(--sans);font-size:.75rem;font-weight:500;color:var(--ink-faint);cursor:pointer;padding:.2rem .4rem;border-radius:3px}
+.lang-btn.active{font-weight:700;color:var(--burgundy)}
+.lang-btn:hover{color:var(--burgundy)}
+[lang="en"]{display:none}
+.kb-en-mode [lang="zh"]{display:none}
+.kb-en-mode [lang="en"]{display:block}
+.pulse{width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.block{margin-bottom:4rem}
+.section-title{font-family:var(--serif);font-size:1.75rem;color:var(--burgundy);margin-bottom:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.section-num{width:2rem;height:2rem;border-radius:50%;background:var(--burgundy);color:#fff;font-family:var(--sans);font-size:.75rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.section-sub{color:rgba(114,47,55,.6);font-weight:700;text-transform:uppercase;letter-spacing:.15em;font-size:.7rem;margin-bottom:2rem}
+h3{font-family:var(--serif);font-size:1.15rem;font-style:italic;color:var(--burgundy);margin:2rem 0 1rem}
+p{margin-bottom:.75rem;color:#4a4540}
+table{width:100%;border-collapse:collapse;margin:1rem 0 1.5rem;font-size:.875rem}
+table th{text-align:left;padding:12px 16px;border-top:2px solid var(--burgundy);border-bottom:1px solid var(--burgundy);font-family:var(--serif);font-weight:700;color:var(--burgundy);background:rgba(114,47,55,.05)}
+table td{padding:12px 16px;border-bottom:1px solid rgba(114,47,55,.1);vertical-align:top}
+tr.highlight-row td{background:rgba(114,47,55,.08)!important;font-weight:500}
+.project-timeline{max-width:58rem}
+.project-timeline .tl-item{margin-bottom:1.45rem}
+.project-timeline .tl-head{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap;margin-bottom:.28rem}
+.project-timeline .tl-kind{font-size:.62rem;font-weight:700;letter-spacing:.04em;color:var(--burgundy)}
+.project-timeline .tl-note{font-size:.76rem;color:var(--ink-soft);margin:.25rem 0 0}
+.project-timeline .tl-source{font-size:.66rem;margin-left:.35rem;vertical-align:super}
+.tl-item.timeline-ongoing::before,.tl-item.timeline-dependency::before{background:#9fb7cc}
+.tl-item.timeline-deadline::before{background:#f59e0b}
+.tag{font-size:.68rem;padding:1px 5px;border-radius:3px;white-space:nowrap}
+.tag-verified{background:#e8f5e9;color:#2e7d32}.tag-party{background:#fef9e7;color:#8b6914}
+.tag-analyst{background:#eef2f7;color:#3d5a80}.tag-unconfirmed{background:#f0eeea;color:#888}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.68rem;font-weight:600;border:1px solid rgba(114,47,55,.15)}
+.badge-green{background:#eef6f0;color:#2d5a3d}.badge-amber{background:#faf6ef;color:#8b6914}
+.badge-red{background:rgba(114,47,55,.1);color:var(--burgundy)}.badge-blue{background:#f0f3f7;color:#3d4a5c}
+.callout{border-left:4px solid;padding:1rem 1.25rem;margin:1.25rem 0;border-radius:0 6px 6px 0}
+.callout.info{border-color:#5a7a9a;background:#f0f4f8}.callout.info .callout-title{color:var(--burgundy);font-weight:700;margin-bottom:.5rem}
+.callout.missing{border-color:#c45c26;background:#fef6ef}.callout.missing .callout-title{color:#a34b1e;font-weight:700;margin-bottom:.5rem}
+.callout.warning{border-color:var(--burgundy);background:#fdf5f4}.callout.warning .callout-title{color:var(--burgundy);font-weight:700;margin-bottom:.5rem}
+.callout.success{border-color:#4a6741;background:#f2f7f0}.callout.success .callout-title{color:#4a6741;font-weight:700;margin-bottom:.5rem}
+.callout-hint{font-size:.75rem;color:#888;font-style:italic;margin-top:.5rem}.callout ul{margin:.5rem 0 0 1.25rem}.callout li{margin-bottom:.35rem;font-size:.875rem}
+.risk-score{display:inline-flex;align-items:center;justify-content:center;min-width:1.75rem;height:1.75rem;padding:0 .35rem;border-radius:4px;font-weight:700;font-size:.7rem;color:#fff}
+.risk-critical{background:#b91c1c}.risk-high{background:#c2410c}.risk-medium{background:#ca8a04;color:#1a1a1a}.risk-low{background:#16a34a}
+.risk-matrix-table td:first-child{width:3.75rem}
+.risk-level{display:inline-flex;align-items:center;justify-content:center;min-width:2rem;min-height:2rem;padding:.22rem .35rem;border-radius:4px;font-size:.68rem;font-weight:700;line-height:1.15;color:#fff;text-align:center}
+.risk-level-critical{background:#b91c1c}.risk-level-high{background:#c2410c}.risk-level-medium{background:#ca8a04;color:#1a1a1a}.risk-level-low{background:#4a6741}
+.risk-meta,.oq-meta{font-size:.68rem;color:#888;margin-top:.3rem;line-height:1.45}
+.oq-group{border:1px solid rgba(114,47,55,.16);border-radius:6px;background:rgba(255,255,255,.42);margin:1rem 0;overflow:hidden}
+.oq-group>summary{list-style:none;cursor:pointer;padding:.95rem 1.1rem;display:flex;align-items:center;gap:.75rem;color:var(--burgundy)}
+.oq-group>summary::-webkit-details-marker{display:none}
+.oq-group>summary::before{content:"⌄";font-size:.7rem;transform:rotate(-90deg);transition:transform .12s}
+.oq-group[open]>summary::before{transform:rotate(0deg)}
+.oq-title{font-family:var(--serif);font-size:1rem;font-style:italic;flex:1}
+.oq-count{font-size:.68rem;font-weight:700;color:#888}
+.oq-list{padding:0 1.25rem 1.1rem 1.75rem;margin:0}
+.oq-item{list-style:none;margin:.7rem 0;color:var(--ink);line-height:1.75}
+.oq-num{font-weight:700;color:var(--burgundy);margin-right:.35rem}
+.oq-action{color:var(--ink-soft)}
+.timeline{position:relative;padding-left:1.5rem;margin:1rem 0}.timeline::before{content:"";position:absolute;left:.2rem;top:0;bottom:0;width:2px;background:rgba(114,47,55,.15)}
+.tl-item{position:relative;margin-bottom:1.1rem;padding-left:1.25rem}.tl-item::before{content:"";position:absolute;left:-1.35rem;top:.35rem;width:14px;height:14px;border-radius:50%;background:var(--burgundy);border:3px solid var(--paper)}
+.tl-item.pending::before{background:#f59e0b}
+.tl-date{font-size:.7rem;font-weight:700;color:var(--burgundy);text-transform:uppercase;display:inline-block;margin-right:.5rem}
+.tl-text{font-size:.875rem;color:#4a4540}
+.tl-tree{margin:1rem 0}
+.tl-year{border:1px solid rgba(114,47,55,.16);border-radius:6px;margin:.6rem 0;background:rgba(255,255,255,.4);overflow:hidden}
+.tl-year>summary{list-style:none;cursor:pointer;padding:.8rem 1.1rem;display:flex;align-items:center;gap:.7rem;font-family:var(--serif);font-size:1.1rem;color:var(--burgundy)}
+.tl-year>summary::-webkit-details-marker{display:none}
+.tl-year>summary::before{content:"▸";font-size:.7rem;transition:transform .12s}
+.tl-year[open]>summary::before{transform:rotate(90deg)}
+.tl-year-sum{margin-left:auto;font-family:var(--sans);font-size:.72rem;font-style:italic;color:var(--ink-soft);font-weight:400}
+.tl-year-body{padding:.2rem 1.1rem 1rem 1.6rem}
+.tl-month{border-left:2px solid rgba(114,47,55,.18);margin:.4rem 0 .4rem .3rem}
+.tl-month>summary{list-style:none;cursor:pointer;padding:.45rem .8rem;font-size:.82rem;font-weight:700;color:var(--burgundy)}
+.tl-month>summary::-webkit-details-marker{display:none}
+.tl-month>summary::before{content:"▸";font-size:.6rem;margin-right:.4rem;display:inline-block;transition:transform .12s}
+.tl-month[open]>summary::before{transform:rotate(90deg)}
+.tl-month-body{padding:.1rem 0 .4rem 1.1rem}
+.scenario-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(114,47,55,.15);border:1px solid rgba(114,47,55,.15);margin:1.25rem 0}
+@media(max-width:700px){.scenario-cards{grid-template-columns:1fr}}
+.scenario-card{background:var(--paper);padding:1.25rem;text-align:center}
+.scenario-card.base{background:rgba(114,47,55,.06);box-shadow:inset 0 3px 0 var(--burgundy)}
+.scenario-card .sc-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:.5rem}
+.scenario-card.base .sc-label{color:var(--burgundy)}
+.scenario-card .sc-irr{font-family:var(--serif);font-size:2rem;font-weight:700;color:var(--burgundy)}
+.scenario-card.down .sc-irr{color:#6b5344}.scenario-card.up .sc-irr{color:#4a6741}
+.scenario-card .sc-detail{font-size:.75rem;color:#666;margin-top:.5rem;line-height:1.45}
+.org-chart{background:rgba(255,255,255,.5);border:1px solid rgba(114,47,55,.1);padding:2rem;margin:1.5rem 0;border-radius:8px;text-align:center}
+.org-node{border:2px solid var(--burgundy);padding:.85rem;background:#fff;display:inline-block;min-width:11rem;margin:.25rem;font-size:.85rem}
+.org-node.highlight{background:rgba(114,47,55,.08)}
+.org-node small{display:block;font-size:.6rem;text-transform:uppercase;font-weight:700;color:#888;margin-bottom:.25rem}
+.org-node strong{font-family:var(--serif);color:var(--burgundy)}
+.org-line{width:2px;height:1.5rem;background:var(--burgundy);margin:0 auto}
+.org-branch{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:.5rem}
+.journey-wrap{overflow-x:auto;margin:1.25rem 0}
+.journey{display:grid;grid-template-columns:7.5rem repeat(var(--journey-cols,4),minmax(7rem,1fr));column-gap:.3rem;row-gap:.45rem;min-width:42rem}
+.journey-corner{min-height:0}
+.journey-stage{text-align:center;font-family:var(--sans);font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--burgundy);padding:.45rem .3rem;border-bottom:2px solid var(--burgundy);align-self:end}
+.journey-lane-label{font-size:.72rem;font-weight:700;color:var(--burgundy);display:flex;align-items:center;padding-right:.35rem;line-height:1.35}
+.journey-node{background:rgba(255,255,255,.5);border:1px solid rgba(114,47,55,.2);border-radius:5px;padding:.55rem .6rem;font-size:.74rem;color:var(--ink-soft)}
+.journey-node.empty{background:transparent;border:1px dashed rgba(114,47,55,.15)}
+.journey-node.priority{border-color:var(--burgundy);box-shadow:inset 0 0 0 1px rgba(114,47,55,.15)}
+.bmc{display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:auto auto;gap:1px;background:rgba(114,47,55,.18);border:1px solid rgba(114,47,55,.18);margin:1.25rem 0}
+.bmc-cell{background:var(--paper);padding:.85rem .9rem;min-height:6rem}
+.bmc-cell h5{font-family:var(--sans);font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--burgundy);margin:0 0 .4rem}
+.bmc-cell ul{margin:0 0 0 1rem;padding:0;font-size:.78rem;color:var(--ink-soft);line-height:1.5}
+.bmc-cell li{margin-bottom:.2rem}
+.bmc-kp{grid-row:1/2}.bmc-ka{grid-column:2/3;grid-row:1/2}.bmc-kr{grid-column:2/3;grid-row:2/3}
+.bmc-vp{grid-column:3/4;grid-row:1/3;background:rgba(114,47,55,.06)}
+.bmc-cr{grid-column:4/5;grid-row:1/2}.bmc-ch{grid-column:4/5;grid-row:2/3}
+.bmc-cs{grid-column:5/6;grid-row:1/3}
+.bmc-cost{grid-column:1/4;grid-row:3/4}.bmc-rev{grid-column:4/6;grid-row:3/4}
+@media(max-width:760px){.bmc{grid-template-columns:1fr}.bmc-cell{grid-column:auto!important;grid-row:auto!important}}
+.pf-step{flex:1;min-width:8rem;display:flex;flex-direction:column;border:1px solid rgba(114,47,55,.2);border-radius:5px;background:rgba(255,255,255,.5);overflow:hidden}
+.process-flow{display:flex;align-items:stretch;gap:0;margin:1.25rem 0;overflow-x:auto;min-width:36rem}
+.pf-step-end{border-color:var(--burgundy)}
+.pf-step-label{font-family:var(--sans);font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--burgundy);padding:.4rem .7rem;border-bottom:1px solid rgba(114,47,55,.15);background:rgba(114,47,55,.04)}
+.pf-step-body{flex:1;padding:.6rem .7rem;font-size:.76rem;color:var(--ink-soft);line-height:1.5}
+.pf-step-margin{font-size:.65rem;font-weight:700;color:var(--burgundy);padding:.35rem .7rem;border-top:1px solid rgba(114,47,55,.15);background:rgba(114,47,55,.04);text-align:right}
+.pf-margin-total{background:var(--burgundy);color:#fff;border-top:none}
+.pf-arrow{display:flex;align-items:center;padding:0 .3rem;color:var(--burgundy);font-size:1.1rem;flex-shrink:0;opacity:.5}
+.topic{border:1px solid rgba(114,47,55,.16);border-radius:6px;margin:.85rem 0;background:rgba(255,255,255,.4);overflow:hidden}
+.topic>summary{list-style:none;cursor:pointer;padding:.85rem 1.1rem;display:flex;align-items:center;gap:.6rem;font-family:var(--serif);font-style:italic;font-size:1rem;color:var(--burgundy)}
+.topic>summary::-webkit-details-marker{display:none}
+.topic>summary::before{content:"▸";font-style:normal;font-size:.7rem;color:var(--burgundy);transition:transform .12s}
+.topic[open]>summary::before{transform:rotate(90deg)}
+.topic>summary .topic-count{margin-left:auto;font-family:var(--sans);font-style:normal;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-faint)}
+.topic-body{padding:0 1.1rem 1rem 2.1rem}
+.topic-body .topic-q{font-size:.85rem;color:var(--ink-soft);margin:.4rem 0;padding-left:.75rem;border-left:2px solid rgba(114,47,55,.2)}
+.topic-q .topic-q-status{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-left:.4rem}
+.tag .tag-src{font-weight:700}
+.tag-attrib{font-size:.62rem;color:var(--ink-faint);font-style:italic;margin-left:.15rem}
+.cite-ref,.term-ref{position:relative}.cite-ref a,.term-marker{color:var(--burgundy);text-decoration:none;font-size:.75em;vertical-align:super}
+.anchor-highlight,.anchor-highlight td{background:rgba(245,158,11,.14)!important;outline:1px solid rgba(114,47,55,.28);outline-offset:-1px}
+.tooltip{display:none;position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;width:320px;padding:.75rem 1rem;background:#fff;border:1px solid rgba(114,47,55,.2);font-size:.8rem;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.cite-ref:hover .tooltip,.term-ref:hover .tooltip{display:block}
+.tooltip-title{font-weight:700;color:var(--burgundy);display:block;margin-bottom:.25rem}
+.tooltip-source{display:block;font-size:.7rem;color:var(--ink-faint);margin-bottom:.25rem}
+.tooltip-preview{display:block;font-style:italic;color:var(--ink-soft)}
+.adv-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+@media(max-width:600px){.adv-grid{grid-template-columns:1fr}}
+.adv-grid .pros{background:#f0f7f1;padding:1rem;border-radius:6px}.adv-grid .cons{background:#fdf5f4;padding:1rem;border-radius:6px}
+.adv-grid h4{font-family:var(--serif);color:var(--burgundy);margin-bottom:.5rem;font-size:.95rem}
+.adv-grid ul{margin-left:1.25rem;font-size:.85rem}
+.valuation-box{background:#fff;padding:1.5rem;border-top:2px solid var(--burgundy);margin:1rem 0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.valuation-box .big{font-family:var(--serif);font-size:2.25rem;font-weight:700;color:var(--burgundy)}
+.glossary-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem 2rem;font-size:.8rem}
+@media(max-width:600px){.glossary-grid{grid-template-columns:1fr}}
+.glossary-row{display:flex;gap:1rem;border-bottom:1px solid #e0dcd5;padding:.45rem 0}
+.glossary-row .term{font-weight:700;color:var(--burgundy);width:9rem;flex-shrink:0}
+.glossary-term{font-weight:800;color:var(--burgundy);background:rgba(114,47,55,.08);border-left:3px solid var(--burgundy);padding:.2rem .45rem;border-radius:3px;display:inline-block}
+.glossary-row .def{color:#666}
+.changelog{margin-top:4rem;padding-top:2rem;border-top:1px solid rgba(114,47,55,.2)}
+.changelog h4{font-size:.65rem;text-transform:uppercase;letter-spacing:.12em;color:#888;margin-bottom:.75rem}
+.footer{text-align:center;padding:3rem 0 2rem;border-top:2px solid var(--burgundy);margin-top:2rem}
+.footer .brand{font-family:var(--serif);font-size:1.75rem;color:var(--burgundy);font-style:italic;margin-bottom:1rem}
+.footer p{font-size:.72rem;color:#999;line-height:1.6}
+sup{font-size:.65em;color:var(--burgundy)}
+.partial-line{font-size:.8rem;color:#a34b1e;font-style:italic;border-left:2px solid #c45c26;padding-left:.5rem;margin:.5rem 0}
+.section-lead{font-size:.88rem;color:var(--ink-soft);font-style:italic;margin-bottom:1.5rem;padding:.6rem 1rem;border-left:3px solid rgba(114,47,55,.25);background:rgba(114,47,55,.03)}
+</style>
+</head>
+<body>
+
+<!-- KB-CONFIG
+display-order: snapshot, assets, legal-relationships, capital-structure, timeline, business-model, comps, returns, risks, open-questions, decision-framework
+project-type: real-estate-dev
+rendering-mode: chinese-only
+multi-asset: false
+config-version: 1
+display-order-history:
+  2026-06-12 | intake | 初始顺序
+-->
+
+<div class="kb-shell">
+
+  <!-- ═══════════════════════════════════════════════════
+       LEFT NAV — generated from render manifest
+       Navigation title and items are generated below
+       Each item: <li><button class="kb-nav-btn" data-target="ANCHOR"><span class="kb-nav-num">NUMERAL</span>LABEL</button></li>
+       Overview button is always first and always has class="kb-nav-btn active"
+       Appendix items use style="font-size:.52rem;width:2rem" on kb-nav-num
+  ════════════════════════════════════════════════════ -->
+  <nav class="kb-nav" aria-label="板块导航">
+    <p class="kb-nav-title">项目知识网络</p>
+    <ul>
+      <li><button class="kb-nav-btn active" data-target="overview"><span class="kb-nav-num">◎</span>项目总览</button></li>
+      <li><button class="kb-nav-btn" data-target="snapshot"><span class="kb-nav-num">一</span><span>项目快照</span></button></li>
+<li><button class="kb-nav-btn" data-target="assets"><span class="kb-nav-num">二</span><span>资产构成 / 平台能力与资源</span></button></li>
+<li><button class="kb-nav-btn" data-target="legal-relationships"><span class="kb-nav-num">三</span><span>法律结构与关键关系网</span></button></li>
+<li><button class="kb-nav-btn" data-target="capital-structure"><span class="kb-nav-num">四</span><span>融资结构与资本结构</span></button></li>
+<li><button class="kb-nav-btn" data-target="timeline"><span class="kb-nav-num">五</span><span>项目时间轴</span></button></li>
+<li><button class="kb-nav-btn" data-target="business-model"><span class="kb-nav-num">六</span><span>业务模式与收入假设</span></button></li>
+<li><button class="kb-nav-btn" data-target="comps"><span class="kb-nav-num">七</span><span>市场对标与可比交易</span></button></li>
+<li><button class="kb-nav-btn" data-target="returns"><span class="kb-nav-num">八</span><span>投资回报与敏感性分析</span></button></li>
+<li><button class="kb-nav-btn" data-target="risks"><span class="kb-nav-num">九</span><span>关键风险与缓释</span></button></li>
+<li><button class="kb-nav-btn" data-target="open-questions"><span class="kb-nav-num">十</span><span>待确认问题清单</span></button></li>
+<li><button class="kb-nav-btn" data-target="decision-framework"><span class="kb-nav-num">十一</span><span>决策框架</span></button></li>
+<li><button class="kb-nav-btn" data-target="source-index"><span class="kb-nav-num">A</span><span>来源索引</span></button></li>
+<li><button class="kb-nav-btn" data-target="glossary"><span class="kb-nav-num">B</span><span>术语表</span></button></li>
+    </ul>
+  </nav>
+
+  <main class="kb-content">
+
+    <!-- ═══════════════════════════════════════════════════
+         OVERVIEW PANEL — masthead + kb-summary only
+         Always first, always active on load
+    ════════════════════════════════════════════════════ -->
+    <section class="block kb-panel active" id="overview">
+      <header class="masthead">
+        <div class="masthead-split">
+          <div class="masthead-main">
+            <div class="masthead-badges">
+              <span class="conf-badge">CONFIDENTIAL</span>
+              <span class="ai-badge">🤖 AI-Generated · v1.0</span>
+              <!-- Bilingual toggle: only rendered when bilingual=true -->
+              
+            </div>
+            <h1>示例机会型投资项目<span class="sub">Codex v2.8 sample</span></h1>
+            <p class="masthead-subtitle">中国大陆</p>
+            <p class="masthead-lead">这是一个用于测试 renderer 和 validator 的最小示例。</p>
+          </div>
+          <aside class="masthead-meta" aria-label="文档元数据">
+            <dl>
+              <div class="meta-row"><dt>Version</dt><dd>v1.0</dd></div>
+              <div class="meta-row"><dt>Date</dt><dd>2026-06-12</dd></div>
+              <div class="meta-row"><dt>Status</dt><dd>Draft</dd></div>
+              <div class="meta-row"><dt>Stage</dt><dd><span class="stage-pill">Early stage</span></dd></div>
+            </dl>
+          </aside>
+        </div>
+        <div class="stat-row">
+          <div class="stat-item stat-item-a">
+            <div class="stat-label">Factor A · Content Completeness</div>
+            <div class="stat-value">38%</div>
+            <p class="stat-note">Content completeness</p>
+          </div>
+          <div class="stat-item stat-item-b">
+            <div class="stat-label">Factor B · Source Diversity</div>
+            <div class="stat-value">10%</div>
+            <p class="stat-note">Source diversity</p>
+          </div>
+          <div class="stat-item stat-item-c">
+            <div class="stat-label">Combined Maturity</div>
+            <div class="stat-value">27%</div>
+            <p class="stat-note">Early stage</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="kb-summary">
+        <p class="kb-summary-label">项目概览 · 自动生成</p>
+        <p>资料仍处于早期阶段，当前样本用于验证 11 个 canonical slot 的结构化渲染。</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         CONTENT PANELS — one per active slot
+         Main sections are generated below.
+         Each slot shell:
+           <section class="block kb-panel" id="ANCHOR">
+             <h2 class="section-title"><span class="section-num">NUMERAL</span>中文标题 / English Title</h2>
+             <p class="section-sub">副标题（可选）</p>
+             [section body HTML]
+           </section>
+
+         Component templates for all sections (Section 四 visualizations,
+         Org Chart, Scenario Cards, Timeline 三子块, Callouts, Topics,
+         Advantage Grid, Valuation Box) are in assets/components.html.
+    ════════════════════════════════════════════════════ -->
+    <section class="block kb-panel" id="snapshot">
+<h2 class="section-title"><span class="section-num">一</span>项目快照</h2>
+<p class="section-sub">PROJECT SNAPSHOT · 关键事实</p>
+<table><thead><tr><th>项目项</th><th>内容</th><th>来源</th></tr></thead><tbody><tr><td>项目阶段</td><td>早期线索，尚未形成可执行交易结构</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>研究方向</td><td>以换货交付平台为主，铜和石油作为备用货物池</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>关键阻塞</td><td>配额、交易政策、数字口岸接入路径待确认</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="assets">
+<h2 class="section-title"><span class="section-num">二</span>资产构成 / 平台能力与资源</h2>
+<p class="section-sub">ASSETS & RESOURCES · 资产 / 权利 / 平台资源</p>
+<table><thead><tr><th>资产/资源</th><th>类型/状态</th><th>控制/权属</th><th>证据</th><th>缺口/备注</th></tr></thead><tbody><tr><td>换货交付平台路径</td><td>平台能力</td><td>项目方声称可协调</td><td>尚无平台接入证明 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td><td>需书面说明和过往成交样本</td></tr><tr><td>铜/石油备用货物池</td><td>备选资产/货物</td><td>待确认供应方与买方</td><td>仅在项目介绍中出现 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td><td>需货源、买方名单和价格发现路径</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="legal-relationships">
+<h2 class="section-title"><span class="section-num">三</span>法律结构与关键关系网</h2>
+<p class="section-sub">LEGAL RELATIONSHIPS · 实体 / 权属 / 合同依赖</p>
+<div class="org-chart">
+<div class="org-node highlight"><small>拟交易平台</small><strong>示例项目平台</strong></div>
+<div class="org-line"></div><div class="org-branch">
+<div class="org-node"><small>资源协调方</small><strong>项目方</strong></div>
+<div class="org-node"><small>待确认交易对手</small><strong>潜在买方/供应方</strong></div>
+</div>
+</div>
+<table><thead><tr><th>主体/关系</th><th>权利/义务</th><th>控制/依赖</th><th>证据/缺口</th></tr></thead><tbody><tr><td>项目方 → 平台</td><td>声称可协调平台接入</td><td>需项目方提供证明</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>平台 → 买方/供应方</td><td>换货交付与转售安排</td><td>交易对手待确认</td><td>缺少正式合同或意向书</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="capital-structure">
+<h2 class="section-title"><span class="section-num">四</span>融资结构与资本结构</h2>
+<p class="section-sub">CAPITAL STRUCTURE · 资金来源 / 用途 / 优先级</p>
+<table><thead><tr><th>项目</th><th>金额/比例</th><th>来源/用途</th><th>备注</th></tr></thead><tbody><tr><td>拟投资金额</td><td>待确认</td><td>资金用途</td><td>无价格指引，暂不能测算 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>前期尽调预算</td><td>待确认</td><td>成本</td><td>需确认资料包完整度后估算</td></tr></tbody></table>
+<table><thead><tr><th>层级</th><th>资金方</th><th>金额/比例</th><th>优先级/担保</th><th>关键条款/缺口</th></tr></thead><tbody><tr><td>股权/合作款</td><td>家办或 SPV</td><td>待定</td><td>劣后</td><td>需 term sheet</td></tr><tr><td>贸易融资</td><td>银行/保理方</td><td>待定</td><td>优先</td><td>需货权、合同和回款路径证明</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="timeline">
+<h2 class="section-title"><span class="section-num">五</span>项目时间轴</h2>
+<p class="section-sub">已发生事件 · 当前推进 · 未来关键节点</p>
+<h3>8.1 已发生关键事件</h3>
+<div class="tl-tree"><details class="tl-year" open><summary>2026 <span class="tl-year-sum">形成项目研究方向，进入资料补充阶段</span></summary><div class="tl-year-body"><details class="tl-month" open><summary>05 月<span class="tl-year-sum">首次正式项目讨论</span></summary><div class="tl-month-body"><div class="timeline project-timeline"><div class="tl-item"><span class="tl-date">2026-05-21</span><span class="tl-text"><strong>项目方首次正式介绍项目设想，并提出以换货交付平台为主要研究方向</strong> <span class="badge badge-red">关键</span> <span class="tag tag-party">🟡 项目方</span> <sup><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></sup></span><p class="tl-note">重要性：形成项目初始研究范围，但尚未构成可执行交易结构</p></div><div class="tl-item"><span class="tl-date">2026-05-28</span><span class="tl-text"><strong>项目方说明拟以数字口岸/平台路径承接换货交付安排</strong> <span class="badge badge-amber">重要</span> <span class="tag tag-party">🟡 项目方</span> <sup><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></sup></span><p class="tl-note">重要性：把商业模式从普通商品贸易转向平台接入能力验证</p></div></div></div></details><details class="tl-month" open><summary>06 月<span class="tl-year-sum">货物池和交易路径讨论</span></summary><div class="tl-month-body"><div class="timeline project-timeline"><div class="tl-item"><span class="tl-date">2026-06-03</span><span class="tl-text"><strong>项目方提出铜/石油可作为备用货物池</strong> <span class="badge badge-amber">重要</span> <span class="tag tag-party">🟡 项目方</span> <sup><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></sup></span><p class="tl-note">重要性：扩展潜在货物范围，但尚未形成货权、买方或定价证明</p></div><div class="tl-item"><span class="tl-date">2026-06-06</span><span class="tl-text"><strong>资料审阅显示尚缺卖方介绍材料、价格指引和资产权属文件</strong> <span class="badge badge-red">关键</span> <span class="tag tag-analyst">🔵 AI推论</span> <sup><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></sup></span><p class="tl-note">重要性：决定当前不能进入回报测算和 IC 判断</p></div><div class="tl-item"><span class="tl-date">2026-06-10</span><span class="tl-text"><strong>初步判断项目仍处于 Early stage，需要先补齐可执行性证明</strong> <span class="badge badge-red">关键</span> <span class="tag tag-analyst">🔵 AI推论</span> <sup><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></sup></span><p class="tl-note">重要性：决定后续动作应为资料补齐，而非直接进入交易条款</p></div></div></div></details></div></details></div>
+<h3>8.2 当前正在推进的事项</h3>
+<div class="timeline project-timeline"><div class="tl-item pending"><span class="tl-date">2026-06-12</span><span class="tl-text"><strong>补充卖方介绍材料、价格指引、资产权属文件</strong> <span class="badge badge-red">关键</span> <span class="tag tag-unconfirmed">⚪ 待确认</span> <sup><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></sup></span><p class="tl-note">控制方/依赖：项目方 / 卖方</p><p class="tl-note">重要性：决定能否从线索阶段进入可执行尽调</p><p class="tl-note">结果触发行动：补齐：启动 DD checklist；未补齐：保持观察，不进入 IC</p></div></div>
+<h3>8.3 未来关键节点</h3>
+<table><thead><tr><th>节点</th><th>预计时间</th><th>影响程度</th><th>结果触发行动</th></tr></thead><tbody><tr class="highlight-row"><td><strong>取得项目方对配额、交易政策和数字口岸接入路径的书面确认</strong> <sup><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></sup></td><td>待定</td><td><span class="badge badge-red">极高</span></td><td>确认：进入结构化条款讨论；无法确认：降级为观察项目</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="business-model">
+<h2 class="section-title"><span class="section-num">六</span>业务模式与收入假设</h2>
+<p class="section-sub">BUSINESS MODEL · 收入路径 / 客户 / 定价 / 供应链</p>
+<div class="journey-wrap"><div class="journey" style="--journey-cols:4"><div class="journey-corner"></div><div class="journey-stage">① 货源/配额确认</div><div class="journey-stage">② 平台接入</div><div class="journey-stage">③ 换货交付</div><div class="journey-stage">④ 转售/回款</div><div class="journey-lane-label">路径 A · 换货</div><div class="journey-node">铜/石油货源<br><small style="color:#888">供应方待确认</small></div><div class="journey-node priority">数字口岸/平台接入<br><small style="color:#888">核心阻塞</small></div><div class="journey-node">换货交付安排</div><div class="journey-node priority">国内变现/回款</div><div class="journey-lane-label">路径 B · 现汇</div><div class="journey-node">同一货源</div><div class="journey-node empty">配额不适用</div><div class="journey-node">直接采购/销售</div><div class="journey-node priority">现金结算</div></div></div>
+<p style="font-size:.75rem;color:#888;margin-bottom:.75rem">潜在收入拆解 · Revenue Tree</p><table><thead><tr><th>业务线</th><th>细分</th><th>收入规模</th><th>占比</th><th>备注</th></tr></thead><tbody><tr><td rowspan="2"><strong>换货交易服务</strong></td><td>平台撮合/服务费</td><td>待测算</td><td>核心</td><td><span class="tag tag-analyst">🔵 AI推论</span> <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>价差/折扣收益</td><td>待测算</td><td>高弹性</td><td><span class="tag tag-unconfirmed">⚪ 待确认</span> <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td rowspan="1"><strong>贸易配套</strong></td><td>物流/仓储协同</td><td>待确认</td><td>辅助</td><td><span class="tag tag-unconfirmed">⚪ 待确认</span> </td></tr><tr style="font-weight:600;background:rgba(114,47,55,.05)"><td colspan="2">合计</td><td>待测算</td><td>100%</td><td>需买方、货源和价格指引后才能合计</td></tr></tbody></table>
+<p style="font-size:.75rem;color:#888;margin-bottom:.75rem">换货交付价值链 · Value Chain</p><div style="overflow-x:auto;margin:1.25rem 0"><table style="min-width:36rem"><thead><tr><th>环节</th><th>标的当前能力</th><th>行业基准</th><th>护城河评估</th><th>来源</th></tr></thead><tbody><tr><td><strong>① 货源</strong></td><td>铜/石油货物池待确认</td><td>需货权和供应方证明</td><td><span class="badge badge-amber">中</span> 货源广度可能形成议价空间</td><td><span class="tag tag-unconfirmed">⚪ 待确认</span> <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td><strong>② 平台接入</strong></td><td>声称可协调数字口岸/平台路径</td><td>需正式接入资格</td><td><span class="badge badge-green">强</span> 若真实，是核心护城河</td><td><span class="tag tag-party">🟡 项目方</span> <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td><strong>③ 买方/回款</strong></td><td>买方名单和回款路径缺失</td><td>需闭环交易对手</td><td><span class="badge badge-blue">弱</span> 当前是主要短板</td><td><span class="tag tag-unconfirmed">⚪ 待确认</span> </td></tr></tbody></table></div>
+<div style="border:1px solid rgba(114,47,55,.2);border-radius:6px;padding:1.5rem;margin:1.25rem 0;background:rgba(255,255,255,.4)"><p style="text-align:center;font-family:var(--serif);font-style:italic;color:var(--burgundy);margin-bottom:1.25rem">平台型换货交易飞轮</p><div style="display:flex;flex-wrap:wrap;justify-content:center;gap:.75rem 1.5rem;text-align:center"><div style="flex:0 0 calc(33% - 1.5rem);min-width:8rem;border:1px solid rgba(114,47,55,.25);border-radius:4px;padding:.75rem;background:var(--paper)"><div style="font-size:.62rem;font-weight:700;color:var(--burgundy);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem">① 起点</div><div style="font-size:.82rem;color:#4a4540">平台接入证明增强交易可信度</div></div><div style="display:flex;align-items:center;color:var(--burgundy);font-size:1.2rem">→</div><div style="flex:0 0 calc(33% - 1.5rem);min-width:8rem;border:1px solid rgba(114,47,55,.25);border-radius:4px;padding:.75rem;background:var(--paper)"><div style="font-size:.62rem;font-weight:700;color:var(--burgundy);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem">② 强化</div><div style="font-size:.82rem;color:#4a4540">更多货源/买方愿意进入同一通道</div></div><div style="display:flex;align-items:center;color:var(--burgundy);font-size:1.2rem">→</div><div style="flex:0 0 calc(33% - 1.5rem);min-width:8rem;border:1px solid rgba(114,47,55,.25);border-radius:4px;padding:.75rem;background:rgba(114,47,55,.06)"><div style="font-size:.62rem;font-weight:700;color:var(--burgundy);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem">③ 变现</div><div style="font-size:.82rem;color:#4a4540">交易记录沉淀后降低后续撮合成本</div></div><div style="flex-basis:100%;text-align:center;color:var(--burgundy);font-size:.75rem;font-style:italic">→ 循环回起点，飞轮加速</div></div><p style="margin-top:1rem;font-size:.8rem;color:#4a4540"><strong>飞轮核心假设</strong>：飞轮成立的前提是平台接入和交易合规路径可重复，而不是一次性个案。 <span class="tag tag-analyst">🔵 AI推论</span> <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></p></div>
+<div style="border:1px solid rgba(114,47,55,.2);border-radius:6px;padding:1.5rem;margin:1.25rem 0;background:rgba(255,255,255,.4)"><div style="text-align:center;margin-bottom:1.25rem"><div style="display:inline-block;border:2px solid var(--burgundy);padding:.7rem 1.5rem;background:rgba(114,47,55,.08);font-family:var(--serif);font-size:.95rem;color:var(--burgundy)">换货交付平台 / 项目方</div></div><table><thead><tr><th>参与方</th><th>给平台的价值</th><th>从平台获取的价值</th><th>关系强度</th></tr></thead><tbody><tr><td><strong>项目方</strong></td><td>资源协调、平台路径</td><td>融资与交易推进</td><td><span class="badge badge-green">强</span></td></tr><tr><td><strong>供应方</strong></td><td>货源与权属文件</td><td>销售/换货通道</td><td><span class="badge badge-amber">中</span></td></tr><tr><td><strong>买方</strong></td><td>采购付款或回款承诺</td><td>稳定货源和价格</td><td><span class="badge badge-amber">中</span></td></tr><tr><td><strong>监管/口岸平台</strong></td><td>接入和合规边界</td><td>合规交易记录</td><td><span class="badge badge-green">强</span></td></tr></tbody></table><p style="font-size:.75rem;color:#888;margin-top:.5rem">当前最大价值捕获点取决于平台接入权是否真实可用。</p></div>
+<table><thead><tr><th>要素</th><th>当前判断</th><th>证据</th><th>缺口</th></tr></thead><tbody><tr><td>客户/买方</td><td>买方名单尚未形成，价格发现路径待补充</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td><td>需项目方提供潜在买方清单</td></tr><tr><td>瓶颈</td><td>平台接入和配额政策决定商业模式是否成立</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td><td>需政策和平台证明</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="comps">
+<h2 class="section-title"><span class="section-num">七</span>市场对标与可比交易</h2>
+<p class="section-sub">COMPARABLES · 市场信号 / 可比性 / 局限</p>
+<table><thead><tr><th>可比项/数据集</th><th>可比理由</th><th>价格/倍数/信号</th><th>局限</th><th>来源</th></tr></thead><tbody><tr><td>第三方哈萨克精炼铜交易样本</td><td>同属跨境大宗商品交易记录</td><td>覆盖 3026 条记录，其中正金额交易 2896 条</td><td>不能直接证明本项目可执行</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>官方海关进口数据</td><td>可作为市场规模和流向证据</td><td>覆盖 2024-01 至 2026-04</td><td>属于数据参考，不是项目事件</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="returns">
+<h2 class="section-title"><span class="section-num">八</span>投资回报与敏感性分析</h2>
+<p class="section-sub">RETURNS · 情景 / 假设 / 敏感变量</p>
+<div class="valuation-box"><p style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:.35rem">基准回报可测算性</p><div class="big">暂不测算 <span class="tag tag-analyst">🔵 AI推论</span></div><p style="font-size:.8rem;color:#4a4540;margin-top:.5rem">缺少入场金额、买方、价格折扣和回款路径；先以条件门槛管理，而非输出伪 IRR。 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></p></div>
+<div class="scenario-cards"><div class="scenario-card down"><div class="sc-label">Downside</div><div class="sc-irr">待测算</div><div class="sc-detail">无法确认配额/平台接入，项目停留观察</div></div><div class="scenario-card base"><div class="sc-label">Base</div><div class="sc-irr">待测算</div><div class="sc-detail">补齐资料后形成单笔换货交付路径</div></div><div class="scenario-card up"><div class="sc-label">Upside</div><div class="sc-irr">待测算</div><div class="sc-detail">形成多货物池和稳定买方通道</div></div></div>
+<table><thead><tr><th>假设</th><th>Base</th><th>Downside</th><th>Upside</th><th>来源/缺口</th></tr></thead><tbody><tr><td>入场金额</td><td>待确认</td><td>不入场</td><td>分阶段入场</td><td>缺价格指引</td></tr><tr><td>回款路径</td><td>项目方确认后测算</td><td>无法闭环</td><td>多买方分散</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr></tbody></table>
+<table><thead><tr><th>变量</th><th>下行情景</th><th>基准</th><th>上行情景</th><th>影响</th></tr></thead><tbody><tr><td>配额可用性</td><td>不可用</td><td>单次可用</td><td>可重复使用</td><td>决定项目是否成立</td></tr><tr><td>价格折扣</td><td>折扣不足</td><td>待确认</td><td>形成套利空间</td><td>决定毛利</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="risks">
+<h2 class="section-title"><span class="section-num">九</span>关键风险与缓释</h2>
+<p class="section-sub">RISK MATRIX · 关键风险与缓释措施</p>
+<table class="risk-matrix-table"><thead><tr><th>级别</th><th>风险</th><th>证据</th><th>缓释措施</th></tr></thead><tbody><tr><td><span class="risk-level risk-level-high">高</span></td><td><strong>配额、交易政策和数字口岸接入路径无法确认，导致换货交付平台无法落地</strong><div class="risk-meta">R-001 · 执行可行性</div></td><td>当前材料只提出以换货交付平台为研究方向，未提供可执行政策文件或平台接入证明 <span class="tag tag-unconfirmed">⚪ 待确认</span> <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td><td>要求项目方提供配额/交易政策依据、平台接入说明和过往成交样本<div class="risk-meta">责任方：项目方；触发：若无法提供书面证明，项目降级为观察</div></td></tr><tr><td><span class="risk-level risk-level-medium">中</span></td><td><strong>卖方介绍材料、价格指引和权属文件缺失，无法判断资产边界和交易价格合理性</strong><div class="risk-meta">R-002 · 资料完整性</div></td><td>当前仅有早期项目简介，交易对手和指引价待确认 <span class="tag tag-unconfirmed">⚪ 待确认</span> <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td><td>补齐卖方材料、价格指引、资产/权属证明后再进入回报测算<div class="risk-meta">责任方：卖方 / 项目方；触发：补齐后进入 DD checklist；未补齐则不进入 IC</div></td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="open-questions">
+<h2 class="section-title"><span class="section-num">十</span>待确认问题清单</h2>
+<p class="section-sub">OPEN QUESTIONS · 按优先级排序</p>
+<details class="oq-group" open><summary><span class="oq-title">P1 紧急 — 可执行性确认</span><span class="oq-count">2 项</span></summary><ol class="oq-list"><li class="oq-item"><span class="oq-num">①</span>项目方是否能提供配额、交易政策和数字口岸接入路径的书面证明？<span class="oq-action"> —— 影响：决定换货交付平台是否具备真实落地路径；责任方：项目方 / 平台方；下一步：索取政策依据、接入说明和过往成交样本；<span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></span></li><li class="oq-item"><span class="oq-num">②</span>拟交易标的、买方名单和价格发现路径分别是什么？<span class="oq-action"> —— 影响：决定是否能进入交易结构和回报测算；责任方：卖方 / 项目方；下一步：补充卖方介绍材料和价格指引；<span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></span></li></ol></details>
+<details class="oq-group" open><summary><span class="oq-title">P2 重要 — 尽调前置条件</span><span class="oq-count">1 项</span></summary><ol class="oq-list"><li class="oq-item"><span class="oq-num">③</span>资产或平台资源的权属、授权和使用边界是否清晰？<span class="oq-action"> —— 影响：影响法律结构、风险矩阵和交易文件路径；责任方：项目方；下一步：补充权属文件、授权文件或平台合作协议；<span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></span></li></ol></details>
+</section>
+
+<section class="block kb-panel" id="decision-framework">
+<h2 class="section-title"><span class="section-num">十一</span>决策框架</h2>
+<p class="section-sub">DECISION FRAMEWORK · 投资论点 / 增值杠杆 / 选项 / 行动</p>
+<aside class="callout info"><div class="callout-title">当前建议</div><p>当前不建议进入 IC；应先作为 Early stage 项目补齐可执行性证明和交易条款。</p><p class="callout-hint">核心原因不是市场空间不足，而是平台接入、配额/政策依据、买方和价格机制尚未形成可核实闭环。</p></aside>
+<div class="valuation-box"><p style="font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:.35rem">当前决策姿态</p><div class="big">Hold / 补资料 <span class="tag tag-analyst">🔵 AI推论</span></div><p style="font-size:.8rem;color:#4a4540;margin-top:.5rem">不是否决项目，而是把进入 IC 的前置条件收窄到 P1 可执行性证明。 </p></div>
+<h3>投资论点</h3>
+<table><thead><tr><th>论点</th><th>证据</th><th>决策意义</th><th>来源</th></tr></thead><tbody><tr><td>若数字口岸/平台接入真实，项目可能具备非标换货交付通道价值</td><td>项目方向材料中提出以换货交付平台为主要研究方向</td><td>先验证平台权利和政策依据，再讨论融资或收益</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>铜/石油货物池可以扩大交易适配性，但目前仍是待验证假设</td><td>货物池仅在项目材料中被提出，未见货权和买方证明</td><td>需要货源、买方名单和价格发现路径</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>当前资料完整度不足以支持回报测算或 IC 提案</td><td>卖方材料、价格指引、权属证明和融资条款均待补充</td><td>应以资料补齐作为下一阶段 gate</td><td><span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr></tbody></table>
+<h3>投后增值杠杆</h3>
+<table><thead><tr><th>杠杆</th><th>金额/价值</th><th>概率</th><th>时间窗口</th><th>前置条件/证据</th></tr></thead><tbody><tr><td>平台接入权验证</td><td>把线索从概念性机会推进为可执行交易路径</td><td>待确认</td><td>P1 资料补齐前</td><td>取得平台接入说明、政策依据和过往成交样本 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>买方/货源池固化</td><td>形成价格发现和回款闭环</td><td>中低</td><td>尽调早期</td><td>取得买方清单、货权证明和指引价 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></td></tr><tr><td>分阶段资金安排</td><td>降低一次性资金暴露</td><td>待测算</td><td>term sheet 前</td><td>需明确融资金额、担保、优先级和回款路径</td></tr></tbody></table>
+<h3>决策选项</h3>
+<table><thead><tr><th>选项</th><th>适用条件</th><th>收益/优点</th><th>风险/限制</th><th>行动</th></tr></thead><tbody><tr><td>A 继续观察</td><td>项目方无法提供平台/配额证明</td><td>保留线索</td><td>机会成本低</td><td>30 天后复核</td></tr><tr><td>B 条件推进</td><td>取得书面证明和价格指引</td><td>可进入 DD</td><td>仍需验证买方与回款</td><td>启动 DD checklist</td></tr><tr><td>C 暂停</td><td>交易路径无法闭环</td><td>避免资源投入</td><td>错过潜在机会</td><td>归档为观察项目</td></tr></tbody></table>
+<aside class="callout warning"><div class="callout-title">阻塞下一步决策的事项</div><ul><li><strong>平台/配额/政策依据</strong> — 未确认前无法判断换货交付是否合法、可重复、可落地 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></li><li><strong>货权、买方和价格指引</strong> — 未确认前无法进行回报测算、风险定价和融资结构设计 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></li></ul></aside>
+<div class="adv-grid"><div class="pros"><h4>支持推进的理由</h4><ul><li>存在跨境商品交易数据可作为市场参考 <span class="cite-ref"><a href="#source-U-1">[U-1]</a></span></li><li>若平台接入真实，可能形成非标交易路径</li></ul></div><div class="cons"><h4>暂停 / 降级理由</h4><ul><li>缺少可执行政策和平台证明</li><li>缺少价格、买方、权属和融资条款</li></ul></div></div>
+<h3>下一步动作</h3>
+<table><thead><tr><th>下一步</th><th>负责人</th><th>截止/窗口</th><th>触发条件</th></tr></thead><tbody><tr><td>索取平台接入证明、配额/政策依据和过往成交样本</td><td>项目方</td><td>下一轮会议前</td><td>P1 问题未解前不进入 IC</td></tr><tr><td>补齐卖方材料、价格指引和权属文件</td><td>卖方/项目方</td><td>资料包 v2 前</td><td>资料齐备后重算成熟度</td></tr><tr><td>形成一页式交易路径 memo：货源、平台、买方、回款、融资五段闭环</td><td>内部分析</td><td>收到 P1 资料后 3 个工作日</td><td>决定是否进入 DD checklist</td></tr></tbody></table>
+</section>
+
+    <!-- ═══════════════════════════════════════════════════
+         APPENDIX A — 来源索引 (omit entire section if empty)
+    ════════════════════════════════════════════════════ -->
+    <section class="block kb-panel" id="source-index">
+<h2 class="section-title"><span class="section-num">A</span>附录 A · 来源索引</h2>
+<table><thead><tr><th>ID</th><th>类型</th><th>标题</th><th>摘录</th></tr></thead><tbody><tr><td id="source-U-1">U-1</td><td>用户上传</td><td>示例项目简介.pdf</td><td>用户上传材料中提到项目仍处于早期沟通阶段，交易对手和指引价待确认。</td></tr></tbody></table>
+</section>
+
+    <!-- ═══════════════════════════════════════════════════
+         APPENDIX B — 术语表 (omit entire section if empty)
+    ════════════════════════════════════════════════════ -->
+    <section class="block kb-panel" id="glossary">
+<h2 class="section-title"><span class="section-num">B</span>附录 B · 术语表</h2>
+<table><thead><tr><th>术语</th><th>解释</th><th>上下文</th></tr></thead><tbody><tr><td><span class="glossary-term">KB-CONFIG</span></td><td>知识网络 HTML 内的展示层配置块，用于控制章节顺序、项目类型、渲染模式和重排历史。</td><td>用于 v2.8 的展示顺序控制。</td></tr><tr><td><span class="glossary-term">Factor B</span></td><td>来源多样性评分，用于衡量资料是否来自多个独立视角，而非单一文件数量。</td><td>成熟度评分。</td></tr></tbody></table>
+</section>
+
+    <!-- ═══════════════════════════════════════════════════
+         CHANGELOG — always present
+    ════════════════════════════════════════════════════ -->
+    <div class="changelog">
+      <h4>更新记录 · Changelog</h4>
+      <table>
+        <thead><tr><th>版本</th><th>时间</th><th>来源 Skill</th><th>变更内容</th></tr></thead>
+        <tbody>
+          <tr><td>v1.0</td><td>—</td><td>Codex</td><td>Initial render</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+      <p class="brand">合域 AI · Opportunistic Investments · Codex v2.8</p>
+      <p>本文档由 AI 辅助生成，仅供内部研究参考，不构成投资建议。所有数据须经独立核实后方可用于决策。</p>
+      <p style="margin-top:.5rem;color:#bbb">Generated 2026-06-15T08:57:10</p>
+    </footer>
+
+  </main>
+</div>
+
+<!-- Panel switcher + bilingual toggle JS — DO NOT MODIFY -->
+<script>
+(function(){
+  var btns = document.querySelectorAll('.kb-nav-btn');
+  var panels = document.querySelectorAll('.kb-panel');
+  function activate(id){
+    panels.forEach(function(p){ p.classList.toggle('active', p.id === id); });
+    btns.forEach(function(b){ b.classList.toggle('active', b.dataset.target === id); });
+  }
+  function show(id){
+    activate(id);
+    if (history.replaceState) history.replaceState(null, '', '#' + id);
+    window.scrollTo(0, 0);
+  }
+  function revealAnchor(anchorId){
+    var el = document.getElementById(anchorId);
+    if (!el) return false;
+    var panel = el.closest('.kb-panel');
+    if (panel) activate(panel.id);
+    if (history.replaceState) history.replaceState(null, '', '#' + anchorId);
+    var target = el.closest('tr') || el;
+    document.querySelectorAll('.anchor-highlight').forEach(function(x){ x.classList.remove('anchor-highlight'); });
+    target.classList.add('anchor-highlight');
+    setTimeout(function(){ target.scrollIntoView({behavior:'smooth', block:'center'}); }, 0);
+    return true;
+  }
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){ show(b.dataset.target); });
+  });
+  document.querySelectorAll('.cite-ref a[href^="#"], .term-ref a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(ev){
+      var id = a.getAttribute('href').slice(1);
+      if (revealAnchor(id)) ev.preventDefault();
+    });
+  });
+  var hash = (location.hash || '').replace('#','');
+  if (hash && document.getElementById(hash)) {
+    var hashed = document.getElementById(hash);
+    if (hashed.classList.contains('kb-panel')) show(hash);
+    else revealAnchor(hash);
+  }
+  var toggle = document.getElementById('lang-toggle');
+  if (toggle) {
+    toggle.style.display = 'flex';
+    toggle.querySelectorAll('.lang-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        document.body.classList.toggle('kb-en-mode', btn.dataset.lang === 'en');
+        toggle.querySelectorAll('.lang-btn').forEach(function(b){
+          b.classList.toggle('active', b.dataset.lang === btn.dataset.lang);
+          b.setAttribute('aria-pressed', b.dataset.lang === btn.dataset.lang);
+        });
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>

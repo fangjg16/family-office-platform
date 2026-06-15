@@ -6,6 +6,7 @@ import {
 import {
   buildHermesKnowledgeNetworkFileProtocol,
   buildHermesKnowledgeNetworkRequiredReads,
+  messageTouchesTimeline,
 } from "./hermes-knowledge-network";
 import { buildJfoMaterialsInstructions } from "./hermes-materials-instructions";
 import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
@@ -266,17 +267,22 @@ export function buildHermesAgentInstructions(
 
   if (intent === "knowledge_network") {
     const jobId = (ctx?.jobId ?? "").trim() || "unknown-job";
+    const userMessage = ctx?.userMessage ?? "";
+    const mode = knMode ?? "initial";
     lines.push(
-      buildHermesKnowledgeNetworkRequiredReads(),
+      buildHermesKnowledgeNetworkRequiredReads({
+        mode,
+        touchesTimeline: messageTouchesTimeline(userMessage),
+      }),
       buildHermesKnowledgeNetworkFileProtocol(
         jfoBase,
         projectId,
         userId || "system",
         jobId,
         projectTitleHint,
-        knMode ?? "initial",
+        mode,
       ),
-      "预注入摘录只供事实依据；写入 HTML 时须保留 kb-template 结构与 <!-- KB-CONFIG -->。",
+      "预注入摘录只供事实依据；写入 HTML 时须保留 assets/kb-template.html 结构与 <!-- KB-CONFIG -->。",
     );
   }
 

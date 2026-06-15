@@ -107,7 +107,7 @@ Generate a structured file index (rendered as 附录 A · 来源索引 in the KB
   - 附录 A 中的 source-ID 被其他 section 中的 <sup>[id]</sup> 引用回填
   - Gap analysis: 哪些章节缺乏来源支撑 (馈送给 gap-tracking)
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
 ## Important Notes
 
 - Preserve original filenames — never rename user files.

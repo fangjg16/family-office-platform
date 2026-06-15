@@ -112,7 +112,7 @@ Report section contents:
   - 七: Tornado chart、双变量敏感性矩阵、break-even 关键阈值、对决策影响最大的 3-5 个变量
   - 如发现某变量对项目可行性极度敏感 → 同步到 九 关键风险与缓释
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
 ## Important Notes
 
 - Sensitivity analysis is only as good as the range definitions — garbage ranges produce garbage insights.

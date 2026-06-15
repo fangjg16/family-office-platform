@@ -114,7 +114,7 @@ ls -la /opt/data/.hermes/skills/knowledge-base-generation/references/
 ls -la /opt/data/.hermes/skills/knowledge-base-generation/assets/
 ```
 
-应看到：`SKILL.md`、`kb-template.html`、`references/STYLE_GUIDE.md`、`assets/components.html` 等。
+应看到：`SKILL.md`、`assets/kb-template.html`、`references/kb-schema.md`、`assets/components.html` 等；`grep revealAnchor assets/kb-template.html` 应有输出。
 
 ### 3.4 写入 SOUL（知识网络硬性规则）
 
@@ -237,7 +237,7 @@ http://zephyr.proxy.rlwy.net:12180/
 |------|------|
 | `railway ssh` 说 container not running | Railway 里 Restart，等绿再 SSH |
 | `Permission denied` 写 kb | 用 `/opt/data/kb`，第三节 `mkdir` |
-| skill 文件 not found | 重跑 `install-jfo-skills-v25.sh`，检查 `HERMES_SKILLS_DIR` |
+| skill 文件 not found | 重跑 `install-jfo-skills-v28.sh` 或 curl-only，检查 `HERMES_SKILLS_DIR` |
 | `/api/v1/models` 404 | 测 `/v1/models` 和 `/health`，不是 `/api/v1/...` |
 | 只想看图、不急 Dashboard | 家办对话「预览 / 新标签页」即可 |
 

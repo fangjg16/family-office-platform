@@ -139,7 +139,7 @@ Maintain a running list of red flags:
 - **Section details**:
   - 十: 按工作流 (法律/财务/税务/商业/技术/环境/监管) 组织的 open-question 表；每项标注紧迫度、责任方、阻塞性
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
 ## Sector-Specific Additions
 
 Automatically add relevant items based on sector:

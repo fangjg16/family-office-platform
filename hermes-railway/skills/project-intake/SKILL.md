@@ -5,6 +5,12 @@ description: "Automatically diagnose a new project's information maturity, ident
 
 # Project Intake & Maturity Diagnosis
 
+> **v2.8 KB 交叉引用（写入 KB 时必读）**
+> - 结构：`../knowledge-base-generation/references/kb-schema.md`（11 canonical slots）
+> - 配置：`../knowledge-base-generation/references/kb-config.md`（KB-CONFIG、display-order、project-type）
+> - Slot 规则：`../knowledge-base-generation/references/slot-specific-rules.md`
+> - 模板：`../knowledge-base-generation/assets/kb-template.html`（**非**根目录 `kb-template.html`）
+
 ## Auto-trigger Conditions
 
 This skill should fire **automatically without explicit user request** whenever:
@@ -54,7 +60,7 @@ If type is ambiguous after reading available materials, ask the specific disting
 
 #### Step 2.2: Jurisdiction (triggers bilingual KB)
 
-Identify the deal's primary jurisdiction. If jurisdiction is **non-China** (overseas), set the KB to bilingual mode (zh + en with language toggle) — see `STYLE_GUIDE.md` "Bilingual Knowledge Base". For domestic Chinese deals (jurisdiction = China mainland), Chinese-only KB.
+Identify the deal's primary jurisdiction. If jurisdiction is **non-China** (overseas), set the KB to bilingual mode (zh + en with language toggle) — see `../knowledge-base-generation/references/style-guide-v2.7.md` "Bilingual Knowledge Base". For domestic Chinese deals (jurisdiction = China mainland), Chinese-only KB.
 
 Cross-border deals where the target is overseas but the buyer is Chinese: treat as overseas → bilingual.
 
@@ -87,7 +93,7 @@ If the user has already given a single-asset name, ask: "这个交易里只有 X
 A project is multi-asset if Step 2.3 identifies ≥ 2 distinct sub-assets sharing one deal vehicle. If so:
 - List every sub-asset with a short id (the asset id is reused across the whole KB).
 - For each sub-asset, note: location / scale / current state / data availability.
-- Set the KB to multi-asset rendering mode (see `STYLE_GUIDE.md` "Multi-Asset Project Rendering").
+- Set the KB to multi-asset rendering mode (see `../knowledge-base-generation/references/style-guide-v2.7.md` "Multi-Asset Project Rendering").
 - Factor A scoring in Step 3 will be per-asset per-section, then averaged.
 
 #### Step 2.5: KB-CONFIG Determination
@@ -261,7 +267,7 @@ If multiple files were uploaded, also invoke `document-reorganize` in parallel d
 - **Chat**: Markdown — intake diagnosis with two-factor scorecard, section heatmap, source breakdown, next steps
 - **KB update**: Section 一 (项目快照) populated; all 10 other sections rendered (data or 缺乏资料 callout); header carries maturity scores; changelog v1.0 entry added
 - **No standalone "intake report"** — the intake diagnosis lives in chat; the KB is the persistent artifact
-- All output conforms to `STYLE_GUIDE.md`
+- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`
 
 ## Important Notes
 

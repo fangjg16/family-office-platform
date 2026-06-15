@@ -5,7 +5,8 @@ description: "Track external events and decision points whose outcomes would mat
 
 # Decision Node Monitoring
 
-> **v0.4 change**: This skill writes rows into the **unified timeline table** in KB section 八 — it does NOT produce its own separate section or sub-blocks. Every decision node becomes one row tagged as either `推进中`, `外部依赖`, or `截止`. See `STYLE_GUIDE.md` "Unified Timeline" for the row schema. For multi-asset projects, each row also carries the `asset` attribute so users can filter the timeline by asset.
+> **v2.8**：timeline 写入须读 `../knowledge-base-generation/references/timeline-rules.md`（三区块：已发生/正在推进/未来关键节点）。KB 结构见 `../knowledge-base-generation/references/kb-schema.md`。
+> **v0.4 change**: This skill writes rows into the **unified timeline table** in KB section 八 — it does NOT produce its own separate section or sub-blocks. Every decision node becomes one row tagged as either `推进中`, `外部依赖`, or `截止`. See `../knowledge-base-generation/references/timeline-rules.md` and `../knowledge-base-generation/references/style-guide-v2.7.md` "Unified Timeline". For multi-asset projects, each row also carries the `asset` attribute so users can filter the timeline by asset.
 
 ## Workflow
 
@@ -145,7 +146,7 @@ Maintain a real-time view:
   - 每个节点带场景分支预案 (通过/部分通过/不通过)
   - 节点 resolution 后自动触发下游 section 更新 (例: 审批通过 → 二 资产构成更新)
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `STYLE_GUIDE.md`.
+- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
 ## Important Notes
 
 - Nodes are NOT the same as gaps. A gap is missing information; a node is a future event whose outcome is uncertain.

@@ -1,4 +1,4 @@
-/** 知识网络更新模式：由用户话术 + 是否已有 KB 判定（对齐 v2.7 knowledge-base-generation） */
+/** 知识网络更新模式：对齐 v2.8 knowledge-base-generation / kb-config */
 
 export type KnowledgeNetworkUpdateMode = "initial" | "incremental" | "full" | "reorder";
 
