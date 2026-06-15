@@ -1,11 +1,12 @@
 /**
- * 本地验收 v2.8 KB HTML 校验（sample-output + reorder）
+ * 本地验收 v2.8 KB HTML 校验（sample-output + reorder + 8 段式拒绝）
  * 用法：cd api-worker && npx tsx scripts/validate-kb-v28-samples.ts
  */
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  buildEightSlotInvalidFixture,
   CANONICAL_KB_SLOTS,
   validateKnowledgeNetworkHtml,
   validateSampleOutputChecks,
@@ -41,6 +42,7 @@ for (const slot of CANONICAL_KB_SLOTS) {
   report(`  slot #${slot}`, sampleChecks.checks[`slot_${slot}`] === true);
 }
 report("  revealAnchor", sampleChecks.checks.hasRevealAnchor === true);
+report("  source-index", sampleChecks.checks.hasSourceIndex === true);
 report("  citation #source-U-1", sampleChecks.checks.citationU1 === true);
 report("  appendix id=source-U-1", sampleChecks.checks.appendixU1 === true);
 
@@ -50,6 +52,12 @@ const strictSample = validateKnowledgeNetworkHtml(sample, {
 });
 report("sample-output strict initial", strictSample.ok, strictSample.error);
 
+const strictFull = validateKnowledgeNetworkHtml(sample, {
+  strict: true,
+  mode: "full",
+});
+report("sample-output strict full", strictFull.ok, strictFull.error);
+
 const reordered = read("sample-output-reordered.html");
 const reorderResult = validateKnowledgeNetworkHtml(reordered, {
   strict: true,
@@ -57,6 +65,27 @@ const reorderResult = validateKnowledgeNetworkHtml(reordered, {
   previousHtml: sample,
 });
 report("sample-output-reordered reorder vs original", reorderResult.ok, reorderResult.error);
+
+const eightSlot = buildEightSlotInvalidFixture(sample);
+const eightSlotResult = validateKnowledgeNetworkHtml(eightSlot, {
+  strict: true,
+  mode: "initial",
+});
+report(
+  "8-slot invalid fixture must be REJECTED",
+  !eightSlotResult.ok,
+  eightSlotResult.ok ? "unexpected pass" : eightSlotResult.error,
+);
+const expectMissing = ["capital-structure", "comps", "timeline"].every((s) =>
+  (eightSlotResult.error ?? "").includes(s),
+);
+report("  rejection mentions missing slots", expectMissing, eightSlotResult.error);
+
+const oldPreview = validateKnowledgeNetworkHtml(eightSlot, {
+  strict: false,
+  mode: "initial",
+});
+report("8-slot invalid with strict:false (preview) still viewable", oldPreview.ok);
 
 const assetsTemplate = readFileSync(
   join(

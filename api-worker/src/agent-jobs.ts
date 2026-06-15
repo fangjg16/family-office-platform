@@ -179,11 +179,16 @@ async function finalizeKnowledgeNetworkJobResult(
   // 路径 B：从 Hermes 回复提取 HTML 写入（PUT 失败时的主交付）
   const extracted = extractKnHtmlFromResult(result);
   if (extracted) {
+    const knMode =
+      row.skill_intent === "knowledge_network"
+        ? await resolveKnModeForJob(env, row)
+        : "incremental";
     const written = await writeKnowledgeNetworkFromHtml(
       env,
       row,
       extracted,
       "从 Hermes 回复提取 HTML",
+      knMode,
     );
     if (written?.meta) {
       const note = `\n\n已写入**项目知识网络 v${formatKnVersionDisplay(written.meta.version, written.meta.versionLabel)}**${knowledgeNetworkExtractFallbackNote(env)}`;
