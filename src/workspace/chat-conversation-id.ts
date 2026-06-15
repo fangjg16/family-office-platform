@@ -4,10 +4,15 @@ import type { LiveChatMessage } from "@/workspace/chat-types";
 export function inferProjectIdFromConversationId(
   conversationId: string,
 ): string | null {
-  const mainMatch = /^(.+)-main$/u.exec(conversationId);
+  const trimmed = conversationId.trim();
+  if (!trimmed) return null;
+  const mainMatch = /^(.+)-main$/u.exec(trimmed);
   if (mainMatch?.[1]) return mainMatch[1];
-  const blankMatch = /^(.+)-blank-/u.exec(conversationId);
+  const blankMatch = /^(.+)-blank-/u.exec(trimmed);
   if (blankMatch?.[1]) return blankMatch[1];
+  if (/^proj-[a-f0-9]+$/u.test(trimmed)) return trimmed;
+  const projPrefix = /^(proj-[a-f0-9]+)-/u.exec(trimmed);
+  if (projPrefix?.[1]) return projPrefix[1];
   return null;
 }
 

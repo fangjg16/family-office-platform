@@ -138,7 +138,9 @@ function ensureProjectMainThreads(
   for (const c of convs) projectIds.add(c.projectId);
   for (const [convId, msgs] of Object.entries(messagesByConversation)) {
     if (!Array.isArray(msgs) || msgs.length === 0) continue;
-    const pid = inferProjectIdFromConvId(convId);
+    const pid =
+      inferProjectIdFromConversationId(convId, Array.from(byId.values())) ??
+      inferProjectIdFromConvId(convId);
     if (pid) projectIds.add(pid);
   }
   if (focusProjectId) projectIds.add(focusProjectId);
@@ -150,6 +152,16 @@ function ensureProjectMainThreads(
     if (built) byId.set(mainId, built);
   }
   return Array.from(byId.values());
+}
+
+/** 侧栏：合并元数据 + 所有有消息的 conversationId 键（避免 D1 有消息但本地列表遗漏） */
+function buildSidebarConversationList(
+  convs: SessionConversation[],
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+  focusProjectId?: string,
+): SessionConversation[] {
+  const withMain = ensureProjectMainThreads(convs, messagesByConversation, focusProjectId);
+  return reconcileConversationsWithMessages(withMain, messagesByConversation);
 }
 
 function pruneEmptyLiveConversations(
@@ -1817,7 +1829,7 @@ export default function ConversationCenter() {
   const sidebarGroups = useMemo(
     () =>
       groupSidebarByProject(
-        ensureProjectMainThreads(
+        buildSidebarConversationList(
           conversations,
           liveMessagesByConversation,
           projectId,
@@ -1825,7 +1837,7 @@ export default function ConversationCenter() {
         liveMessagesByConversation,
         isLiveAiMode,
       ),
-    [conversations, liveMessagesByConversation, isLiveAiMode, projectId],
+    [conversations, liveMessagesByConversation, isLiveAiMode, projectId, apiProjectsTick],
   );
 
   const [collapsedProjectIds, setCollapsedProjectIds] = useState<Set<string>>(
@@ -1917,6 +1929,22 @@ export default function ConversationCenter() {
       cancelled = true;
     };
   }, [userId, isLiveAiMode]);
+
+  /** 项目列表就绪后，从 messages 键补全会话元数据（首屏 API 未返回时 infer 可能失败） */
+  useEffect(() => {
+    if (!chatSyncReady) return;
+    setConversations((prev) => {
+      const next = mergeConversationsForBootstrap(
+        prev,
+        liveMessagesByConversation,
+        isLiveAiMode,
+        projectId,
+      );
+      const prevIds = new Set(prev.map((c) => c.id));
+      if (next.length === prev.length && next.every((c) => prevIds.has(c.id))) return prev;
+      return next;
+    });
+  }, [apiProjectsTick, chatSyncReady, isLiveAiMode, projectId]);
 
   /** 裸 `/chat/:projectId` 时，自动跳到带 conversationId 的 canonical URL */
   useEffect(() => {
