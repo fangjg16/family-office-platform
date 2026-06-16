@@ -25,7 +25,7 @@ Establish evidence first, then analyze, then render or update HTML. Do not analy
 8. `assets/kb-template.html` — **only** shell; do not rewrite CSS/JS
 9. `assets/components.html` — **visual/debug only** (not default generation)
 
-**Optional (visual / debug only):** `references/style-guide-v2.7.md`  
+**Optional (visual / debug only):** `references/visual-style-guide.md`  
 **Do NOT read on each run:** `examples-kb-data.json`, `scripts/`  
 **Do NOT use:** `skills_reference.md`, root `kb-template.html`, old `STYLE_GUIDE.md`, `README-hermes.md`
 
@@ -37,7 +37,7 @@ Establish evidence first, then analyze, then render or update HTML. Do not analy
 | Incremental slot update | above + current KB HTML | 当前 KB + 点名 slot 相关资料 |
 | Reorder display order | **kb-config + SKILL** + current KB HTML | **禁止**拉项目资料全文 |
 | Timeline slot | + timeline-rules | 按需 |
-| Visual / CSS debug only | + style-guide-v2.7, components.html | 非默认 |
+| Visual / CSS debug only | + visual-style-guide, components.html | 非默认 |
 
 ## 11 Canonical Slots (data layer — never rename)
 

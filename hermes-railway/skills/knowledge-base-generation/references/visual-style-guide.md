@@ -1,6 +1,6 @@
-# Report Style Guide
+# Report Style Guide · Portable KB Visual Style
 
-description: Visual and typographic specification for the six Layer Report HTML documents. All skills that produce report output must conform to this guide. This file is the single source of truth for colors, typography, spacing, component patterns, and interaction behavior.
+description: Visual and typographic specification for Project Knowledge Base (项目知识网络) HTML output. v2.8 runtime reference — not a legacy v2.7 skill artifact. All skills that produce KB/report output should conform when doing visual/CSS debug. Single source of truth for colors, typography, spacing, component patterns, and interaction behavior.
 
 ---
 

@@ -110,7 +110,7 @@ Flag any of the following:
   - 三: 持股架构图 (HTML/SVG)、实控人识别、关联方网络、律师/会计师/估值师名单
   - 九: 任何 critical/high 风险 (司法记录、声誉风险、关联交易疑点) 同步到风险矩阵章节
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
+- All output conforms to `../knowledge-base-generation/references/visual-style-guide.md`.
 ## Important Notes
 
 - Background checks must respect privacy laws — use only publicly available information and lawful inquiry methods.

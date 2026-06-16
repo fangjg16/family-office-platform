@@ -1,5 +1,7 @@
 /** 与 api-worker/src/knowledge-network-intent.ts 保持同步 */
 
+import { isKnowledgeNetworkSlotDeliveryIntent } from "@/lib/knowledge-network-slot-aliases";
+
 const KN_TOPIC_RE =
   /知识网络|知识底座|knowledge\s*base|knowledge\s*network|项目知识网络/u;
 
@@ -12,7 +14,8 @@ const KN_READ_RE =
 export function isKnowledgeNetworkDeliveryIntent(message: string): boolean {
   const m = message.trim();
   if (!m) return false;
-  return KNOWLEDGE_NETWORK_DELIVERY_RE.test(m);
+  if (KNOWLEDGE_NETWORK_DELIVERY_RE.test(m)) return true;
+  return isKnowledgeNetworkSlotDeliveryIntent(m);
 }
 
 export function isKnowledgeNetworkReadQuery(message: string): boolean {

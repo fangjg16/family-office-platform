@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Railway 纯 curl 安装 v2.8（不走 hermes skills install 交互）
 # export HERMES_HOME=/opt/data
-# export HERMES_SKILLS_DIR=/opt/data/.hermes/skills
+# export HERMES_SKILLS_DIR=/opt/data/skills   # Hermes Gateway 实际读取路径（非 .hermes/skills）
 # bash install-jfo-skills-railway-curl-only.sh
 
 set -euo pipefail
 
 RAW="${JFO_SKILLS_RAW_BASE:-https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway}"
-SKILLS_ROOT="${HERMES_SKILLS_DIR:-/opt/data/.hermes/skills}"
+SKILLS_ROOT="${HERMES_SKILLS_DIR:-/opt/data/skills}"
 KB="$SKILLS_ROOT/knowledge-base-generation"
 
 echo "=== JFO skills (curl-only, Railway, v2.8) ==="
@@ -29,7 +29,7 @@ curl_kb "SKILL.md" "$KB/SKILL.md"
 curl_kb "examples-kb-data.json" "$KB/examples-kb-data.json"
 curl_kb "assets/kb-template.html" "$KB/assets/kb-template.html"
 curl_kb "assets/components.html" "$KB/assets/components.html"
-for ref in kb-schema.md kb-config.md content-rules.md slot-specific-rules.md slot-rendering-rules.md timeline-rules.md style-guide-v2.7.md handoff-schema.md; do
+for ref in kb-schema.md kb-config.md content-rules.md slot-specific-rules.md slot-rendering-rules.md timeline-rules.md visual-style-guide.md handoff-schema.md; do
   curl_kb "references/$ref" "$KB/references/$ref"
 done
 curl_kb "kb-template.html" "$KB/kb-template.html" 2>/dev/null || true

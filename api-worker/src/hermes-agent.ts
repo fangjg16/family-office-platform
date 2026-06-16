@@ -9,6 +9,7 @@ import {
   isVisualDebugKnRequest,
   messageTouchesTimeline,
 } from "./hermes-knowledge-network";
+import { buildKnowledgeNetworkSlotResolutionLines } from "./knowledge-network-slot-aliases";
 import { buildJfoMaterialsInstructions } from "./hermes-materials-instructions";
 import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
@@ -278,6 +279,7 @@ export function buildHermesAgentInstructions(
         includeStyleGuide: visualDebug,
         includeComponents: visualDebug,
       }),
+      buildKnowledgeNetworkSlotResolutionLines(userMessage),
       buildHermesKnowledgeNetworkFileProtocol(
         jfoBase,
         projectId,

@@ -81,40 +81,83 @@ Railway 卷一般挂在 **`/opt/data`**。
 
 ```bash
 export HERMES_HOME=/opt/data
-export HERMES_SKILLS_DIR=/opt/data/.hermes/skills
-mkdir -p /opt/data/.hermes/skills /opt/data/kb /opt/data/logs
-ls -la /opt/data/.hermes/skills
+export HERMES_SKILLS_DIR=/opt/data/skills   # ⚠️ Hermes Gateway 实际读取此路径，不是 .hermes/skills
+mkdir -p /opt/data/skills /opt/data/kb /opt/data/logs
+ls -la /opt/data/skills
 ```
 
-### 3.3 安装合域 skills（GitHub Raw）
+> **路径教训（2026-06）**：安装到 `/opt/data/.hermes/skills` 时 `skill_view` 会 404（`references/kb-schema.md` not found），导致 60 轮 tool 迭代耗尽。必须以 **`/opt/data/skills`** 为 skills 根目录。
 
-**推荐（Railway，无交互、无安全扫描误拦）：**
+### 3.3 安装合域 skills v2.8（GitHub Raw · **仅 curl-only**）
+
+**Railway 上必须用 curl-only v28 脚本**（不走 `hermes skills install` 交互）：
 
 ```bash
 curl -fsSL "https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/install-jfo-skills-railway-curl-only.sh" -o /tmp/install-curl-only.sh
-HERMES_HOME=/opt/data HERMES_SKILLS_DIR=/opt/data/.hermes/skills bash /tmp/install-curl-only.sh
+HERMES_HOME=/opt/data HERMES_SKILLS_DIR=/opt/data/skills bash /tmp/install-curl-only.sh
 ```
 
-若你已在跑旧脚本 `install-jfo-skills-v25.sh` 且卡在 `Uninstall` / `Pick a category` / `BLOCKED exfiltration`：按 **Ctrl+C** 停掉，改跑上面 **curl-only** 脚本。
-
-旧脚本 `install-jfo-skills-v25.sh` 会调用 `hermes skills install`，可能：
+若你已在跑 `install-jfo-skills-v28.sh` / `install-jfo-skills-v25.sh` 且卡在 `Uninstall` / `Pick a category` / `BLOCKED exfiltration`：按 **Ctrl+C** 停掉，改跑上面 **curl-only** 脚本。
 
 | 现象 | 原因 |
 |------|------|
 | `Uninstall 'xxx'?` | CLI 先卸旧 skill |
-| `Pick a category` | CLI 问分类；**直接回车** |
-| `jfo-r2-materials` **BLOCKED exfiltration** | 安全扫描把 SKILL 里的 `curl` 示例当成危险；**用 curl-only 脚本绕过** |
-| `OK: hermes directory install` 但前面有 Fetch Error | CLI 误报成功，**仍以 curl-only 校验文件是否存在** |
+| `Pick a category` | CLI 问分类；SSH 非交互会卡死 |
+| `jfo-r2-materials` **BLOCKED exfiltration** | 安全扫描误拦；**用 curl-only 绕过** |
+| `skill_view` → `kb-schema.md not found` | skills 装错目录（`.hermes/skills`）或仍是 v2.7 单文件旧 skill |
 
-验收（必须有这些文件）：
+**安装后必须验收**（路径均为 `/opt/data/skills/knowledge-base-generation/`）：
 
 ```bash
-ls -la /opt/data/.hermes/skills/knowledge-base-generation/
-ls -la /opt/data/.hermes/skills/knowledge-base-generation/references/
-ls -la /opt/data/.hermes/skills/knowledge-base-generation/assets/
+KB=/opt/data/skills/knowledge-base-generation
+test -f "$KB/references/kb-schema.md" && echo KB_SCHEMA_OK || echo KB_SCHEMA_MISSING
+test -f "$KB/assets/kb-template.html" && echo TEMPLATE_OK || echo TEMPLATE_MISSING
+grep -c revealAnchor "$KB/assets/kb-template.html"   # 应 ≥ 1
+ls -la "$KB/references/" "$KB/assets/"
+wc -c "$KB/SKILL.md"   # v2.8 整目录版约数 KB～数十 KB，勿用 43KB 旧单文件
 ```
 
-应看到：`SKILL.md`、`assets/kb-template.html`、`references/kb-schema.md`、`assets/components.html` 等；`grep revealAnchor assets/kb-template.html` 应有输出。
+应看到：`SKILL.md`、`assets/kb-template.html`、`references/kb-schema.md`、`references/kb-config.md`、`references/visual-style-guide.md`（视觉调试可选）等。
+
+**禁止**再使用 legacy 归档：`reference/skills_reference.md`、`reference/STYLE_GUIDE.md`、根目录残缺 `kb-template.html` 作运行入口。运行时视觉规范见 `references/visual-style-guide.md`（非旧 `style-guide-v2.7.md`）。
+
+### 3.3.1 安装后自检（必做）
+
+| 路径 | 用途 |
+|------|------|
+| **`/opt/data/skills`** | ✅ **正式 skills 根目录**（Hermes Gateway 运行读取） |
+| **`/opt/data/.hermes/skills`** | ❌ **不再作为运行路径**（历史误装；应已重命名为 `skills_deprecated_YYYYMMDD`） |
+
+三条命令须**全部通过**（退出码 0）；另建议确认 `references/visual-style-guide.md` 存在（旧名 `style-guide-v2.7.md` 已废弃）：
+
+```bash
+test -f /opt/data/skills/knowledge-base-generation/references/kb-schema.md
+test -f /opt/data/skills/knowledge-base-generation/references/visual-style-guide.md
+test -f /opt/data/skills/knowledge-base-generation/assets/kb-template.html
+grep -q revealAnchor /opt/data/skills/knowledge-base-generation/assets/kb-template.html
+```
+
+可选：合并为一条并打印结果：
+
+```bash
+test -f /opt/data/skills/knowledge-base-generation/references/kb-schema.md && \
+test -f /opt/data/skills/knowledge-base-generation/references/visual-style-guide.md && \
+test -f /opt/data/skills/knowledge-base-generation/assets/kb-template.html && \
+grep -q revealAnchor /opt/data/skills/knowledge-base-generation/assets/kb-template.html && \
+echo "SKILLS_SELF_CHECK_OK"
+```
+
+若曾误装到 `/opt/data/.hermes/skills`，**不要删除正式路径**，只隔离旧副本：
+
+```bash
+# 先确认正式路径 OK（见上三条 test）
+test ! -d /opt/data/.hermes/skills || \
+  mv /opt/data/.hermes/skills /opt/data/.hermes/skills_deprecated_$(date +%Y%m%d)
+# 写入说明，避免后续维护误用
+# 见 hermes-railway/README_DEPRECATED-skills-path.md
+```
+
+当前生产环境（2026-06-03）：旧副本已重命名为 `/opt/data/.hermes/skills_deprecated_20260603`，并写入 `/opt/data/.hermes/README_DEPRECATED`。
 
 ### 3.4 写入 SOUL（知识网络硬性规则）
 
@@ -237,7 +280,8 @@ http://zephyr.proxy.rlwy.net:12180/
 |------|------|
 | `railway ssh` 说 container not running | Railway 里 Restart，等绿再 SSH |
 | `Permission denied` 写 kb | 用 `/opt/data/kb`，第三节 `mkdir` |
-| skill 文件 not found | 重跑 `install-jfo-skills-v28.sh` 或 curl-only，检查 `HERMES_SKILLS_DIR` |
+| skill 文件 not found / `kb-schema.md` 404 | 确认 `HERMES_SKILLS_DIR=/opt/data/skills`（非 `.hermes/skills`），重跑 **curl-only v28**，跑第三节验收命令 |
+| job 卡 60 轮 iteration | 多为 skills 路径错误或 PUT curl 引号错误；查 Railway 日志 `skill_view returned error` |
 | `/api/v1/models` 404 | 测 `/v1/models` 和 `/health`，不是 `/api/v1/...` |
 | 只想看图、不急 Dashboard | 家办对话「预览 / 新标签页」即可 |
 

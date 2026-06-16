@@ -5,7 +5,7 @@ import {
 
 const banned = [
   "components.html",
-  "style-guide-v2.7.md",
+  "visual-style-guide.md",
   "examples-kb-data.json",
   "scripts/",
 ];

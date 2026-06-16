@@ -6,7 +6,21 @@
 
 合域 **v2.8** 的 16 个 skill + 家办桥接 `jfo-r2-materials` 已放在 `hermes-railway/skills/`。  
 `knowledge-base-generation` 为**整目录**（含 `assets/kb-template.html`、`KB-CONFIG`、`assets/components.html`、`references/kb-schema.md` 等）。  
-安装见 **[INSTALL-SKILLS-FROM-GITHUB.md](./INSTALL-SKILLS-FROM-GITHUB.md)** 或容器内 **`install-jfo-skills-v28.sh`**；SOUL 见 **[SOUL-JFO-KB.md](./SOUL-JFO-KB.md)**。
+**Railway 生产环境**：必须用 **`install-jfo-skills-railway-curl-only.sh`**（curl-only v2.8），skills 根路径 **`/opt/data/skills`**（Hermes Gateway 实际读取路径，**不是** `/opt/data/.hermes/skills`）。
+
+**安装后自检（三条须全部通过）：**
+
+```bash
+test -f /opt/data/skills/knowledge-base-generation/references/kb-schema.md
+test -f /opt/data/skills/knowledge-base-generation/assets/kb-template.html
+grep -q revealAnchor /opt/data/skills/knowledge-base-generation/assets/kb-template.html
+```
+
+`/opt/data/.hermes/skills` 为历史误装路径，**不再作为运行路径**；见 [README_DEPRECATED-skills-path.md](./README_DEPRECATED-skills-path.md)。
+
+详见 **[INSTALL-SKILLS-FROM-GITHUB.md](./INSTALL-SKILLS-FROM-GITHUB.md)**、`docs/HERMES-RAILWAY-SSH-SETUP.md`；SOUL 见 **[SOUL-JFO-KB.md](./SOUL-JFO-KB.md)**。
+
+勿用 `install-jfo-skills-v28.sh` 在 Railway SSH 非交互环境（会卡在 `Pick a category`）。勿再引用 v2.7 `reference/skills_reference.md`。
 
 **运行时模板路径**：`knowledge-base-generation/assets/kb-template.html`（根目录 `kb-template.html` 仅为 deprecated 占位，勿作入口）。
 

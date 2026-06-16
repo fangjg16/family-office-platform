@@ -67,7 +67,7 @@ For each detected term:
 
 ### Step 3: Insert Tooltip-Enabled Term Reference
 
-> **v0.4 change**: numeric footnote markers (¹³) are deprecated. Use a single asterisk `*` as the marker for every glossary term. The marker is **both clickable** (jumps to 附录 B) **and hoverable** (shows definition preview inline). See `../knowledge-base-generation/references/style-guide-v2.7.md` "Tooltip-Enabled Citations and Glossary".
+> **v0.4 change**: numeric footnote markers (¹³) are deprecated. Use a single asterisk `*` as the marker for every glossary term. The marker is **both clickable** (jumps to 附录 B) **and hoverable** (shows definition preview inline). See `../knowledge-base-generation/references/visual-style-guide.md` "Tooltip-Enabled Citations and Glossary".
 
 Wrap the first occurrence in the body:
 

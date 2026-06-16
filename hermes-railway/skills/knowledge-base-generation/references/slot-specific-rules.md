@@ -1,6 +1,6 @@
 # Slot-Specific Rules
 
-Use this file for full KB generation, major refreshes, or when filling a specific canonical slot. These are compressed v2.7 coverage requirements, not a generic depth checklist.
+Use this file for full KB generation, major refreshes, or when filling a specific canonical slot. These are compressed per-slot coverage requirements (portable KB visual style), not a generic depth checklist.
 
 General rule: do not invent coverage. If a required item is missing, render a specific gap or stub that says what source can answer it and what analysis it unlocks.
 
@@ -54,7 +54,7 @@ Must render as a risk matrix, not loose prose. Each row must include:
 - mitigation measure or mitigation gap;
 - owner/controller, trigger, and affected value driver where known.
 
-Preserve v2.7 density: the reader should see "级别 / 风险 / 证据 / 缓释措施" in one scan. Avoid generic risk labels such as "market risk" unless tied to a concrete mechanism, consequence, and mitigation.
+Preserve established KB information density: the reader should see "级别 / 风险 / 证据 / 缓释措施" in one scan. Avoid generic risk labels such as "market risk" unless tied to a concrete mechanism, consequence, and mitigation.
 
 ## `open-questions` - 待确认问题清单
 
@@ -66,7 +66,7 @@ Must render as prioritized question groups, not a flat missing-data callout. Gro
 - status if partially answered;
 - next action.
 
-Preserve v2.7 density: each group should display its count and keep the original question wording when user/meeting questions exist. Missing data should be operational, not vague.
+Preserve established KB information density: each group should display its count and keep the original question wording when user/meeting questions exist. Missing data should be operational, not vague.
 
 ## `decision-framework` - 决策框架
 

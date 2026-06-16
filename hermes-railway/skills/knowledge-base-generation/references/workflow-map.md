@@ -1,6 +1,6 @@
 ﻿# Workflow Map
 
-This file maps the original 16 v2.7 skills to Codex v2.8 references. Load only what the task needs.
+This file maps the original legacy skill set to Codex v2.8 references. Load only what the task needs.
 
 | Original skill | Reference |
 |---|---|

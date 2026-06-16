@@ -11,4 +11,4 @@ v2.8 唯一真相源：
 - `assets/kb-template.html`（**正式模板路径**）
 - `assets/components.html`
 
-视觉调试可选：`references/style-guide-v2.7.md`（在 KB skill 目录内，非本 `reference/` 目录）。
+视觉调试可选：`references/visual-style-guide.md`（在 KB skill 目录内，非本 `reference/` 目录）。

@@ -42,7 +42,7 @@
 
 **仅 visual/debug 时（非每次）**
 
-- `…/references/style-guide-v2.7.md`
+- `…/references/visual-style-guide.md`
 
 **禁止作为运行依据**
 

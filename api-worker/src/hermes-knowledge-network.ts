@@ -231,7 +231,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
       "",
       "重排模式：必须先 GET 当前 KB HTML；**禁止** read_file 项目资料包/session 全文。",
       "仅更新 <!-- KB-CONFIG -->、nav 顺序、各 section <h2> 编号；禁止改内容面板。",
-      "**禁止** read_file style-guide-v2.7.md、components.html、examples-kb-data.json。",
+      "**禁止** read_file visual-style-guide.md、components.html、examples-kb-data.json。",
     );
     return lines.join("\n");
   }
@@ -258,7 +258,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     lines.push(readLine(n++, "assets/components.html"));
   }
   if (includeStyleGuide) {
-    lines.push(readLine(n++, "references/style-guide-v2.7.md"));
+    lines.push(readLine(n++, "references/visual-style-guide.md"));
   }
 
   lines.push(
@@ -270,7 +270,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     "- **timeline** 仅写项目推进节点；每条候选先过 eligibility gate（scope / timelineEligible / reason）；行业/市场/政策背景写 comps/risks/decision-framework，不得填充 timeline。",
     "- **禁止** skills_reference.md、根目录 kb-template.html、旧 STYLE_GUIDE.md。",
     "- **禁止**每次 read_file examples-kb-data.json、scripts/（仅本地开发调试）。",
-    "- 非视觉调试任务：**不要** read_file style-guide-v2.7.md / components.html（版式以 kb-template 为准）。",
+    "- 非视觉调试任务：**不要** read_file visual-style-guide.md / components.html（版式以 kb-template 为准）。",
   );
 
   if (mode === "full" || mode === "initial") {
@@ -282,9 +282,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
   return lines.join("\n");
 }
 
-export function messageTouchesTimeline(message: string): boolean {
-  return /timeline|时间轴|#timeline|节点监控|未来关键节点|项目时间轴/i.test(message);
-}
+export { messageTouchesTimeline } from "./knowledge-network-slot-aliases";
 
 function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
   modeLine: string;

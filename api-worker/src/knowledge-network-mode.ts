@@ -1,3 +1,5 @@
+import { isKnowledgeNetworkReorderIntent } from "./knowledge-network-slot-aliases";
+
 /** 知识网络更新模式：对齐 v2.8 knowledge-base-generation / kb-config */
 
 export type KnowledgeNetworkUpdateMode = "initial" | "incremental" | "full" | "reorder";
@@ -5,17 +7,13 @@ export type KnowledgeNetworkUpdateMode = "initial" | "incremental" | "full" | "r
 const FULL_REGENERATE_RE =
   /全量重做|完整重做|从零生成|重新生成|全部重做|整页重做|重做知识网络|regenerate\s+from\s+scratch|full\s+rebuild|rebuild\s+from\s+scratch|scratch\s+build/u;
 
-/** 轻量重排：只改 KB-CONFIG display-order + nav + 章节编号，不重写内容面板 */
-const REORDER_DISPLAY_ORDER_RE =
-  /调整展示顺序|调整知识网络顺序|重排(?:章节|板块|顺序)|(?:章节|板块).{0,8}重排|展示顺序|章节顺序|章节排列|display[\s-]*order|reset\s+display\s+order|把.{0,32}移到.{0,32}(?:前面|之后|后面|前)|把.{0,32}放到.{0,32}(?:前面|之后|后面|前)|将.{0,32}移到|将.{0,32}提前/u;
-
 export function detectKnowledgeNetworkUpdateMode(
   message: string,
   hasExisting = false,
 ): KnowledgeNetworkUpdateMode {
   const m = message.trim();
   if (FULL_REGENERATE_RE.test(m)) return "full";
-  if (REORDER_DISPLAY_ORDER_RE.test(m)) return "reorder";
+  if (isKnowledgeNetworkReorderIntent(m)) return "reorder";
   if (!hasExisting) return "initial";
   if (!m) return "incremental";
   return "incremental";

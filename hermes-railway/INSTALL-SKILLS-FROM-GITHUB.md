@@ -53,24 +53,33 @@ curl -fsSL "https://raw.githubusercontent.com/fangjg16/family-office-platform/ma
 bash /tmp/install-jfo-skills-v28.sh
 ```
 
-Railway 卷环境（无 hermes CLI 交互）可用：
+Railway 卷环境（无 hermes CLI 交互）**必须**用 curl-only，且装到 **`/opt/data/skills`**：
 
 ```bash
 export HERMES_HOME=/opt/data
-export HERMES_SKILLS_DIR=/opt/data/.hermes/skills
+export HERMES_SKILLS_DIR=/opt/data/skills
 curl -fsSL "https://raw.githubusercontent.com/fangjg16/family-office-platform/main/hermes-railway/install-jfo-skills-railway-curl-only.sh" -o /tmp/install.sh
 bash /tmp/install.sh
-ln -sfn /opt/data/.hermes /root/.hermes   # 若 Hermes 读 ~/.hermes
 ```
 
-手动确认 KB 目录：
+**安装后自检（正式路径 `/opt/data/skills`，不是 `/opt/data/.hermes/skills`）：**
 
 ```bash
-ls -la ~/.hermes/skills/knowledge-base-generation/
+test -f /opt/data/skills/knowledge-base-generation/references/kb-schema.md
+test -f /opt/data/skills/knowledge-base-generation/assets/kb-template.html
+grep -q revealAnchor /opt/data/skills/knowledge-base-generation/assets/kb-template.html && echo SKILLS_SELF_CHECK_OK
+```
+
+若存在误装的 `/opt/data/.hermes/skills`，重命名为 `skills_deprecated_YYYYMMDD` 并见 [README_DEPRECATED-skills-path.md](./README_DEPRECATED-skills-path.md)。
+
+手动确认 KB 目录（路径均为 `/opt/data/skills/...`）：
+
+```bash
+ls -la /opt/data/skills/knowledge-base-generation/
 # 须有：SKILL.md  assets/kb-template.html  assets/components.html
 #       references/kb-schema.md  kb-config.md  slot-specific-rules.md
 #       slot-rendering-rules.md  timeline-rules.md
-grep revealAnchor ~/.hermes/skills/knowledge-base-generation/assets/kb-template.html
+grep revealAnchor /opt/data/skills/knowledge-base-generation/assets/kb-template.html
 ```
 
 **禁止**对 `knowledge-base-generation` 只执行 `hermes skills install .../SKILL.md`（会丢失模板与 references）。
@@ -97,7 +106,7 @@ Worker 在知识网络任务时会按 **mode** 注入 required reads + KB-CONFIG
 | incremental | 当前 KB HTML + 上述规则（按需 slot）+ 相关资料 textUrl |
 | reorder | 当前 KB + kb-config（**不**拉项目资料全文） |
 | timeline 相关 | + timeline-rules |
-| visual/debug | style-guide-v2.7（可选） |
+| visual/debug | visual-style-guide（可选） |
 
 **勿用**：`reference/skills_reference.md`、根目录 `kb-template.html`、旧 `STYLE_GUIDE.md`、`README-hermes.md`
 
@@ -124,7 +133,7 @@ Worker 在知识网络任务时会按 **mode** 注入 required reads + KB-CONFIG
 | Raw 404 | 未 push 或分支不是 `main` |
 | 无 assets/kb-template | 用了旧版 v2.7 脚本 → 跑 `install-jfo-skills-v28.sh` |
 | Redeploy 后 skill 没了 | 无 Volume → Redeploy 后重跑安装脚本 |
-| Hermes 报 reference files don't exist | `ln -sfn /opt/data/.hermes /root/.hermes` |
+| Hermes 报 reference files don't exist | 确认 `HERMES_SKILLS_DIR=/opt/data/skills`；勿装到 `.hermes/skills`；跑第三节自检三条 `test`/`grep` |
 
 ---
 

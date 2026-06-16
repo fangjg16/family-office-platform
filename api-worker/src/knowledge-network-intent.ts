@@ -1,3 +1,4 @@
+import { isKnowledgeNetworkSlotDeliveryIntent } from "./knowledge-network-slot-aliases";
 import { formatKnVersionDisplay } from "./knowledge-network-version";
 import type { ProjectKnowledgeNetworkMeta } from "./project-knowledge-network";
 
@@ -23,7 +24,8 @@ const KN_SUMMARIZE_OR_CONTENT_RE =
 export function isKnowledgeNetworkDeliveryIntent(message: string): boolean {
   const m = message.trim();
   if (!m) return false;
-  return KNOWLEDGE_NETWORK_DELIVERY_RE.test(m);
+  if (KNOWLEDGE_NETWORK_DELIVERY_RE.test(m)) return true;
+  return isKnowledgeNetworkSlotDeliveryIntent(m);
 }
 
 export function isKnowledgeNetworkReadQuery(message: string): boolean {

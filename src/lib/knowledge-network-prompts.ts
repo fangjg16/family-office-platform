@@ -1,17 +1,20 @@
-/** 项目知识网络：对话预填话术（与 Worker detectKnowledgeNetworkUpdateMode 四类模式对齐：initial / incremental / full / reorder） */
+/** 项目知识网络：对话预填话术（与 Worker detectKnowledgeNetworkUpdateMode 四类模式对齐） */
 
-/** 进入对话后请用户在【】内写明要改/删的 slot，再发送 */
-export const KNOWLEDGE_NETWORK_INCREMENTAL_PROMPT = `请对项目知识网络进行增量更新（按 canonical slot 调整，未列明的 slot 均保持不变）。
+export const KNOWLEDGE_NETWORK_INCREMENTAL_PROMPT = `请对项目知识网络进行增量更新（按板块调整，未点名的板块均保持不变）。
 
-【本次拟修订的 slot / 锚点】
-（请在此填写，例如：仅更新 #timeline；或更新 #returns 投资人回报假设）
+【本次拟修订的板块】
+（请填写要更新的板块，例如：项目时间轴 / #timeline；关键风险 / #risks；投资回报 / #returns；待确认问题 / #open-questions）
+
+说明：中文板块名与 #英文锚点 等价，无需只写英文。
 
 请先读取现有 KB-CONFIG，保持 display-order 不变（除非另有重排请求）。可结合最新资料包与本对话附件。请在**同一条回复末尾**附完整更新后的 \`\`\`html 整页。`;
 
 export const KNOWLEDGE_NETWORK_REORDER_PROMPT = `请调整项目知识网络的展示顺序（轻量重排，不重写内容）。
 
 【期望顺序】
-（请在此填写，例如：把 #returns 移到 #comps 前面；或按 real-estate-dev 默认顺序重置）
+（请用中文或锚点描述，例如：把项目时间轴移到法律结构后面；把市场对标放到业务模式后；把决策框架提前到第二；或写「重排章节顺序」）
+
+说明：可用中文板块名（项目时间轴、市场对标、决策框架等），不必写 #timeline。
 
 执行要求：
 1. 必须先 GET 当前版 HTML。

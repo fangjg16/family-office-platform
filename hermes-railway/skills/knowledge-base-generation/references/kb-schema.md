@@ -65,19 +65,19 @@ Slot state values:
 
 ## Structured Slot Keys By Slot
 
-Prefer structured keys over freeform `html` when a section fits the default v2.7 component pattern. This keeps v2.8 from flattening detailed sections into generic prose.
+Prefer structured keys over freeform `html` when a section fits the default established KB component pattern. This keeps v2.8 from flattening detailed sections into generic prose.
 
 | Slot | Preferred structured keys | Default renderer output |
 |---|---|---|
 | `snapshot` | `facts`, `items` | key-facts table |
 | `assets` | `rows`, `assets` | asset/resource table |
 | `legal-relationships` | `entities`, `relationships`, `rows` | org chart + relationship table |
-| `business-model` | `journey`, `processFlow`, `canvas`, `revenueTree`, `valueChain`, `flywheel`, `ecosystemMap`, `valuationBox`, `topics`, `rows` | v2.7 business visualization + assumption table |
+| `business-model` | `journey`, `processFlow`, `canvas`, `revenueTree`, `valueChain`, `flywheel`, `ecosystemMap`, `valuationBox`, `topics`, `rows` | established KB business visualization + assumption table |
 | `capital-structure` | `sourcesUses`, `capitalStack`, `rows` | sources & uses table + capital stack |
 | `comps` | `rows` | comparable table with signal and caveat |
 | `returns` | `valuationBox`, `valuationBoxes`, `scenarios`, `assumptions`, `sensitivities`, `rows` | valuation box + scenario cards + assumptions/sensitivity tables |
-| `timeline` | `rows` | v2.7 dedicated timeline: 8.1/8.2 vertical items, 8.3 future-node table |
-| `risks` | `rows` | v2.7-style risk matrix |
+| `timeline` | `rows` | established KB timeline layout: 8.1/8.2 vertical items, 8.3 future-node table |
+| `risks` | `rows` | portable KB visual style risk matrix |
 | `open-questions` | `groups`, `items` | priority question cards |
 | `decision-framework` | `recommendation`, `recommendationReason`, `valuationBox`, `valuationBoxes`, `theses`, `valueLevers`, `options`, `blockers`, `pros`, `cons`, `nextActions`, `rows` | recommendation + valuation box + theses + value-add levers + options + blockers + next actions |
 
@@ -146,7 +146,7 @@ When slot `risks` is populated from structured data, prefer `rows` over freeform
 }
 ```
 
-The renderer outputs the v2.7-style `级别 / 风险 / 证据 / 缓释措施` matrix.
+The renderer outputs the portable KB visual style `级别 / 风险 / 证据 / 缓释措施` matrix.
 
 ## Open Question Groups
 
@@ -175,4 +175,4 @@ When slot `open-questions` is populated from structured data, prefer `groups` ov
 }
 ```
 
-The renderer outputs v2.7-style priority cards with item counts.
+The renderer outputs established KB priority cards with item counts.

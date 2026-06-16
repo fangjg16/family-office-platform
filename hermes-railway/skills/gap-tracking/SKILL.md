@@ -88,7 +88,7 @@ Generate a concise weekly status update:
 - **Section details**:
   - 十: Active gaps 表 (按紧迫度排序)、已解决 gaps 审计轨迹、责任人/截止日期、blocker 标记
 - All KB writes go through `knowledge-base-generation` (single source of truth — no separate layer/section HTML files).
-- All output conforms to `../knowledge-base-generation/references/style-guide-v2.7.md`.
+- All output conforms to `../knowledge-base-generation/references/visual-style-guide.md`.
 ## Important Notes
 
 - Gaps are a **living registry** — they grow as analysis deepens and shrink as information arrives.
