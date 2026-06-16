@@ -7,6 +7,7 @@ import {
   buildHermesKnowledgeNetworkFileProtocol,
   buildHermesKnowledgeNetworkRequiredReads,
   isVisualDebugKnRequest,
+  messageTouchesMaturityScorecard,
   messageTouchesTimeline,
 } from "./hermes-knowledge-network";
 import { buildKnowledgeNetworkSlotResolutionLines } from "./knowledge-network-slot-aliases";
@@ -276,6 +277,7 @@ export function buildHermesAgentInstructions(
       buildHermesKnowledgeNetworkRequiredReads({
         mode,
         touchesTimeline: messageTouchesTimeline(userMessage),
+        touchesMaturityScorecard: messageTouchesMaturityScorecard(userMessage),
         includeStyleGuide: visualDebug,
         includeComponents: visualDebug,
       }),

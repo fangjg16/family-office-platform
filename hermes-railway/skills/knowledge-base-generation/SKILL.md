@@ -22,8 +22,9 @@ Establish evidence first, then analyze, then render or update HTML. Do not analy
 5. `references/slot-specific-rules.md` — per-slot depth (not generic guardrails)
 6. `references/slot-rendering-rules.md` — Revenue Tree, Value Chain, Flywheel, etc.
 7. `references/timeline-rules.md` — when touching `#timeline`
-8. `assets/kb-template.html` — **only** shell; do not rewrite CSS/JS
-9. `assets/components.html` — **visual/debug only** (not default generation)
+8. `references/maturity-scoring.md` — header 三张成熟度卡（initial/full 必读；增量仅改 header/评分时）
+9. `assets/kb-template.html` — **only** shell; do not rewrite CSS/JS
+10. `assets/components.html` — **visual/debug only** (not default generation)
 
 **Optional (visual / debug only):** `references/visual-style-guide.md`  
 **Do NOT read on each run:** `examples-kb-data.json`, `scripts/`  
@@ -33,8 +34,9 @@ Establish evidence first, then analyze, then render or update HTML. Do not analy
 
 | User intent | Read | Materials |
 |---|---|---|
-| First KB / full rebuild | kb-schema, kb-config, content-rules, slot-specific, slot-rendering, **kb-template** | jfo-r2-materials manifest → 按需 textUrl |
+| First KB / full rebuild | kb-schema, kb-config, content-rules, slot-specific, slot-rendering, **maturity-scoring**, **kb-template** | jfo-r2-materials manifest → 按需 textUrl |
 | Incremental slot update | above + current KB HTML | 当前 KB + 点名 slot 相关资料 |
+| Incremental header / maturity scorecard | + maturity-scoring | 重算 A%/B%/综合% 后更新 stat-row |
 | Reorder display order | **kb-config + SKILL** + current KB HTML | **禁止**拉项目资料全文 |
 | Timeline slot | + timeline-rules | 按需 |
 | Visual / CSS debug only | + visual-style-guide, components.html | 非默认 |
@@ -50,6 +52,13 @@ Appendices: `#source-index`, `#glossary`
 ## KB-CONFIG
 
 Mandatory `<!-- KB-CONFIG -->` at `<body>` start. See `references/kb-config.md`. Reorder = **only** KB-CONFIG + nav + `<h2>` section numbers; **never** rewrite content panels.
+
+## Maturity scorecard (header stat-row)
+
+See `references/maturity-scoring.md`. The three `.stat-value` cells **must be percentages** (`38%`, `10%`, `27%`) or `—`.
+
+- **Forbidden as `.stat-value`:** `7/11`, bare counts (`6`), letter grades (`C+`), tier text (`Early stage`).
+- Put slot counts (`7/11 sections`), source-type lists, and tiers in `.stat-note` or masthead `Stage`.
 
 ## Timeline (v2.8)
 

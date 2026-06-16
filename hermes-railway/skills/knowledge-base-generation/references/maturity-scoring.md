@@ -1,5 +1,17 @@
 ﻿# Maturity Scoring
 
+## Header scorecard (stat-row) — mandatory format
+
+The masthead `.stat-row` has three cards. **`.stat-value` must be a percentage 0–100%** (e.g. `38%`, `10%`, `27%`) or `—` when not yet scored.
+
+| Card | `.stat-value` | `.stat-note` / elsewhere |
+|---|---|---|
+| Factor A · 内容覆盖度 | `0%`–`100%` | slot counts like `7/11 populated` |
+| Factor B · 来源多样性 | `0%`–`100%` | source-type lists, party names |
+| Combined · 综合成熟度 | `0%`–`100%` | tier labels: Early stage, C+, etc. |
+
+**Forbidden in `.stat-value`:** `7/11`, bare integers (`6`), letter grades (`C+`), entry-state text (`Early stage`).
+
 Overall maturity = `0.6 * Factor A + 0.4 * Factor B`.
 
 ## Factor A

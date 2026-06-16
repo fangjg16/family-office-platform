@@ -51,7 +51,7 @@ else
   curl_kb_file "examples-kb-data.json" "$KB/examples-kb-data.json"
   curl_kb_file "assets/kb-template.html" "$KB/assets/kb-template.html"
   curl_kb_file "assets/components.html" "$KB/assets/components.html"
-  for ref in kb-schema.md kb-config.md content-rules.md slot-specific-rules.md slot-rendering-rules.md timeline-rules.md visual-style-guide.md handoff-schema.md; do
+  for ref in kb-schema.md kb-config.md content-rules.md slot-specific-rules.md slot-rendering-rules.md timeline-rules.md maturity-scoring.md visual-style-guide.md handoff-schema.md; do
     curl_kb_file "references/$ref" "$KB/references/$ref"
   done
   curl_kb_file "examples/sample-output.html" "$KB/examples/sample-output.html" 2>/dev/null || true

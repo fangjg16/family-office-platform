@@ -29,7 +29,7 @@ curl_kb "SKILL.md" "$KB/SKILL.md"
 curl_kb "examples-kb-data.json" "$KB/examples-kb-data.json"
 curl_kb "assets/kb-template.html" "$KB/assets/kb-template.html"
 curl_kb "assets/components.html" "$KB/assets/components.html"
-for ref in kb-schema.md kb-config.md content-rules.md slot-specific-rules.md slot-rendering-rules.md timeline-rules.md visual-style-guide.md handoff-schema.md; do
+for ref in kb-schema.md kb-config.md content-rules.md slot-specific-rules.md slot-rendering-rules.md timeline-rules.md maturity-scoring.md visual-style-guide.md handoff-schema.md; do
   curl_kb "references/$ref" "$KB/references/$ref"
 done
 curl_kb "kb-template.html" "$KB/kb-template.html" 2>/dev/null || true
@@ -61,7 +61,7 @@ echo "=== Verify v2.8 required files ==="
 test -f "$KB/SKILL.md"
 test -f "$KB/references/kb-schema.md"
 test -f "$KB/references/slot-specific-rules.md"
-test -f "$KB/references/slot-rendering-rules.md"
+test -f "$KB/references/maturity-scoring.md"
 test -f "$KB/references/timeline-rules.md"
 test -f "$KB/assets/kb-template.html"
 test -f "$KB/assets/components.html"

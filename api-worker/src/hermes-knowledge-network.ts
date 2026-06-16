@@ -204,11 +204,20 @@ function readLine(n: number, relPath: string): string {
 export type HermesKnRequiredReadsOptions = {
   mode: KnowledgeNetworkUpdateMode;
   touchesTimeline?: boolean;
+  /** 增量模式：用户点名 header / 成熟度评分卡时读 maturity-scoring.md */
+  touchesMaturityScorecard?: boolean;
   /** 视觉/版式调试任务才读 style-guide */
   includeStyleGuide?: boolean;
   /** 视觉/版式调试任务才读 components.html */
   includeComponents?: boolean;
 };
+
+/** 增量更新 header 成熟度三张卡时 */
+export function messageTouchesMaturityScorecard(message: string): boolean {
+  return /header|评分|maturity|成熟度|项目总览|scorecard|factor\s*[ab]|综合成熟|stat[\s-]*row|覆盖度|来源多样性|两因素/i.test(
+    message.trim(),
+  );
+}
 
 /** 用户明确要求版式/CSS 调试时 */
 export function isVisualDebugKnRequest(message: string): boolean {
@@ -221,7 +230,8 @@ export function isVisualDebugKnRequest(message: string): boolean {
 export function buildHermesKnowledgeNetworkRequiredReads(
   options: HermesKnRequiredReadsOptions,
 ): string {
-  const { mode, touchesTimeline, includeStyleGuide, includeComponents } = options;
+  const { mode, touchesTimeline, touchesMaturityScorecard, includeStyleGuide, includeComponents } =
+    options;
   const lines: string[] = ["", "【知识网络 · v2.8 必读（read_file，按模式）】"];
 
   if (mode === "reorder") {
@@ -252,6 +262,11 @@ export function buildHermesKnowledgeNetworkRequiredReads(
   if (needsTimelineRules) {
     add("references/timeline-rules.md");
   }
+  const needsMaturityScoring =
+    mode === "initial" || mode === "full" || Boolean(touchesMaturityScorecard);
+  if (needsMaturityScoring) {
+    add("references/maturity-scoring.md");
+  }
   add("assets/kb-template.html");
 
   if (includeComponents) {
@@ -268,6 +283,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     "- 资料仅经 jfo-r2-materials：manifest/digest → 按需 textUrl，禁止机械全文拉取。",
     "- 正文 citation（如 #source-U-1）须对应 appendix id；保留 assets/kb-template.html 内 revealAnchor。",
     "- **timeline** 仅写项目推进节点；每条候选先过 eligibility gate（scope / timelineEligible / reason）；行业/市场/政策背景写 comps/risks/decision-framework，不得填充 timeline。",
+    "- **成熟度三张卡** `.stat-value` 必须为 0–100%（如 38%）；slot 计数、来源类别数、字母等级只能写 stat-note / stage。详见必读 maturity-scoring 规则文件。",
     "- **禁止** skills_reference.md、根目录 kb-template.html、旧 STYLE_GUIDE.md。",
     "- **禁止**每次 read_file examples-kb-data.json、scripts/（仅本地开发调试）。",
     "- 非视觉调试任务：**不要** read_file visual-style-guide.md / components.html（版式以 kb-template 为准）。",

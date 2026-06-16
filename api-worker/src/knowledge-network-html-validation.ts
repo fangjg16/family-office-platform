@@ -216,6 +216,53 @@ function validateSourceIndex(uncommented: string, navTargets: string[]): KnHtmlV
   return null;
 }
 
+const MATURITY_SCORECARD_ERROR =
+  "Maturity scorecard main values must be percentages; move counts/letter grades to notes.";
+
+const MATURITY_PERCENT_RE = /^(100|[1-9]?\d)%$/;
+const MATURITY_MISSING_RE = /^[—–\-]$/u;
+
+/** 提取 masthead 三张成熟度卡 .stat-value 主值 */
+export function extractMaturityStatValues(uncommented: string): string[] | null {
+  const values: string[] = [];
+  for (const cls of ["stat-item-a", "stat-item-b", "stat-item-c"] as const) {
+    const m = uncommented.match(
+      new RegExp(
+        `class=["'][^"']*${cls}[^"']*["'][\\s\\S]*?<div class="stat-value">([^<]*)</div>`,
+        "i",
+      ),
+    );
+    if (!m) return null;
+    values.push(m[1].trim());
+  }
+  return values;
+}
+
+export function isValidMaturityStatValue(value: string): boolean {
+  if (MATURITY_MISSING_RE.test(value)) return true;
+  if (!MATURITY_PERCENT_RE.test(value)) return false;
+  const n = Number.parseInt(value.replace("%", ""), 10);
+  return n >= 0 && n <= 100;
+}
+
+export function validateMaturityScorecard(
+  uncommented: string,
+): KnHtmlValidationResult | null {
+  const values = extractMaturityStatValues(uncommented);
+  if (!values) {
+    return {
+      ok: false,
+      error: `${MATURITY_SCORECARD_ERROR} (missing stat-row or stat-item-a/b/c)`,
+    };
+  }
+  for (const v of values) {
+    if (!isValidMaturityStatValue(v)) {
+      return { ok: false, error: MATURITY_SCORECARD_ERROR };
+    }
+  }
+  return null;
+}
+
 function validateCitationsAndRevealAnchor(
   t: string,
   uncommented: string,
@@ -339,6 +386,11 @@ function validateStrictV28(t: string, options: KnHtmlValidationOptions): KnHtmlV
     if (warnings.length > 0) {
       return { ok: true, warning: warnings.join("；") };
     }
+  }
+
+  if (mode !== "reorder") {
+    const maturity = validateMaturityScorecard(uncommented);
+    if (maturity) return maturity;
   }
 
   return { ok: true };
