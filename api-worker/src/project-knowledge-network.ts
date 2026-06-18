@@ -7,6 +7,10 @@ import {
   formatKnVersionDisplay,
   resolveKnVersionOnUpload,
 } from "./knowledge-network-version";
+import {
+  mergeKnVersionLedgerHtml,
+  type KnVersionLedgerEntry,
+} from "./knowledge-network-version-ledger";
 
 export type ProjectKnowledgeNetworkMeta = {
   projectId: string;
@@ -136,12 +140,87 @@ export async function listProjectKnowledgeNetworkVersions(
 export async function readProjectKnowledgeNetworkHtml(
   env: ProjectKnowledgeNetworkEnv,
   projectId: string,
+  options?: { mergeVersionLedger?: boolean },
 ): Promise<string | null> {
   const meta = await getProjectKnowledgeNetworkMeta(env, projectId);
   if (!meta) return null;
   const object = await env.FILES.get(meta.r2Key);
   if (!object) return null;
-  return object.text();
+  let html = await object.text();
+  if (options?.mergeVersionLedger !== false) {
+    html = await mergeVersionLedgerFromDb(env, projectId, html);
+  }
+  return html;
+}
+
+async function mergeVersionLedgerFromDb(
+  env: ProjectKnowledgeNetworkEnv,
+  projectId: string,
+  html: string,
+  pendingCurrent?: KnVersionLedgerEntry,
+): Promise<string> {
+  const archived = await listProjectKnowledgeNetworkVersions(env, projectId);
+  const archivedAsc: KnVersionLedgerEntry[] = [...archived].reverse().map((v) => ({
+    version: v.version,
+    versionLabel: v.versionLabel,
+    updatedAt: v.updatedAt,
+    updatedBy: v.updatedBy,
+    changelog: v.changelog,
+  }));
+
+  let current: KnVersionLedgerEntry | null = pendingCurrent ?? null;
+  if (!current) {
+    const meta = await getProjectKnowledgeNetworkMeta(env, projectId);
+    if (meta) {
+      current = {
+        version: meta.version,
+        versionLabel: meta.versionLabel,
+        updatedAt: meta.updatedAt,
+        updatedBy: meta.updatedBy,
+        changelog: meta.changelog,
+      };
+    }
+  }
+
+  return mergeKnVersionLedgerHtml(html, archivedAsc, current).html;
+}
+
+/** 将 D1 版本历史写回当前 R2 HTML 的附录 D，不升版本 */
+export async function refreshProjectKnowledgeNetworkVersionLedger(
+  env: ProjectKnowledgeNetworkEnv,
+  projectId: string,
+): Promise<{ applied: boolean; rowCount: number }> {
+  const meta = await getProjectKnowledgeNetworkMeta(env, projectId);
+  if (!meta) {
+    return { applied: false, rowCount: 0 };
+  }
+  const object = await env.FILES.get(meta.r2Key);
+  if (!object) {
+    return { applied: false, rowCount: 0 };
+  }
+  const raw = await object.text();
+  const archived = await listProjectKnowledgeNetworkVersions(env, projectId);
+  const archivedAsc: KnVersionLedgerEntry[] = [...archived].reverse().map((v) => ({
+    version: v.version,
+    versionLabel: v.versionLabel,
+    updatedAt: v.updatedAt,
+    updatedBy: v.updatedBy,
+    changelog: v.changelog,
+  }));
+  const current: KnVersionLedgerEntry = {
+    version: meta.version,
+    versionLabel: meta.versionLabel,
+    updatedAt: meta.updatedAt,
+    updatedBy: meta.updatedBy,
+    changelog: meta.changelog,
+  };
+  const merged = mergeKnVersionLedgerHtml(raw, archivedAsc, current);
+  if (merged.applied && merged.html !== raw) {
+    await env.FILES.put(meta.r2Key, merged.html, {
+      httpMetadata: { contentType: "text/html; charset=utf-8" },
+    });
+  }
+  return { applied: merged.applied, rowCount: merged.rowCount };
 }
 
 export async function readProjectKnowledgeNetworkVersionHtml(
@@ -212,7 +291,7 @@ export async function upsertProjectKnowledgeNetwork(
     uploadFileName?: string | null;
   },
 ): Promise<ProjectKnowledgeNetworkMeta> {
-  const html = params.html.trim();
+  let html = params.html.trim();
   if (!html) {
     throw new Error("知识网络 HTML 为空，无法写入项目");
   }
@@ -241,6 +320,15 @@ export async function upsertProjectKnowledgeNetwork(
       : null) ||
     changelogFromAnswer(summary) ||
     (prev ? `版本 v${displayVer} 更新` : "首次生成");
+
+  const ledgerApplied = await mergeVersionLedgerFromDb(env, projectId, html, {
+    version,
+    versionLabel,
+    updatedAt: now,
+    updatedBy: userId,
+    changelog,
+  });
+  html = ledgerApplied;
 
   await env.FILES.put(r2Key, html, {
     httpMetadata: { contentType: "text/html; charset=utf-8" },
