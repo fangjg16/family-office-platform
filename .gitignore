@@ -7,3 +7,8 @@ dist
 !.env.example
 api-worker/.dev.vars
 api-worker/node_modules
+api-worker/.wrangler/
+
+# Local scratch / accidental CLI output
+/500
+api-worker/scripts/_*.html
