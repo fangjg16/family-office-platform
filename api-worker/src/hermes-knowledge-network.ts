@@ -122,6 +122,24 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
     requestedJobId,
   );
   if (!resolved.jobId) {
+    if (resolved.rejected === "cancelled") {
+      return json(
+        {
+          error: "关联任务已取消，拒绝写入知识网络",
+          code: "KN_JOB_CANCELLED",
+        },
+        409,
+      );
+    }
+    if (resolved.rejected === "terminal") {
+      return json(
+        {
+          error: "关联任务已结束，拒绝写入知识网络",
+          code: "KN_JOB_TERMINAL",
+        },
+        409,
+      );
+    }
     return json(
       {
         error:

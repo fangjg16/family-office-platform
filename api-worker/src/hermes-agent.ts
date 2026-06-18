@@ -22,6 +22,7 @@ import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
   listHermesRunApprovalUrls,
   listHermesRunPollUrls,
+  listHermesRunStopUrls,
   listHermesRunsBaseUrls,
   listHermesRunsPostUrls,
 } from "./hermes-url";
@@ -510,6 +511,25 @@ export async function pollHermesRun(env: HermesAgentEnv, runId: string): Promise
 
   await new Promise((r) => setTimeout(r, 400));
   return fetchHermesRunSnapshot(env, runId);
+}
+
+/** 尽力取消 Hermes Run（无 cancel API 时本地终态仍生效） */
+export async function cancelHermesRun(env: HermesAgentEnv, runId: string): Promise<boolean> {
+  const id = runId.trim();
+  const base = (env.HERMES_BASE_URL || "").trim();
+  if (!base || !id || id.startsWith("chat-fallback-")) return false;
+  for (const url of listHermesRunStopUrls(base, id)) {
+    try {
+      const res = await fetch(url, {
+        method: "POST",
+        headers: hermesAuthHeaders(env),
+      });
+      if (res.ok || res.status === 404 || res.status === 409) return true;
+    } catch {
+      /* try next base */
+    }
+  }
+  return false;
 }
 
 export async function waitForHermesRun(

@@ -66,19 +66,49 @@ export async function fetchActiveAgentJobs(
   return data.jobs ?? [];
 }
 
-/** 刷新后恢复深度任务轮询：合并 D1 pending_job_id 与仍在运行的 agent_jobs */
+export async function cancelAgentJobRemote(
+  userId: string,
+  jobId: string,
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<{ ok: boolean; error?: string; status?: string }> {
+  if (!chatEndpoint) return { ok: false, error: "未配置 AI 接口" };
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  const res = await fetch(
+    `${base}/api/agent-jobs/${encodeURIComponent(jobId)}/cancel?userId=${encodeURIComponent(userId)}`,
+    { method: "POST" },
+  );
+  const data = (await res.json().catch(() => ({}))) as {
+    ok?: boolean;
+    error?: string;
+    status?: string;
+  };
+  if (!res.ok) {
+    return { ok: false, error: data.error || `HTTP ${res.status}` };
+  }
+  return { ok: true, status: data.status };
+}
+
+/** 刷新后恢复深度任务轮询：仅合并仍在 active-agent-jobs 中的任务 */
 export async function attachActiveAgentJobsToMessages(
   userId: string,
   messagesByConversation: Record<string, LiveChatMessage[]>,
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<Record<string, LiveChatMessage[]>> {
   const jobs = await fetchActiveAgentJobs(userId, chatEndpoint);
-  if (jobs.length === 0) return messagesByConversation;
+  const activeJobIds = new Set(jobs.map((j) => j.jobId));
 
   const out: Record<string, LiveChatMessage[]> = {};
   for (const [convId, msgs] of Object.entries(messagesByConversation)) {
-    out[convId] = msgs.map((m) => ({ ...m }));
+    out[convId] = (msgs ?? []).map((m) => {
+      if (m.role !== "assistant" || !m.pendingJobId) return { ...m };
+      if (!activeJobIds.has(m.pendingJobId)) {
+        return { ...m, pendingJobId: undefined, jobProgressLabel: undefined };
+      }
+      return { ...m };
+    });
   }
+
+  if (jobs.length === 0) return out;
 
   for (const job of jobs) {
     const convId = job.conversationId;

@@ -1,7 +1,8 @@
 import type { SkillIntent } from "./chat-modes";
 import { extractKnowledgeNetworkHtmlLoose } from "./chat-modes";
-import { syncCompletedAgentJobToChat } from "./chat-sync";
+import { syncAgentJobTerminalToChat } from "./chat-sync";
 import {
+  cancelHermesRun,
   finalizeHermesOutput,
   isHermesAgentConfigured,
   pollHermesRun,
@@ -49,7 +50,18 @@ function knowledgeNetworkExtractFallbackNote(env: AgentJobEnv): string {
   );
 }
 
-export type AgentJobStatus = "pending" | "running" | "completed" | "failed";
+export type AgentJobStatus = "pending" | "running" | "completed" | "failed" | "cancelled";
+
+export const AGENT_JOB_CANCELLED_MESSAGE = "深度分析已取消：用户取消";
+
+export function isAgentJobActive(status: AgentJobStatus | string): boolean {
+  return status === "pending" || status === "running";
+}
+
+/** 是否仍接受 Hermes/Worker 写入任务结果 */
+export function shouldAcceptAgentJobCompletion(status: AgentJobStatus | string): boolean {
+  return isAgentJobActive(status);
+}
 
 export type AgentJobRow = {
   id: string;
@@ -462,7 +474,7 @@ export async function completeAgentJob(
 
   if (!rowBefore) return;
 
-  if (rowBefore.status === "completed" || rowBefore.status === "failed") {
+  if (!shouldAcceptAgentJobCompletion(rowBefore.status)) {
     return;
   }
 
@@ -487,7 +499,7 @@ export async function completeAgentJob(
     .bind(jobId)
     .first<AgentJobRow>();
   if (row) {
-    await syncCompletedAgentJobToChat(env, row, {
+    await syncAgentJobTerminalToChat(env, row, {
       answer: finalized.answer,
       knowledgeNetworkHtml: finalized.knowledgeNetworkHtml,
     });
@@ -500,6 +512,11 @@ export async function failAgentJob(
   error: string,
   answerForChat?: string | null,
 ): Promise<void> {
+  const rowBefore = await getAgentJobById(env, jobId);
+  if (rowBefore && !shouldAcceptAgentJobCompletion(rowBefore.status)) {
+    return;
+  }
+
   const answer = (answerForChat ?? "").trim() || `深度分析失败：${error}`;
 
   await env.DB.prepare(
@@ -517,11 +534,62 @@ export async function failAgentJob(
     .first<AgentJobRow>();
 
   if (row?.conversation_id) {
-    await syncCompletedAgentJobToChat(env, row, {
+    await syncAgentJobTerminalToChat(env, row, {
       answer,
       knowledgeNetworkHtml: null,
     });
   }
+}
+
+export type CancelAgentJobResult =
+  | { ok: true; job: AgentJobRow; hermesCancelAttempted: boolean }
+  | { ok: false; error: string; status?: number };
+
+/** 用户主动取消进行中的 Hermes / 深度任务 */
+export async function cancelAgentJob(
+  env: AgentJobEnv,
+  jobId: string,
+  userId: string,
+): Promise<CancelAgentJobResult> {
+  const row = await getAgentJob(env, jobId, userId);
+  if (!row) {
+    return { ok: false, error: "任务不存在或无权访问", status: 404 };
+  }
+  if (!isAgentJobActive(row.status)) {
+    return { ok: false, error: `任务已结束（${row.status}）`, status: 409 };
+  }
+
+  let hermesCancelAttempted = false;
+  const runId = (row.hermes_run_id ?? "").trim();
+  if (runId && !runId.startsWith("chat-fallback-") && isHermesAgentConfigured(env)) {
+    hermesCancelAttempted = true;
+    try {
+      await cancelHermesRun(env, runId);
+    } catch {
+      /* 本地终态优先 */
+    }
+  }
+
+  const now = nowIso();
+  await env.DB.prepare(
+    `UPDATE agent_jobs SET status = 'cancelled', error = ?, answer = ?, knowledge_network_html = NULL, updated_at = ? WHERE id = ? AND user_id = ?`,
+  )
+    .bind("用户取消", AGENT_JOB_CANCELLED_MESSAGE, now, jobId, userId)
+    .run();
+
+  const updated = await getAgentJob(env, jobId, userId);
+  if (!updated) {
+    return { ok: false, error: "取消后读取任务失败", status: 500 };
+  }
+
+  if (updated.conversation_id) {
+    await syncAgentJobTerminalToChat(env, updated, {
+      answer: AGENT_JOB_CANCELLED_MESSAGE,
+      knowledgeNetworkHtml: null,
+    });
+  }
+
+  return { ok: true, job: updated, hermesCancelAttempted };
 }
 
 export async function getAgentJob(
@@ -562,7 +630,7 @@ export async function finalizeAgentJobAfterKnPut(
   answerSummary?: string,
 ): Promise<boolean> {
   const row = await getAgentJobById(env, jobId);
-  if (!row || (row.status !== "running" && row.status !== "pending")) return false;
+  if (!row || !isAgentJobActive(row.status)) return false;
   if (row.skill_intent !== "knowledge_network") return false;
 
   const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
@@ -603,7 +671,7 @@ export async function reconcileAgentJob(
   env: AgentJobEnv,
   row: AgentJobRow,
 ): Promise<{ row: AgentJobRow; hermesStatus: string | null }> {
-  if (row.status !== "pending" && row.status !== "running") {
+  if (!isAgentJobActive(row.status)) {
     return { row, hermesStatus: null };
   }
 
@@ -647,6 +715,22 @@ export async function reconcileAgentJob(
       }
 
       if (terminal.has(snap.status)) {
+        if (snap.status === "cancelled") {
+          const now = nowIso();
+          await env.DB.prepare(
+            `UPDATE agent_jobs SET status = 'cancelled', error = ?, answer = ?, knowledge_network_html = NULL, updated_at = ? WHERE id = ?`,
+          )
+            .bind("用户取消", AGENT_JOB_CANCELLED_MESSAGE, now, row.id)
+            .run();
+          const updated = await reloadAgentJob(env, row.id);
+          if (updated?.conversation_id) {
+            await syncAgentJobTerminalToChat(env, updated, {
+              answer: AGENT_JOB_CANCELLED_MESSAGE,
+              knowledgeNetworkHtml: null,
+            });
+          }
+          return { row: updated ?? row, hermesStatus: snap.status };
+        }
         await failAgentJob(env, row.id, errText || `Hermes 任务结束：${snap.status}`);
         const updated = await reloadAgentJob(env, row.id);
         return { row: updated ?? row, hermesStatus: snap.status };

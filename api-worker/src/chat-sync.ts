@@ -480,7 +480,7 @@ async function ensureUserMessageForCompletedJob(
 }
 
 /** Hermes 深度任务完成时写入聊天表（不依赖浏览器 PUT） */
-export async function syncCompletedAgentJobToChat(
+export async function syncAgentJobTerminalToChat(
   env: ChatSyncEnv,
   job: AgentJobRow,
   result: { answer: string; knowledgeNetworkHtml: string | null },
@@ -497,18 +497,29 @@ export async function syncCompletedAgentJobToChat(
   const userSortIndex = await ensureUserMessageForCompletedJob(env, job, now);
   await ensureConversationForAgentJob(env, job, preview, now);
 
-  const maxRow = await env.DB.prepare(
-    `SELECT MAX(sort_index) AS max_idx FROM user_chat_messages WHERE user_id = ? AND conversation_id = ?`,
+  const existingMsg = await env.DB.prepare(
+    `SELECT sort_index, time_label FROM user_chat_messages WHERE user_id = ? AND id = ?`,
   )
-    .bind(userId, conversationId)
-    .first<{ max_idx: number | null }>();
-  const sortIndex = Math.max(maxRow?.max_idx ?? -1, userSortIndex) + 1;
+    .bind(userId, messageId)
+    .first<{ sort_index: number; time_label: string }>();
+
+  let sortIndex: number;
+  if (existingMsg) {
+    sortIndex = existingMsg.sort_index;
+  } else {
+    const maxRow = await env.DB.prepare(
+      `SELECT MAX(sort_index) AS max_idx FROM user_chat_messages WHERE user_id = ? AND conversation_id = ?`,
+    )
+      .bind(userId, conversationId)
+      .first<{ max_idx: number | null }>();
+    sortIndex = Math.max(maxRow?.max_idx ?? -1, userSortIndex) + 1;
+  }
 
   const msg: SyncChatMessage = {
     id: messageId,
     role: "assistant",
     content: result.answer,
-    time: now,
+    time: existingMsg?.time_label ?? now,
     sortIndex,
     knowledgeNetworkHtml: result.knowledgeNetworkHtml,
     pendingJobId: null,
@@ -522,6 +533,95 @@ export async function syncCompletedAgentJobToChat(
     sortIndex,
     "agent_job",
   );
+
+  // 兼容前端曾用临时 assistant id 写入的 pending 行
+  const stalePending = await env.DB.prepare(
+    `SELECT id, sort_index, time_label FROM user_chat_messages
+     WHERE user_id = ? AND conversation_id = ? AND pending_job_id = ? AND id != ?`,
+  )
+    .bind(userId, conversationId, job.id, messageId)
+    .all<{ id: string; sort_index: number; time_label: string }>();
+
+  for (const row of stalePending.results ?? []) {
+    const staleMsg: SyncChatMessage = {
+      id: row.id,
+      role: "assistant",
+      content: result.answer,
+      time: row.time_label,
+      sortIndex: row.sort_index,
+      pendingJobId: null,
+    };
+    await upsertChatMessage(env, userId, conversationId, staleMsg, now);
+  }
+}
+
+export async function syncCompletedAgentJobToChat(
+  env: ChatSyncEnv,
+  job: AgentJobRow,
+  result: { answer: string; knowledgeNetworkHtml: string | null },
+): Promise<void> {
+  await syncAgentJobTerminalToChat(env, job, result);
+}
+
+const CHAT_AGENT_JOB_CANCELLED_MESSAGE = "深度分析已取消：用户取消";
+
+/** GET chat-state 前：清除指向已终态 agent_jobs 的僵尸 pending_job_id */
+export async function reconcileStalePendingJobMessages(
+  env: ChatSyncEnv,
+  userId: string,
+): Promise<number> {
+  const { results } = await env.DB.prepare(
+    `SELECT id, conversation_id, pending_job_id, sort_index, time_label
+     FROM user_chat_messages
+     WHERE user_id = ? AND pending_job_id IS NOT NULL AND TRIM(pending_job_id) != ''`,
+  )
+    .bind(userId)
+    .all<{
+      id: string;
+      conversation_id: string;
+      pending_job_id: string;
+      sort_index: number;
+      time_label: string;
+    }>();
+
+  let fixed = 0;
+  const now = nowIso();
+
+  for (const row of results ?? []) {
+    const jobId = row.pending_job_id.trim();
+    const job = await env.DB.prepare(
+      `SELECT status, answer, error, knowledge_network_html FROM agent_jobs WHERE id = ? AND user_id = ?`,
+    )
+      .bind(jobId, userId)
+      .first<{
+        status: string;
+        answer: string | null;
+        error: string | null;
+        knowledge_network_html: string | null;
+      }>();
+
+    if (!job || job.status === "pending" || job.status === "running") continue;
+
+    const content =
+      job.status === "cancelled"
+        ? CHAT_AGENT_JOB_CANCELLED_MESSAGE
+        : (job.answer ?? "").trim() ||
+          `深度分析未完成：${(job.error ?? job.status).trim()}`;
+
+    const msg: SyncChatMessage = {
+      id: row.id,
+      role: "assistant",
+      content,
+      time: row.time_label,
+      sortIndex: row.sort_index,
+      knowledgeNetworkHtml: job.knowledge_network_html,
+      pendingJobId: null,
+    };
+    await upsertChatMessage(env, userId, row.conversation_id, msg, now);
+    fixed += 1;
+  }
+
+  return fixed;
 }
 
 export type ActiveAgentJobSummary = {
@@ -571,6 +671,8 @@ export async function handleGetChatState(
   env: ChatSyncEnv,
   userId: string,
 ): Promise<Response> {
+  await reconcileStalePendingJobMessages(env, userId);
+
   const { results: projectRows } = await env.DB.prepare(`SELECT id FROM projects`).all<{
     id: string;
   }>();

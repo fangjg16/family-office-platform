@@ -19,6 +19,7 @@ import {
   type SkillIntent,
 } from "./chat-modes";
 import {
+  cancelAgentJob,
   completeAgentJob,
   createAgentJob,
   failAgentJob,
@@ -965,6 +966,25 @@ async function handleAgentJobPoll(
   });
 }
 
+async function handleCancelAgentJob(
+  env: Env,
+  jobId: string,
+  userId: string,
+): Promise<Response> {
+  const result = await cancelAgentJob(env, jobId, userId);
+  if (!result.ok) {
+    return json({ error: result.error, jobId }, result.status ?? 400);
+  }
+  return json({
+    ok: true,
+    jobId: result.job.id,
+    status: result.job.status,
+    answer: result.job.answer,
+    error: result.job.error,
+    hermesCancelAttempted: result.hermesCancelAttempted,
+  });
+}
+
 async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const body = (await request.json()) as ChatBody;
   const projectId = body.projectId?.trim();
@@ -1369,6 +1389,14 @@ export default {
           response = json({ error: "缺少 userId 查询参数" }, 400);
         } else {
           response = await handleAgentJobPoll(env, jobId, uid);
+        }
+      } else if (/^\/api\/agent-jobs\/[^/]+\/cancel$/u.test(path) && request.method === "POST") {
+        const jobId = path.split("/")[3];
+        const uid = normalizeUserId(url.searchParams.get("userId"));
+        if (!uid) {
+          response = json({ error: "缺少 userId 查询参数" }, 400);
+        } else {
+          response = await handleCancelAgentJob(env, jobId, uid);
         }
       } else if (
         /^\/api\/users\/[^/]+\/active-agent-jobs$/u.test(path) &&

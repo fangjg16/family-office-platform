@@ -23,6 +23,7 @@ import {
   Plane,
   Plus,
   Sparkles,
+  Square,
   Trash2,
   X,
 } from "lucide-react";
@@ -48,6 +49,7 @@ import type { KnowledgeNetworkChatEntryState } from "@/lib/knowledge-network-pro
 import type { WorkspaceProject } from "@/workspace/projects";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import { consumeChatSse } from "@/lib/chat-stream-client";
+import { cancelAgentJobRemote } from "@/lib/chat-sync-api";
 import {
   deriveConversationTopicHeuristic,
   isSidebarTopicPreview,
@@ -631,6 +633,7 @@ async function pollAgentJobUntilDone(params: {
   conversationKey: string;
   assistantMsgId: string;
   citationMap: Record<string, string>;
+  shouldAbort?: () => boolean;
   onUpdate: (
     conversationKey: string,
     messageId: string,
@@ -646,13 +649,16 @@ async function pollAgentJobUntilDone(params: {
     conversationKey,
     assistantMsgId,
     citationMap,
+    shouldAbort,
     onUpdate,
     onError,
     onPersist,
   } = params;
   const root = apiBase.replace(/\/+$/u, "");
   for (let i = 0; i < AGENT_JOB_MAX_POLLS; i++) {
+    if (shouldAbort?.()) return;
     await new Promise((r) => setTimeout(r, AGENT_JOB_POLL_MS));
+    if (shouldAbort?.()) return;
     try {
       const url = `${root}/api/agent-jobs/${encodeURIComponent(jobId)}?userId=${encodeURIComponent(userId)}`;
       const res = await fetch(url);
@@ -664,6 +670,15 @@ async function pollAgentJobUntilDone(params: {
             ? data.progressLabel.trim()
             : "深度分析进行中…";
         onUpdate(conversationKey, assistantMsgId, { jobProgressLabel: label });
+      }
+      if (data.status === "cancelled") {
+        onUpdate(conversationKey, assistantMsgId, {
+          content: "深度分析已取消：用户取消",
+          pendingJobId: undefined,
+          jobProgressLabel: undefined,
+        });
+        onPersist?.();
+        return;
       }
       if (data.status === "completed") {
         const raw = String(data.answer ?? "").trim() || "（任务已完成，但未返回正文。）";
@@ -1578,6 +1593,8 @@ export default function ConversationCenter() {
   const playbackTimeoutRef = useRef<number | null>(null);
   const playbackSeqRef = useRef(0);
   const resumedAgentJobIdsRef = useRef<Set<string>>(new Set());
+  const cancelledAgentJobPollsRef = useRef<Set<string>>(new Set());
+  const chatSendAbortRef = useRef<AbortController | null>(null);
   const chatPersistTimerRef = useRef<number | null>(null);
   /** 云端 hydrate 后跳过首次自动 PUT，避免用未稳定 state 覆盖 D1 */
   const skipNextAutoPersistRef = useRef(false);
@@ -1743,12 +1760,21 @@ export default function ConversationCenter() {
     );
   }, [projectId, conversationId, liveMessagesByConversation]);
 
+  const isLiveAiMode =
+    ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
+
   const isCurrentConversationSending = Boolean(
     effectiveConversationId && sendingConversationId === effectiveConversationId,
   );
 
-  const isLiveAiMode =
-    ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
+  const hasPendingAgentJobInThread = useMemo(() => {
+    if (!effectiveConversationId) return false;
+    const msgs = liveMessagesByConversation[effectiveConversationId] ?? [];
+    return msgs.some((m) => m.role === "assistant" && Boolean(m.pendingJobId));
+  }, [effectiveConversationId, liveMessagesByConversation]);
+
+  const canStopCurrentTask =
+    isLiveAiMode && (isCurrentConversationSending || hasPendingAgentJobInThread);
 
   useLayoutEffect(() => {
     persistSnapshotRef.current = {
@@ -2391,6 +2417,7 @@ export default function ConversationCenter() {
           conversationKey,
           assistantMsgId: m.id,
           citationMap,
+          shouldAbort: () => cancelledAgentJobPollsRef.current.has(m.pendingJobId!),
           onUpdate: updateLiveMessage,
           onError: setLiveError,
           onPersist: () => flushChatPersist(),
@@ -2507,6 +2534,46 @@ export default function ConversationCenter() {
         });
       }
     }
+  };
+
+  const handleStopCurrentTask = async () => {
+    if (!effectiveConversationId || !userId || !AI_CHAT_ENDPOINT) return;
+
+    if (isCurrentConversationSending && chatSendAbortRef.current) {
+      chatSendAbortRef.current.abort();
+      chatSendAbortRef.current = null;
+      setSendingConversationId((cur) =>
+        cur === effectiveConversationId ? null : cur,
+      );
+      return;
+    }
+
+    const msgs = liveMessagesByConversation[effectiveConversationId] ?? [];
+    const pending = [...msgs]
+      .reverse()
+      .find((m) => m.role === "assistant" && m.pendingJobId);
+    if (!pending?.pendingJobId) return;
+
+    const jobId = pending.pendingJobId;
+    const assistantMsgId = pending.id;
+    cancelledAgentJobPollsRef.current.add(jobId);
+
+    const result = await cancelAgentJobRemote(userId, jobId, AI_CHAT_ENDPOINT);
+    if (!result.ok) {
+      cancelledAgentJobPollsRef.current.delete(jobId);
+      setLiveError(result.error ?? "取消任务失败，请稍后重试");
+      return;
+    }
+
+    setLiveError(null);
+    updateLiveMessage(effectiveConversationId, assistantMsgId, {
+      content: "深度分析已取消：用户取消",
+      pendingJobId: undefined,
+      jobProgressLabel: undefined,
+      isStreaming: false,
+      streamStatusLabel: undefined,
+    });
+    flushChatPersist();
   };
 
   const handleSend = async () => {
@@ -2664,6 +2731,8 @@ export default function ConversationCenter() {
       ...liveCitationMap,
     };
     setSendingConversationId(sendConversationId);
+    const sendAbort = new AbortController();
+    chatSendAbortRef.current = sendAbort;
     try {
       let uploadNotes = "";
       if (filesToUpload.length > 0) {
@@ -2753,6 +2822,7 @@ export default function ConversationCenter() {
           ...(RAGFLOW_API_KEY ? { Authorization: `Bearer ${RAGFLOW_API_KEY}` } : {}),
         },
         body: JSON.stringify(requestBody),
+        signal: sendAbort.signal,
       });
 
       mergedCitationMap = {
@@ -2841,6 +2911,7 @@ export default function ConversationCenter() {
             conversationKey: effectiveConversationId,
             assistantMsgId: assistantIdJob,
             citationMap: mergedCitationMap,
+            shouldAbort: () => cancelledAgentJobPollsRef.current.has(jobId),
             onUpdate: updateLiveMessage,
             onError: setLiveError,
             onPersist: () => flushChatPersist(),
@@ -2958,6 +3029,7 @@ export default function ConversationCenter() {
           conversationKey: effectiveConversationId,
           assistantMsgId: assistantId,
           citationMap: mergedCitationMap,
+          shouldAbort: () => cancelledAgentJobPollsRef.current.has(jobId),
           onUpdate: updateLiveMessage,
           onError: setLiveError,
           onPersist: () => flushChatPersist(),
@@ -3005,6 +3077,9 @@ export default function ConversationCenter() {
       }
       flushChatPersist();
     } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") {
+        return;
+      }
       const raw =
         error instanceof Error ? error.message : "未知错误";
       const errMsg = formatRagflowRequestError(raw, AI_CHAT_ENDPOINT);
@@ -3041,6 +3116,7 @@ export default function ConversationCenter() {
         }
       }
     } finally {
+      chatSendAbortRef.current = null;
       setSendingConversationId((cur) =>
         cur === sendConversationId ? null : cur,
       );
@@ -3858,23 +3934,40 @@ export default function ConversationCenter() {
             </button>
             <button
               type="button"
-              onClick={() => void handleSend()}
+              onClick={() => {
+                if (canStopCurrentTask) {
+                  void handleStopCurrentTask();
+                  return;
+                }
+                void handleSend();
+              }}
               disabled={
-                isCurrentConversationSending ||
-                playbackThinking ||
-                (playbackActive ? !playbackSendAllowed : false) ||
-                (!playbackActive &&
-                  !isLiveAiMode &&
-                  selectedFiles.length === 0 &&
-                  draftMessage.trim().length === 0) ||
-                (isLiveAiMode &&
-                  draftMessage.trim().length === 0 &&
-                  selectedFiles.length === 0)
+                canStopCurrentTask
+                  ? false
+                  : isCurrentConversationSending ||
+                    playbackThinking ||
+                    (playbackActive ? !playbackSendAllowed : false) ||
+                    (!playbackActive &&
+                      !isLiveAiMode &&
+                      selectedFiles.length === 0 &&
+                      draftMessage.trim().length === 0) ||
+                    (isLiveAiMode &&
+                      draftMessage.trim().length === 0 &&
+                      selectedFiles.length === 0)
               }
-              className="inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full border border-[hsl(var(--wine-deep))] bg-[hsl(var(--wine-deep))] px-8 text-sm font-semibold text-[hsl(var(--wine-deep-foreground))] shadow-[0_8px_22px_-10px_hsl(var(--wine-deep)/0.55)] transition-all hover:bg-[hsl(353_42%_28%)] active:scale-[0.98]"
+              className={cn(
+                "inline-flex h-12 shrink-0 items-center justify-center gap-2 rounded-full border px-8 text-sm font-semibold shadow-[0_8px_22px_-10px_hsl(var(--wine-deep)/0.55)] transition-all active:scale-[0.98]",
+                canStopCurrentTask
+                  ? "border-destructive/40 bg-destructive/10 text-destructive hover:bg-destructive/15"
+                  : "border-[hsl(var(--wine-deep))] bg-[hsl(var(--wine-deep))] text-[hsl(var(--wine-deep-foreground))] hover:bg-[hsl(353_42%_28%)]",
+              )}
             >
-              <Plane className="h-4 w-4" strokeWidth={2} />
-              {isCurrentConversationSending ? "发送中…" : "发送"}
+              {canStopCurrentTask ? (
+                <Square className="h-4 w-4 fill-current" strokeWidth={2} />
+              ) : (
+                <Plane className="h-4 w-4" strokeWidth={2} />
+              )}
+              {canStopCurrentTask ? "停止" : isCurrentConversationSending ? "发送中…" : "发送"}
             </button>
           </div>
         </footer>

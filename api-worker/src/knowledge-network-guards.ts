@@ -56,6 +56,7 @@ export type ResolvedPutJobId = {
   jobId: string | null;
   /** 是否由服务端自动绑定（查询参数未带 jobId） */
   autoBound: boolean;
+  rejected?: "cancelled" | "terminal";
 };
 
 /**
@@ -76,6 +77,12 @@ export async function resolveKnowledgeNetworkPutJobId(
       .bind(req, projectId, userId)
       .first<{ id: string; status: string }>();
     if (row) {
+      if (row.status === "cancelled") {
+        return { jobId: null, autoBound: false, rejected: "cancelled" as const };
+      }
+      if (row.status === "failed" || row.status === "completed") {
+        return { jobId: null, autoBound: false, rejected: "terminal" as const };
+      }
       return { jobId: row.id, autoBound: false };
     }
   }
