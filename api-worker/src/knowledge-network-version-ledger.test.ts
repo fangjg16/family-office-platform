@@ -76,7 +76,8 @@ describe("injectKnVersionLedger", () => {
     expect(html).toContain("v5.8");
     expect(html).toContain("v5");
     expect(html).not.toContain("only current");
-    expect((html.match(/<tr>/g) ?? []).length).toBe(2);
+    const tbody = html.match(/<tbody>([\s\S]*?)<\/tbody>/i)?.[1] ?? "";
+    expect((tbody.match(/<tr>/g) ?? []).length).toBe(2);
   });
 
   it("replaces callout-only appendix D with version table", () => {
