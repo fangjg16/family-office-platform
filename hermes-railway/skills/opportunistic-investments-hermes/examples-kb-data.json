@@ -1,0 +1,705 @@
+{
+  "config": {
+    "projectType": "technology",
+    "renderingMode": "chinese-only",
+    "multiAsset": false,
+    "configVersion": 1,
+    "parentVersion": "none",
+    "generatedAt": "2026-06-16 10:00",
+    "displayOrder": [
+      "snapshot",
+      "target-overview",
+      "industry-market",
+      "business-operations",
+      "resource-network",
+      "legal-ownership",
+      "regulatory-compliance",
+      "comps-benchmark",
+      "valuation-returns",
+      "diligence-gaps",
+      "risks-mitigation",
+      "timeline-milestones",
+      "decision-framework"
+    ],
+    "displayOrderHistory": [
+      "2026-06-16 | intake | technology 默认顺序，v2.91 13-slot schema"
+    ]
+  },
+  "meta": {
+    "navTitle": "项目知识网络",
+    "version": "v1.0",
+    "date": "2026-06-16",
+    "status": "内部讨论",
+    "stage": "早期线索",
+    "title": "AI短剧及演员AI版权",
+    "subtitle": "运营模式与数字资产确权分析",
+    "mastheadSubtitle": "AI Short Drama & Actor AI Rights · Project Knowledge Base · Hermes v2.92",
+    "lead": "聚焦 AI 短剧产业链、演员 AI 授权、平台分发、合规边界与投资人回报假设；样例用于验证 Hermes v2.92 deep-reference 层与 v2.91 结构，不代表真实项目结论。",
+    "summary": "本样例把公开行业信息、业务假设、权属问题、合规路径、估值回报和尽调缺口拆入 13 个 canonical slot；项目级时间轴仅使用项目自身节点，不以行业新闻填充。",
+    "footerBrand": "合域 AI · Opportunistic Investments · Hermes v2.92"
+  },
+  "maturity": {
+    "factorA": "38%",
+    "factorANote": "13 个核心 slot 均已渲染，但多数依赖假设或公开资料",
+    "factorB": "18%",
+    "factorBNote": "来源覆盖公开研报、平台政策、法律评论与用户输入，独立项目方资料不足",
+    "combined": "30%",
+    "tier": "Early stage"
+  },
+  "slots": {
+    "snapshot": {
+      "state": "filled",
+      "facts": [
+        {
+          "label": "项目类型",
+          "value": "AI 内容版权与短剧运营机会",
+          "source": "[A-1]"
+        },
+        {
+          "label": "当前阶段",
+          "value": "行业分析 + 模式验证，尚缺项目方核心资料",
+          "source": "[U-1]"
+        },
+        {
+          "label": "一句话判断",
+          "value": "若演员授权链和平台分发路径可验证，可继续进入小额试点；若权利边界无法闭合，应暂缓投资。",
+          "source": "[A-2]"
+        }
+      ]
+    },
+    "target-overview": {
+      "state": "filled",
+      "rows": [
+        {
+          "asset": "演员 AI 肖像/声音授权",
+          "definition": "以合同授权方式取得特定演员肖像、声音、表演风格在 AI 内容中的使用权",
+          "investability": "可投资性取决于授权范围、期限、排他性和再授权权利",
+          "evidence": "需项目方提供授权样本 [U-1]"
+        },
+        {
+          "asset": "AI 短剧生产流程",
+          "definition": "剧本生成、分镜、人物资产、视频合成、剪辑和投放数据闭环",
+          "investability": "若能稳定降低制作成本并形成分发回款数据，可作为运营资产",
+          "evidence": "当前为模式假设 [A-1]"
+        },
+        {
+          "asset": "内容分发账号/渠道",
+          "definition": "短视频平台账号、MCN/渠道合作、海外短剧平台入口",
+          "investability": "需要确认账号控制权、分账规则和历史数据",
+          "evidence": "待项目方补充 [U-1]"
+        }
+      ]
+    },
+    "industry-market": {
+      "state": "filled",
+      "rows": [
+        {
+          "topic": "需求驱动",
+          "finding": "短剧内容消费增长，AI 生产可缩短制作周期并降低试错成本。",
+          "implication": "机会不在单条内容爆款，而在低成本多版本测试能力。",
+          "source": "[A-1]"
+        },
+        {
+          "topic": "监管背景",
+          "finding": "AI 生成内容、肖像声音权益、平台标识和内容审核均可能形成约束。",
+          "implication": "合规设计需要前置进入业务模型。",
+          "source": "[A-2]"
+        },
+        {
+          "topic": "商业周期",
+          "finding": "内容平台红利通常快速转向买量竞争，渠道成本可能压缩利润。",
+          "implication": "必须看 CAC、完播率、付费转化和版权分账。",
+          "source": "[A-3]"
+        }
+      ]
+    },
+    "business-operations": {
+      "state": "filled",
+      "journey": {
+        "stages": [
+          "权利取得",
+          "内容生产",
+          "平台分发",
+          "数据回流",
+          "二次变现"
+        ],
+        "lanes": [
+          {
+            "label": "授权驱动路径",
+            "nodes": [
+              "演员/经纪授权",
+              "AI 形象入库",
+              "短剧上线",
+              "ROI 与反馈",
+              "续约/联名"
+            ]
+          },
+          {
+            "label": "平台运营路径",
+            "nodes": [
+              "账号/渠道合作",
+              "批量内容测试",
+              "投放分发",
+              "用户留存分析",
+              "广告/会员/分账"
+            ]
+          },
+          {
+            "label": "IP 扩展路径",
+            "nodes": [
+              "原创角色资产",
+              "系列化生产",
+              "跨平台投放",
+              "粉丝资产沉淀",
+              "周边/授权"
+            ]
+          }
+        ]
+      },
+      "applications": [
+        {
+          "scenario": "AI 短剧批量生产",
+          "value": "用低成本验证题材、演员组合和投放素材",
+          "evidence": "当前为假设，需要历史投放数据"
+        },
+        {
+          "scenario": "演员数字分身授权",
+          "value": "提高演员商业化频次，降低真人拍摄依赖",
+          "evidence": "需合同和技术样本"
+        }
+      ],
+      "customers": [
+        {
+          "customer": "短剧平台/内容平台",
+          "need": "持续上新与低成本测试",
+          "channel": "平台合作或账号矩阵",
+          "status": "未验证"
+        },
+        {
+          "customer": "品牌广告主",
+          "need": "可控 IP 与定制化内容",
+          "channel": "品牌合作/代理商",
+          "status": "待验证"
+        }
+      ],
+      "economics": [
+        {
+          "source": "平台分账",
+          "pricing": "按播放、广告、会员或充值分成",
+          "cost": "制作、买量、审核、版权",
+          "unitEconomics": "需计算 CAC、单集成本、回收周期"
+        },
+        {
+          "source": "授权费/服务费",
+          "pricing": "按项目、期限或收益分成",
+          "cost": "艺人授权、模型训练、法务",
+          "unitEconomics": "需确认毛利和续约率"
+        }
+      ],
+      "assumptions": [
+        {
+          "assumption": "AI 生成可把单集制作成本压至传统制作的显著折扣",
+          "why": "决定是否具备规模化试错优势",
+          "test": "抽样核对真实制作成本与上线周期"
+        },
+        {
+          "assumption": "演员授权可覆盖肖像、声音、表演风格及二次剪辑",
+          "why": "决定权利链是否闭合",
+          "test": "审阅授权合同和平台规则"
+        }
+      ]
+    },
+    "resource-network": {
+      "state": "filled",
+      "rows": [
+        {
+          "party": "演员/经纪资源",
+          "role": "提供可授权的肖像、声音、粉丝基础",
+          "strength": "待验证",
+          "dependency": "高度依赖个人授权和舆情"
+        },
+        {
+          "party": "短剧发行/买量团队",
+          "role": "负责平台投放、素材迭代和回款",
+          "strength": "需看历史 ROI",
+          "dependency": "渠道成本上升风险"
+        },
+        {
+          "party": "AI 视频生成供应商",
+          "role": "提供人物一致性、口型、分镜和后期能力",
+          "strength": "需技术样片",
+          "dependency": "模型政策与成本变化"
+        }
+      ]
+    },
+    "legal-ownership": {
+      "state": "filled",
+      "entities": [
+        {
+          "entity": "演员本人/经纪公司",
+          "role": "原始权利人或授权代理",
+          "restriction": "需确认代理权限、期限、地域、排他性和再授权",
+          "evidence": "合同未提供 [U-1]"
+        },
+        {
+          "entity": "项目公司/SPV",
+          "role": "拟承接授权、内容资产和回款账户",
+          "restriction": "需确认股权、控制权、IP 归属和关联交易",
+          "evidence": "待补充"
+        },
+        {
+          "entity": "AI 生成内容作品",
+          "role": "可能形成著作权、邻接权益或合同收益权",
+          "restriction": "权利性质需由律师确认",
+          "evidence": "[A-2]"
+        }
+      ],
+      "relationships": [
+        {
+          "relationship": "授权链",
+          "from": "演员/经纪公司",
+          "to": "项目公司",
+          "status": "未签署",
+          "risk": "授权范围不足会影响商业化"
+        },
+        {
+          "relationship": "分发合作",
+          "from": "项目公司",
+          "to": "平台/渠道",
+          "status": "待谈",
+          "risk": "账号控制和分账权属需清楚"
+        }
+      ]
+    },
+    "regulatory-compliance": {
+      "state": "filled",
+      "rows": [
+        {
+          "rule": "AI 生成内容标识",
+          "applicability": "AI 视频、声音和肖像合成内容上线时可能需要标识或平台审核",
+          "status": "需按目标平台逐项确认",
+          "redFlag": "不得误导观众为真人拍摄"
+        },
+        {
+          "rule": "肖像权/声音权益/人格权",
+          "applicability": "演员数字分身使用直接涉及个人权益和授权边界",
+          "status": "合同样本缺失",
+          "redFlag": "授权不清则不可商业化"
+        },
+        {
+          "rule": "广告与消费者保护",
+          "applicability": "若用于品牌广告或付费内容，需满足广告真实性和平台规范",
+          "status": "待律师确认",
+          "redFlag": "不得虚假背书"
+        }
+      ]
+    },
+    "comps-benchmark": {
+      "state": "filled",
+      "rows": [
+        {
+          "name": "短剧平台分账模式",
+          "rationale": "反映内容供给方与平台之间的收益分配",
+          "metrics": "分账比例、买量 ROI、留存/付费转化",
+          "lesson": "需要项目级后台数据"
+        },
+        {
+          "name": "虚拟人/数字分身授权",
+          "rationale": "对应艺人 IP 的可复制授权和品牌合作",
+          "metrics": "授权费、项目分成、合同期限",
+          "lesson": "权利条款比技术展示更关键"
+        },
+        {
+          "name": "AI 视频生产工具链",
+          "rationale": "反映生产降本与质量上限",
+          "metrics": "单条视频成本、迭代速度、通过率",
+          "lesson": "技术优势需转化成可回款内容"
+        }
+      ]
+    },
+    "valuation-returns": {
+      "state": "filled",
+      "valuationBoxes": [
+        {
+          "label": "投资额",
+          "value": "待定",
+          "note": "无项目方融资方案，暂不估值"
+        },
+        {
+          "label": "回收路径",
+          "value": "平台分账 / 授权费 / 广告合作",
+          "note": "需拆分现金流归属"
+        },
+        {
+          "label": "关键敏感变量",
+          "value": "授权成本、买量 ROI、完播率",
+          "note": "目前均缺一手数据"
+        }
+      ],
+      "scenarios": [
+        {
+          "label": "Downside",
+          "irr": "不可测",
+          "detail": "授权链不闭合或平台审核不通过，内容无法商业化。"
+        },
+        {
+          "label": "Base",
+          "irr": "待测算",
+          "detail": "小规模试点验证 3-5 个演员/题材组合。"
+        },
+        {
+          "label": "Upside",
+          "irr": "待测算",
+          "detail": "形成可复制演员授权池和稳定分发 ROI。"
+        }
+      ],
+      "capitalUses": [
+        {
+          "use": "授权费",
+          "amount": "待定",
+          "note": "应分为保底、分成和续约费用"
+        },
+        {
+          "use": "内容生产与买量",
+          "amount": "待定",
+          "note": "需与回款周期匹配"
+        },
+        {
+          "use": "法务与合规",
+          "amount": "待定",
+          "note": "必须前置预算"
+        }
+      ],
+      "assumptions": [
+        {
+          "assumption": "买量 ROI",
+          "base": "1.1x-1.5x",
+          "upside": ">2.0x",
+          "downside": "<1.0x",
+          "source": "假设，需后台验证"
+        },
+        {
+          "assumption": "授权成本",
+          "base": "按项目保底+分成",
+          "upside": "低保底高分成",
+          "downside": "高保底且不可再授权",
+          "source": "待合同确认"
+        }
+      ],
+      "sensitivities": [
+        {
+          "variable": "平台审核通过率",
+          "impact": "影响上线速度和内容库存",
+          "range": "按平台逐项统计",
+          "monitoring": "上线记录"
+        },
+        {
+          "variable": "演员授权范围",
+          "impact": "影响可复制性和退出价值",
+          "range": "地域/期限/排他/再授权",
+          "monitoring": "合同审阅"
+        }
+      ]
+    },
+    "diligence-gaps": {
+      "state": "filled",
+      "groups": [
+        {
+          "name": "P1 紧急 - 权利与商业化闭环",
+          "items": [
+            {
+              "question": "演员授权是否覆盖肖像、声音、表演风格、二次剪辑和平台分发？",
+              "evidenceStrength": "缺一手合同",
+              "owner": "法务/项目方",
+              "urgency": "阻塞",
+              "request": "提供完整授权样本"
+            },
+            {
+              "question": "平台账号、分账账户和回款主体由谁控制？",
+              "evidenceStrength": "缺后台资料",
+              "owner": "项目方",
+              "urgency": "阻塞",
+              "request": "提供后台截图、合同和账户说明"
+            }
+          ]
+        },
+        {
+          "name": "P2 重要 - 经济模型",
+          "items": [
+            {
+              "question": "单集制作成本、上线周期、买量 ROI、完播率和付费转化是否可验证？",
+              "evidenceStrength": "仅行业假设",
+              "owner": "运营团队",
+              "urgency": "重要",
+              "request": "提供历史项目数据"
+            },
+            {
+              "question": "授权成本如何影响毛利和回收周期？",
+              "evidenceStrength": "缺价格条款",
+              "owner": "投资团队",
+              "urgency": "重要",
+              "request": "拆分保底、分成、续约和违约成本"
+            }
+          ]
+        }
+      ]
+    },
+    "risks-mitigation": {
+      "state": "filled",
+      "rows": [
+        {
+          "severity": "致命",
+          "risk": "演员授权链不闭合",
+          "cause": "合同未覆盖 AI 生成、二次剪辑、平台分发或再授权",
+          "impact": "内容无法商业化或引发诉讼",
+          "evidence": "合同缺失 [U-1]",
+          "mitigation": "上线前律师逐条审阅，未闭合不投放"
+        },
+        {
+          "severity": "高",
+          "risk": "平台审核或内容标识不通过",
+          "cause": "AI 内容政策、广告规范和肖像声音权益要求变化",
+          "impact": "上线延迟、账号受限、买量浪费",
+          "evidence": "[A-2]",
+          "mitigation": "按目标平台形成合规 checklist"
+        },
+        {
+          "severity": "高",
+          "risk": "买量成本吞噬利润",
+          "cause": "短剧赛道竞争导致 CAC 上升",
+          "impact": "回收周期拉长，现金流承压",
+          "evidence": "[A-3]",
+          "mitigation": "试点期设置 ROI 停损线"
+        },
+        {
+          "severity": "中",
+          "risk": "技术质量不稳定",
+          "cause": "人物一致性、口型、情绪表达和审美不达标",
+          "impact": "内容转化差，返工成本上升",
+          "evidence": "需技术样片",
+          "mitigation": "先验收样片再签长期授权"
+        }
+      ],
+      "redFlags": [
+        {
+          "condition": "项目方无法提供授权合同、平台后台和历史现金流",
+          "action": "暂停投资推进",
+          "owner": "投资负责人"
+        },
+        {
+          "condition": "授权条款禁止 AI 生成或再分发",
+          "action": "改为纯服务采购或放弃",
+          "owner": "法务"
+        }
+      ]
+    },
+    "timeline-milestones": {
+      "state": "filled",
+      "rows": [
+        {
+          "bucket": "past",
+          "date": "2026-06-12",
+          "title": "首轮内部讨论",
+          "detail": "确认研究方向为 AI 短剧及演员 AI 授权投资机会。"
+        },
+        {
+          "bucket": "ongoing",
+          "date": "进行中",
+          "title": "项目方资料请求",
+          "detail": "等待授权合同样本、平台后台、历史投放和回款数据。"
+        },
+        {
+          "bucket": "future",
+          "date": "T+7",
+          "title": "法务初筛",
+          "detail": "完成授权链、AI 内容标识和平台规则的初步审阅。"
+        }
+      ]
+    },
+    "decision-framework": {
+      "state": "filled",
+      "recommendation": "建议进入资料请求和小额试点设计阶段；在授权链、平台回款和买量 ROI 未验证前，不进入正式投资决策。",
+      "theses": [
+        {
+          "thesis": "AI 生产降低内容试错成本",
+          "evidence": "行业资料显示生成工具可压缩制作周期 [A-1]",
+          "condition": "需项目级成本和上线周期验证",
+          "counterpoint": "质量和审核可能抵消降本"
+        },
+        {
+          "thesis": "演员数字分身可形成可复制授权池",
+          "evidence": "商业逻辑成立但合同未验证",
+          "condition": "授权必须覆盖 AI 生成和商业分发",
+          "counterpoint": "人格权争议和舆情风险"
+        },
+        {
+          "thesis": "平台分发数据可快速验证商业模型",
+          "evidence": "短剧投放可形成日级数据回流",
+          "condition": "必须拿到后台数据",
+          "counterpoint": "买量成本波动大"
+        }
+      ],
+      "options": [
+        {
+          "option": "继续推进",
+          "pros": "锁定早期机会",
+          "cons": "资料缺口大",
+          "condition": "项目方 7 天内补齐核心资料"
+        },
+        {
+          "option": "改条件推进",
+          "pros": "以试点降低风险",
+          "cons": "谈判周期拉长",
+          "condition": "设置 ROI、授权闭合和合规通过的里程碑"
+        },
+        {
+          "option": "暂缓",
+          "pros": "避免在权利不清时投入",
+          "cons": "可能错过窗口",
+          "condition": "资料无法提供或授权条款不闭合"
+        }
+      ],
+      "valueLevers": [
+        {
+          "lever": "合同标准化",
+          "action": "建立演员 AI 授权条款库",
+          "owner": "法务",
+          "metric": "授权闭合率"
+        },
+        {
+          "lever": "投放试验体系",
+          "action": "按演员/题材/平台做小样本 A/B 测试",
+          "owner": "运营",
+          "metric": "ROI、完播率、回款周期"
+        },
+        {
+          "lever": "资产沉淀",
+          "action": "沉淀可复用角色资产、剧本模板和分发数据",
+          "owner": "项目公司",
+          "metric": "单集成本下降、复用率"
+        }
+      ],
+      "nextActions": [
+        {
+          "action": "收取授权合同样本和平台账号资料",
+          "owner": "项目方",
+          "timing": "T+3",
+          "deliverable": "合同、后台截图、分账说明"
+        },
+        {
+          "action": "形成法务初筛意见",
+          "owner": "法务",
+          "timing": "T+7",
+          "deliverable": "授权链与监管红线备忘录"
+        },
+        {
+          "action": "搭建试点预算和 ROI 停损线",
+          "owner": "投资团队",
+          "timing": "T+10",
+          "deliverable": "试点财务模型"
+        }
+      ],
+      "icReadiness": "当前不适合提交 IC；需至少补齐 P1 权利资料和一轮项目级运营数据。"
+    }
+  },
+  "sources": [
+    {
+      "id": "U-1",
+      "type": "用户输入",
+      "title": "项目早期讨论与资料请求",
+      "author": "内部对话",
+      "excerpt": "项目尚缺项目方核心资料，需要以资料请求和试点设计为下一步。",
+      "usedIn": [
+        "snapshot",
+        "diligence-gaps",
+        "timeline-milestones"
+      ]
+    },
+    {
+      "id": "A-1",
+      "type": "公开资料",
+      "title": "AI 短剧与生成式视频行业资料",
+      "author": "公开研报/行业资料",
+      "excerpt": "用于判断行业需求、生产降本和内容试错逻辑。",
+      "usedIn": [
+        "industry-market",
+        "business-operations"
+      ]
+    },
+    {
+      "id": "A-2",
+      "type": "公开法规/法律评论",
+      "title": "AI 生成内容、肖像声音权益与平台规则",
+      "author": "公开监管/法律资料",
+      "excerpt": "用于识别授权链、人格权和内容标识要求。",
+      "usedIn": [
+        "legal-ownership",
+        "regulatory-compliance",
+        "risks-mitigation"
+      ]
+    },
+    {
+      "id": "A-3",
+      "type": "公开市场资料",
+      "title": "短剧投放与分发商业模型资料",
+      "author": "公开行业观察",
+      "excerpt": "用于判断买量成本、平台分账和商业周期风险。",
+      "usedIn": [
+        "industry-market",
+        "valuation-returns",
+        "risks-mitigation"
+      ]
+    }
+  ],
+  "terms": [
+    {
+      "term": "AI 生成内容",
+      "definition": "由生成式模型自动或半自动生成的视频、音频、图像或文本内容。",
+      "context": "监管合规"
+    },
+    {
+      "term": "数字分身",
+      "definition": "以算法模拟个人肖像、声音或表演风格的数字化表达。",
+      "context": "法律权属"
+    },
+    {
+      "term": "买量 ROI",
+      "definition": "投放成本与由投放带来的收入或毛利之间的回报关系。",
+      "context": "估值回报"
+    },
+    {
+      "term": "再授权",
+      "definition": "被授权方将部分权利继续授权给第三方使用的权利。",
+      "context": "法律权属"
+    }
+  ],
+  "dataDictionary": [
+    {
+      "field": "CAC",
+      "definition": "获客成本，按投放成本除以新增付费用户计算。",
+      "sample": "需平台后台和投放账户导出",
+      "caveat": "当前样例未接入真实数据。"
+    },
+    {
+      "field": "单集制作成本",
+      "formula": "剧本/生成/剪辑/审核/返工等成本合计除以上线集数。",
+      "sample": "需项目方提供 production workpaper",
+      "caveat": "AI 生成工具成本可能随模型政策变化。"
+    },
+    {
+      "field": "授权闭合率",
+      "definition": "合同覆盖目标商业使用场景的比例。",
+      "sample": "由法务逐条审阅合同条款",
+      "caveat": "需人工判断，不应由模型自动认定。"
+    }
+  ],
+  "versionLedger": [
+    {
+      "version": "v1.0",
+      "time": "2026-06-16 10:00",
+      "parent": "none",
+      "source": "Codex",
+      "change": "Initial v2.91 sample render with 13 slots and Appendix A-D"
+    }
+  ]
+}

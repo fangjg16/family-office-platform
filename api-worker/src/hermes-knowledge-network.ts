@@ -140,7 +140,8 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
       mode: putMode,
       previousHtml,
       strict: true,
-      touchesTimeline: putMode !== "reorder" && /id=["']timeline["']/i.test(html),
+      touchesTimeline:
+        putMode !== "reorder" && /id=["']timeline-milestones["']/i.test(html),
     });
     if (!validation.ok) {
       return json({ error: validation.error ?? "HTML 校验失败" }, 400);
@@ -170,7 +171,8 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
     mode: putMode,
     previousHtml,
     strict: true,
-    touchesTimeline: putMode !== "reorder" && /id=["']timeline["']/i.test(html),
+    touchesTimeline:
+      putMode !== "reorder" && /id=["']timeline-milestones["']/i.test(html),
   });
   if (!validation.ok) {
     return json({ error: validation.error ?? "HTML 校验失败" }, 400);
@@ -195,7 +197,7 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
   });
 }
 
-const KB_SKILL_BASE = "~/.hermes/skills/knowledge-base-generation";
+const KB_SKILL_BASE = "~/.hermes/skills/opportunistic-investments-hermes";
 
 function readLine(n: number, relPath: string): string {
   return `${n}. ${KB_SKILL_BASE}/${relPath}`;
@@ -232,7 +234,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
 ): string {
   const { mode, touchesTimeline, touchesMaturityScorecard, includeStyleGuide, includeComponents } =
     options;
-  const lines: string[] = ["", "【知识网络 · v2.8 必读（read_file，按模式）】"];
+  const lines: string[] = ["", "【知识网络 · Hermes v2.92 / v2.91 schema · 必读（read_file，按模式）】"];
 
   if (mode === "reorder") {
     lines.push(
@@ -241,7 +243,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
       "",
       "重排模式：必须先 GET 当前 KB HTML；**禁止** read_file 项目资料包/session 全文。",
       "仅更新 <!-- KB-CONFIG -->、nav 顺序、各 section <h2> 编号；禁止改内容面板。",
-      "**禁止** read_file visual-style-guide.md、components.html、examples-kb-data.json。",
+      "**禁止** read_file references/deep/*.md、components.html、examples-kb-data.json、visual-style-guide.md。",
     );
     return lines.join("\n");
   }
@@ -278,19 +280,20 @@ export function buildHermesKnowledgeNetworkRequiredReads(
 
   lines.push(
     "",
-    "规则摘要（v2.8）：",
-    "- 11 个 canonical slot 锚点固定；展示顺序由 <!-- KB-CONFIG --> display-order 驱动。",
+    "规则摘要（Hermes v2.92 · schema v2.91）：",
+    "- 13 个 core canonical slot + Appendix A–D；展示顺序由 <!-- KB-CONFIG --> display-order 驱动（schema-version: 2.91）。",
+    "- legacy v2.8 / 11-slot KB 须全量重建（Route A），禁止增量 patch 旧 anchor。",
     "- 资料仅经 jfo-r2-materials：manifest/digest → 按需 textUrl，禁止机械全文拉取。",
-    "- 正文 citation（如 #source-U-1）须对应 appendix id；保留 assets/kb-template.html 内 revealAnchor。",
-    "- **timeline** 仅写项目推进节点；每条候选先过 eligibility gate（scope / timelineEligible / reason）；行业/市场/政策背景写 comps/risks/decision-framework，不得填充 timeline。",
-    "- **成熟度三张卡** `.stat-value` 必须为 0–100%（如 38%）；slot 计数、来源类别数、字母等级只能写 stat-note / stage。详见必读 maturity-scoring 规则文件。",
-    "- **禁止** skills_reference.md、根目录 kb-template.html、旧 STYLE_GUIDE.md。",
-    "- **禁止**每次 read_file examples-kb-data.json、scripts/（仅本地开发调试）。",
-    "- 非视觉调试任务：**不要** read_file visual-style-guide.md / components.html（版式以 kb-template 为准）。",
+    "- 正文 citation（如 #source-U-1）须对应 Appendix A id；保留 assets/kb-template.html 内 revealAnchor。",
+    "- **timeline-milestones** 仅写项目推进节点；行业/市场背景写 industry-market/comps-benchmark/risks-mitigation。",
+    "- **成熟度三张卡** `.stat-value` 必须为 0–100%；slot 计数、字母等级只能写 stat-note / stage。",
+    "- **禁止** legacy v2.8 anchors（assets、business-model、timeline 等）、skills_reference.md、根目录 kb-template.html。",
+    "- **禁止** read_file examples-kb-data.json、scripts/、references/deep/（下一阶段再默认注入 deep refs）。",
+    "- 非视觉调试：**不要** read_file components.html / visual-style-guide.md。",
   );
 
   if (mode === "full" || mode === "initial") {
-    lines.push("- 模式：首次/全量 — 可跳过 GET 旧版；写入完整 KB-CONFIG 后渲染各 slot。");
+    lines.push("- 模式：首次/全量 — 可跳过 GET 旧版；写入完整 KB-CONFIG（13 core slots + 附录）后渲染。");
   } else {
     lines.push("- 模式：增量 — 必须先 GET 当前版；只改用户点名的 slot。");
   }
@@ -310,18 +313,18 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
     case "full":
       return {
         modeLine:
-          "全量重做（v2.8）：按 kb-schema + slot-specific-rules 从零渲染；写入完整 KB-CONFIG。",
+          "全量重做（v2.91）：legacy v2.8 KB 须重建；按 kb-schema 13-slot 从零渲染；写入完整 KB-CONFIG。",
         materialsLine:
           "资料：jfo-r2-materials manifest 后读取主要项目资料与本对话 session 附件（按需）。",
         getStep: "全量可跳过 GET；或 curl GET … || echo NO_CURRENT_KB",
         editStep:
-          "从 assets/kb-template.html 填充各 slot；保留 kb-shell、revealAnchor、KB-CONFIG。timeline 须经 eligibility gate；无项目级事件则三区块 stub，勿用行业新闻填充。",
+          "从 assets/kb-template.html 填充 13 core slots + Appendix A–D；schema-version: 2.91；timeline-milestones 须经 eligibility gate。",
       };
     case "reorder":
       return {
         modeLine:
-          "展示顺序重排（v2.8）：必须先 GET 当前版；只更新 KB-CONFIG、nav、section 编号。",
-        materialsLine: "资料：**禁止**拉取项目资料包；只读当前 KB + kb-config.md。",
+          "展示顺序重排（v2.91）：必须先 GET 当前版；只更新 KB-CONFIG、nav、section 编号。",
+        materialsLine: "资料：**禁止**拉取项目资料包与 deep refs；只读当前 KB + kb-config.md。",
         getStep: "必做：curl GET 当前版到工作文件",
         editStep:
           "仅改 <!-- KB-CONFIG -->、nav、<h2> 编号；禁止改内容面板。",
@@ -329,23 +332,23 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
     case "incremental":
       return {
         modeLine:
-          "增量更新（v2.8）：GET 当前版；slot-specific-rules 只改用户点名 slot。",
+          "增量更新（v2.91）：GET 当前版；slot-specific-rules 只改用户点名 slot。",
         materialsLine:
           "资料：当前 KB + 点名 slot 相关资料片段 + session 附件（按需 textUrl）。",
         getStep: "必做：curl GET 当前版到工作文件",
         editStep:
-          "局部编辑点名 slot；若含 timeline 须读 timeline-rules.md 并过 eligibility gate。",
+          "局部编辑点名 slot；若含 timeline-milestones 须读 timeline-rules.md 并过 eligibility gate。",
       };
     case "initial":
     default:
       return {
         modeLine:
-          "首次生成（v2.8）：无已发布版；按 kb-schema 写入 KB-CONFIG 后渲染。",
+          "首次生成（v2.91）：无已发布版；按 kb-schema 13-slot 写入 KB-CONFIG 后渲染。",
         materialsLine:
           "资料：jfo-r2-materials manifest 后按需读取主要资料 + session 附件。",
         getStep: "无旧版可跳过 GET；或 curl GET … || echo NO_CURRENT_KB",
         editStep:
-          "从 assets/kb-template.html 填充；<body> 开头写入 <!-- KB-CONFIG -->。",
+          "从 assets/kb-template.html 填充；<body> 开头写入 <!-- KB-CONFIG -->（schema-version: 2.91）。",
       };
   }
 }
@@ -366,7 +369,7 @@ export function buildHermesKnowledgeNetworkFileProtocol(
 
   return `
 
-【知识网络 · 一次回复双交付（v2.8 硬性）】
+【知识网络 · 一次回复双交付（Hermes v2.92 硬性）】
 ${modeLine}
 ${materialsLine}
 

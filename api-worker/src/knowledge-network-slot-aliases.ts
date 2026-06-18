@@ -4,89 +4,143 @@ import {
 
 export type CanonicalKbSlot = (typeof CANONICAL_KB_SLOTS)[number];
 
-/** 中文板块名 / 简称 / #anchor → canonical slot（长模式优先匹配） */
 const SLOT_ALIAS_PATTERNS: ReadonlyArray<{ slot: CanonicalKbSlot; patterns: RegExp[] }> = [
   {
     slot: "snapshot",
-    patterns: [/项目快照/u, /#snapshot\b/i, /\bsnapshot\b/i],
+    patterns: [/项目快照/u, /项目总览/u, /#snapshot\b/i, /\bsnapshot\b/i],
   },
   {
-    slot: "assets",
+    slot: "target-overview",
     patterns: [
-      /平台能力与资源/u,
+      /标的概况/u,
       /资产构成/u,
-      /#assets\b/i,
-      /\bassets\b/i,
+      /产品平台/u,
+      /平台能力/u,
+      /#target-overview\b/i,
+      /\btarget-overview\b/i,
     ],
   },
   {
-    slot: "legal-relationships",
+    slot: "resource-network",
     patterns: [
-      /法律结构/u,
-      /关键关系网/u,
-      /法律关系/u,
-      /#legal-relationships\b/i,
-      /\blegal-relationships\b/i,
+      /资源网络/u,
+      /资源关系/u,
+      /协作网络/u,
+      /关键协作/u,
+      /#resource-network\b/i,
+      /\bresource-network\b/i,
     ],
   },
   {
-    slot: "business-model",
+    slot: "industry-market",
+    patterns: [
+      /行业背景/u,
+      /市场格局/u,
+      /政策背景/u,
+      /行业市场/u,
+      /#industry-market\b/i,
+      /\bindustry-market\b/i,
+    ],
+  },
+  {
+    slot: "business-operations",
     patterns: [
       /业务模式/u,
+      /运营假设/u,
+      /收入路径/u,
       /收入假设/u,
-      /#business-model\b/i,
-      /\bbusiness-model\b/i,
+      /#business-operations\b/i,
+      /\bbusiness-operations\b/i,
     ],
   },
   {
-    slot: "capital-structure",
+    slot: "legal-ownership",
     patterns: [
-      /融资结构/u,
-      /资本结构/u,
-      /#capital-structure\b/i,
-      /\bcapital-structure\b/i,
+      /法律结构/u,
+      /权属/u,
+      /\bUBO\b/i,
+      /控制权/u,
+      /关键关系网/u,
+      /#legal-ownership\b/i,
+      /\blegal-ownership\b/i,
     ],
   },
   {
-    slot: "comps",
+    slot: "regulatory-compliance",
+    patterns: [
+      /监管合规/u,
+      /合规/u,
+      /许可/u,
+      /审批/u,
+      /隐私数据/u,
+      /#regulatory-compliance\b/i,
+      /\bregulatory-compliance\b/i,
+    ],
+  },
+  {
+    slot: "comps-benchmark",
     patterns: [
       /市场对标/u,
+      /可比案例/u,
       /可比交易/u,
-      /#comps\b/i,
+      /#comps-benchmark\b/i,
+      /\bcomps-benchmark\b/i,
       /\bcomps\b/i,
     ],
   },
   {
-    slot: "returns",
+    slot: "valuation-returns",
     patterns: [
       /投资回报/u,
-      /敏感性分析/u,
+      /估值/u,
+      /敏感性/u,
       /回报假设/u,
-      /#returns\b/i,
-      /\breturns\b/i,
+      /#valuation-returns\b/i,
+      /\bvaluation-returns\b/i,
     ],
   },
   {
-    slot: "timeline",
-    patterns: [/项目时间轴/u, /时间轴/u, /#timeline\b/i, /\btimeline\b/i],
-  },
-  {
-    slot: "risks",
-    patterns: [/关键风险/u, /风险缓释/u, /风险矩阵/u, /#risks\b/i, /\brisks\b/i],
-  },
-  {
-    slot: "open-questions",
+    slot: "diligence-gaps",
     patterns: [
       /待确认问题/u,
+      /尽调缺口/u,
       /待补充信息/u,
-      /开放问题/u,
-      /#open-questions\b/i,
-      /\bopen-questions\b/i,
+      /claim\s*gap/i,
+      /#diligence-gaps\b/i,
+      /\bdiligence-gaps\b/i,
+    ],
+  },
+  {
+    slot: "risks-mitigation",
+    patterns: [
+      /关键风险/u,
+      /风险缓释/u,
+      /风险矩阵/u,
+      /#risks-mitigation\b/i,
+      /\brisks-mitigation\b/i,
+      /\brisks\b/i,
+    ],
+  },
+  {
+    slot: "timeline-milestones",
+    patterns: [
+      /项目时间轴/u,
+      /时间轴/u,
+      /里程碑/u,
+      /关键节点/u,
+      /#timeline-milestones\b/i,
+      /\btimeline-milestones\b/i,
     ],
   },
   {
     slot: "decision-framework",
-    patterns: [/决策框架/u, /#decision-framework\b/i, /\bdecision-framework\b/i],
+    patterns: [
+      /决策框架/u,
+      /投资论点/u,
+      /下一步/u,
+      /#decision-framework\b/i,
+      /\bdecision-framework\b/i,
+    ],
   },
 ];
 
@@ -96,7 +150,6 @@ const SLOT_UPDATE_VERB_RE =
 const SLOT_REORDER_VERB_RE =
   /(?:调整|修改|重排).{0,16}(?:展示顺序|章节顺序|章节排列|板块顺序|知识网络.{0,8}顺序)|重排(?:章节|板块|顺序)|(?:把|将).{0,48}(?:移到|放到|提(?:前|到)|挪到|换到|后移|前移).{0,48}(?:前面|之后|后面|前|后|第二|第三|第[一二三四五六七八九十\d]+)|display[\s-]*order|reset\s+display\s+order/u;
 
-/** 从用户消息解析点名的 canonical slot（去重，保持 canonical 顺序） */
 export function resolveKnowledgeNetworkSlotsFromMessage(
   message: string,
 ): CanonicalKbSlot[] {
@@ -119,15 +172,14 @@ export function messageMentionsKbSlot(
 }
 
 export function messageTouchesTimeline(message: string): boolean {
-  if (messageMentionsKbSlot(message, "timeline")) return true;
-  return /节点监控|未来关键节点/u.test(message);
+  if (messageMentionsKbSlot(message, "timeline-milestones")) return true;
+  return /节点监控|未来关键节点|时间轴/u.test(message);
 }
 
 export function isKnowledgeNetworkReorderIntent(message: string): boolean {
   return SLOT_REORDER_VERB_RE.test(message.trim());
 }
 
-/** 中文板块更新 / 重排（无「知识网络」四字）也视为 KB 交付意图 */
 export function isKnowledgeNetworkSlotDeliveryIntent(message: string): boolean {
   const m = message.trim();
   if (!m) return false;
@@ -139,26 +191,27 @@ export function isKnowledgeNetworkSlotDeliveryIntent(message: string): boolean {
 
 const SLOT_ZH_LABEL: Record<CanonicalKbSlot, string> = {
   snapshot: "项目快照",
-  assets: "资产构成",
-  "legal-relationships": "法律结构",
-  "business-model": "业务模式",
-  "capital-structure": "融资结构",
-  comps: "市场对标",
-  returns: "投资回报",
-  timeline: "项目时间轴",
-  risks: "关键风险",
-  "open-questions": "待确认问题",
+  "target-overview": "标的概况",
+  "resource-network": "资源网络",
+  "industry-market": "行业市场",
+  "business-operations": "业务模式",
+  "legal-ownership": "法律结构",
+  "regulatory-compliance": "监管合规",
+  "comps-benchmark": "市场对标",
+  "valuation-returns": "投资回报",
+  "diligence-gaps": "待确认问题",
+  "risks-mitigation": "关键风险",
+  "timeline-milestones": "项目时间轴",
   "decision-framework": "决策框架",
 };
 
-/** 注入 Hermes：把用户中文板块名解析为 canonical #slot */
 export function buildKnowledgeNetworkSlotResolutionLines(message: string): string {
   const slots = resolveKnowledgeNetworkSlotsFromMessage(message);
   if (slots.length === 0) return "";
   const parts = slots.map((s) => `${SLOT_ZH_LABEL[s]} → #${s}`);
   return [
     "",
-    "【用户点名 slot（中文与 #anchor 等价，已解析为 canonical）】",
+    "【用户点名 slot（v2.91 13-slot · 中文与 #anchor 等价）】",
     parts.join("；"),
     "增量模式：仅修改上述 slot 内容面板；reorder 模式：仅改 KB-CONFIG/nav/编号，不改内容面板。",
   ].join("\n");

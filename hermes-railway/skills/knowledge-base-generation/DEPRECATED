@@ -1,0 +1,10 @@
+# DEPRECATED — v2.8 11-slot knowledge-base-generation
+
+**不得**再作为 Hermes 运行链路使用。
+
+请改用：
+- `/opt/data/skills/opportunistic-investments-hermes`（Hermes v2.92 · schema v2.91 · 13 core slots + Appendix A–D）
+
+安装：`bash install-jfo-skills-v292-curl-only.sh`
+
+legacy v2.8 KB HTML 须 **全量重建**（Route A），不可增量 patch 到新 schema。

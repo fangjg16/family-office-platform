@@ -3,9 +3,8 @@ import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 export type KnHtmlValidationOptions = {
   mode?: KnowledgeNetworkUpdateMode;
   previousHtml?: string | null;
-  /** v2.8 严格校验（新写入/覆盖）；预览路径勿启用 */
+  /** v2.91 strict validation (new writes); disable for legacy preview */
   strict?: boolean;
-  /** 任务涉及 timeline slot 时加强 timeline 结构提示 */
   touchesTimeline?: boolean;
 };
 
@@ -16,11 +15,36 @@ export type KnHtmlValidationResult = {
 };
 
 const MAX_KN_HTML_BYTES = 2_500_000;
-
 const REORDER_MAX_LENGTH_DRIFT_RATIO = 0.08;
+const KB_SCHEMA_VERSION = "2.91";
 
+/** v2.91 core analysis slots (13) */
 export const CANONICAL_KB_SLOTS = [
   "snapshot",
+  "target-overview",
+  "industry-market",
+  "business-operations",
+  "legal-ownership",
+  "regulatory-compliance",
+  "resource-network",
+  "comps-benchmark",
+  "valuation-returns",
+  "diligence-gaps",
+  "risks-mitigation",
+  "timeline-milestones",
+  "decision-framework",
+] as const;
+
+/** Appendix A–D */
+export const KB_APPENDIX_SLOTS = [
+  "source-index",
+  "glossary",
+  "data-dictionary",
+  "version-ledger",
+] as const;
+
+/** Legacy v2.8 anchors — strict mode rejects */
+export const LEGACY_V28_ANCHORS = [
   "assets",
   "legal-relationships",
   "business-model",
@@ -30,31 +54,26 @@ export const CANONICAL_KB_SLOTS = [
   "timeline",
   "risks",
   "open-questions",
-  "decision-framework",
 ] as const;
 
 type CanonicalSlot = (typeof CANONICAL_KB_SLOTS)[number];
 
 const CANONICAL_SLOT_SET = new Set<string>(CANONICAL_KB_SLOTS);
+const APPENDIX_SLOT_SET = new Set<string>(KB_APPENDIX_SLOTS);
 
 const ALLOWED_NAV_TARGETS = new Set([
   "overview",
-  "source-index",
-  "glossary",
   ...CANONICAL_KB_SLOTS,
+  ...KB_APPENDIX_SLOTS,
 ]);
 
 function stripHtmlComments(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/g, "");
 }
 
-/**
- * 轻量防线：timeline 疑似纯行业/市场背景（warning only，不阻断入库）。
- * 根本约束在 generation rules + public-info-search / node-monitoring handoff。
- */
 export function detectSuspiciousIndustryTimeline(uncommented: string): string | undefined {
   const sectionMatch = uncommented.match(
-    /<section[^>]*\bid=["']timeline["'][\s\S]*?<\/section>/i,
+    /<section[^>]*\bid=["']timeline-milestones["'][\s\S]*?<\/section>/i,
   );
   if (!sectionMatch) return undefined;
   const section = sectionMatch[0];
@@ -79,11 +98,11 @@ export function detectSuspiciousIndustryTimeline(uncommented: string): string | 
   const projectHits = (section.match(projectPattern) ?? []).length;
 
   if (industryHits >= 2 && projectHits === 0) {
-    return "timeline 疑似填入行业/市场/技术趋势而非项目推进节点；请按 timeline-rules.md eligibility gate 复核，并将 ineligible 内容移至 comps/risks/decision-framework";
+    return "timeline-milestones 疑似填入行业/市场/技术趋势而非项目推进节点；请按 timeline-rules.md eligibility gate 复核";
   }
 
   if (industryHits >= 3 && projectHits <= 1) {
-    return "timeline 行业/市场信号偏多、项目级节点偏少；请确认每条已过 eligibility gate（timelineEligible=true）";
+    return "timeline-milestones 行业/市场信号偏多、项目级节点偏少；请确认每条已过 eligibility gate";
   }
 
   return undefined;
@@ -99,7 +118,6 @@ function normalizeReorderBody(html: string): string {
   return t.trim();
 }
 
-/** 从 <!-- KB-CONFIG --> 注释块解析 display-order */
 export function parseKbConfigDisplayOrder(html: string): string[] {
   const configMatch = html.match(/<!--\s*KB-CONFIG([\s\S]*?)-->/i);
   if (!configMatch) return [];
@@ -109,6 +127,13 @@ export function parseKbConfigDisplayOrder(html: string): string[] {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+}
+
+function parseKbConfigSchemaVersion(html: string): string | null {
+  const configMatch = html.match(/<!--\s*KB-CONFIG([\s\S]*?)-->/i);
+  if (!configMatch) return null;
+  const line = configMatch[1].match(/^\s*schema-version:\s*(\S+)/im);
+  return line?.[1] ?? null;
 }
 
 function extractNavTargets(uncommented: string): string[] {
@@ -123,7 +148,7 @@ function presentCanonicalSlotIds(uncommented: string): CanonicalSlot[] {
   );
 }
 
-function requiresFullV28Structure(mode: KnowledgeNetworkUpdateMode | undefined): boolean {
+function requiresFullV291Structure(mode: KnowledgeNetworkUpdateMode | undefined): boolean {
   return mode === "initial" || mode === "full" || mode === "incremental";
 }
 
@@ -143,13 +168,43 @@ function validateBasicStructure(t: string): KnHtmlValidationResult | null {
   if (!/<!--\s*KB-CONFIG/i.test(t)) {
     return {
       ok: false,
-      error: "缺少 <!-- KB-CONFIG --> 块（v2.8 必填：display-order、project-type 等）",
+      error: "缺少 <!-- KB-CONFIG --> 块（v2.91 必填：schema-version、display-order 等）",
+    };
+  }
+  const schemaVersion = parseKbConfigSchemaVersion(t);
+  if (!schemaVersion) {
+    return {
+      ok: false,
+      error: `KB-CONFIG 缺少 schema-version: ${KB_SCHEMA_VERSION}`,
+    };
+  }
+  if (schemaVersion !== KB_SCHEMA_VERSION) {
+    return {
+      ok: false,
+      error: `KB-CONFIG schema-version 须为 ${KB_SCHEMA_VERSION}，当前为 ${schemaVersion}`,
     };
   }
   return null;
 }
 
-/** display-order / nav / section id 三方一致性（initial/full/incremental/reorder 均检查） */
+function validateLegacyV28Anchors(uncommented: string): KnHtmlValidationResult | null {
+  const hits: string[] = [];
+  for (const key of LEGACY_V28_ANCHORS) {
+    if (
+      new RegExp(`(?:id|data-target)=["']${key}["']`, "i").test(uncommented)
+    ) {
+      hits.push(key);
+    }
+  }
+  if (hits.length > 0) {
+    return {
+      ok: false,
+      error: `legacy v2.8 anchors present: ${hits.join(", ")} — rebuild to v2.91 13-slot schema`,
+    };
+  }
+  return null;
+}
+
 function validateConfigNavSectionAlignment(
   uncommented: string,
   displayOrder: string[],
@@ -163,6 +218,14 @@ function validateConfigNavSectionAlignment(
     return {
       ok: false,
       error: `KB-CONFIG display-order 含未知 slot：${unknownInConfig.join(", ")}`,
+    };
+  }
+
+  const dupConfig = displayOrder.filter((x, i) => displayOrder.indexOf(x) !== i);
+  if (dupConfig.length > 0) {
+    return {
+      ok: false,
+      error: `KB-CONFIG display-order 重复：${[...new Set(dupConfig)].join(", ")}`,
     };
   }
 
@@ -206,12 +269,17 @@ function validateConfigNavSectionAlignment(
   return null;
 }
 
-function validateSourceIndex(uncommented: string, navTargets: string[]): KnHtmlValidationResult | null {
-  if (!/\bid=["']source-index["']/i.test(uncommented)) {
-    return { ok: false, error: "缺少 source-index" };
-  }
-  if (!navTargets.includes("source-index")) {
-    return { ok: false, error: "缺少 source-index（nav 无 data-target=\"source-index\"）" };
+function validateAppendices(
+  uncommented: string,
+  navTargets: string[],
+): KnHtmlValidationResult | null {
+  for (const appendix of KB_APPENDIX_SLOTS) {
+    if (!new RegExp(`\\bid=["']${appendix}["']`, "i").test(uncommented)) {
+      return { ok: false, error: `缺少 appendix section: ${appendix}` };
+    }
+    if (!navTargets.includes(appendix)) {
+      return { ok: false, error: `缺少 appendix nav target: ${appendix}` };
+    }
   }
   return null;
 }
@@ -219,10 +287,9 @@ function validateSourceIndex(uncommented: string, navTargets: string[]): KnHtmlV
 const MATURITY_SCORECARD_ERROR =
   "Maturity scorecard main values must be percentages; move counts/letter grades to notes.";
 
-const MATURITY_PERCENT_RE = /^(100|[1-9]?\d)%$/;
+const MATURITY_PERCENT_RE = /^(100|[1-9]?\d(?:\.\d{1,2})?)%$/;
 const MATURITY_MISSING_RE = /^[—–\-]$/u;
 
-/** 提取 masthead 三张成熟度卡 .stat-value 主值 */
 export function extractMaturityStatValues(uncommented: string): string[] | null {
   const values: string[] = [];
   for (const cls of ["stat-item-a", "stat-item-b", "stat-item-c"] as const) {
@@ -241,7 +308,7 @@ export function extractMaturityStatValues(uncommented: string): string[] | null 
 export function isValidMaturityStatValue(value: string): boolean {
   if (MATURITY_MISSING_RE.test(value)) return true;
   if (!MATURITY_PERCENT_RE.test(value)) return false;
-  const n = Number.parseInt(value.replace("%", ""), 10);
+  const n = Number.parseFloat(value.replace("%", ""));
   return n >= 0 && n <= 100;
 }
 
@@ -293,7 +360,7 @@ function validateCitationsAndRevealAnchor(
   return null;
 }
 
-function validateStrictV28(t: string, options: KnHtmlValidationOptions): KnHtmlValidationResult {
+function validateStrictV291(t: string, options: KnHtmlValidationOptions): KnHtmlValidationResult {
   if (/\{\{[A-Z0-9_]+\}\}/.test(t)) {
     return { ok: false, error: "存在未替换的模板占位符 {{…}}" };
   }
@@ -313,6 +380,9 @@ function validateStrictV28(t: string, options: KnHtmlValidationOptions): KnHtmlV
   if (dupNav.length > 0) {
     return { ok: false, error: `导航 data-target 重复：${[...new Set(dupNav)].join(", ")}` };
   }
+
+  const legacy = validateLegacyV28Anchors(uncommented);
+  if (legacy) return legacy;
 
   if (mode === "reorder") {
     if (options.previousHtml) {
@@ -338,17 +408,17 @@ function validateStrictV28(t: string, options: KnHtmlValidationOptions): KnHtmlV
     const alignment = validateConfigNavSectionAlignment(uncommented, displayOrder);
     if (alignment) return alignment;
 
-    const sourceIndex = validateSourceIndex(uncommented, navTargets);
-    if (sourceIndex) return sourceIndex;
+    const appendices = validateAppendices(uncommented, navTargets);
+    if (appendices) return appendices;
 
     const citations = validateCitationsAndRevealAnchor(t, uncommented, false);
     if (citations) return citations;
-  } else if (requiresFullV28Structure(mode)) {
+  } else if (requiresFullV291Structure(mode)) {
     const alignment = validateConfigNavSectionAlignment(uncommented, displayOrder);
     if (alignment) return alignment;
 
-    const sourceIndex = validateSourceIndex(uncommented, navTargets);
-    if (sourceIndex) return sourceIndex;
+    const appendices = validateAppendices(uncommented, navTargets);
+    if (appendices) return appendices;
 
     const citations = validateCitationsAndRevealAnchor(t, uncommented, true);
     if (citations) return citations;
@@ -369,16 +439,20 @@ function validateStrictV28(t: string, options: KnHtmlValidationOptions): KnHtmlV
 
   if (
     options.touchesTimeline ||
-    (mode !== "reorder" && /id=["']timeline["']/i.test(uncommented))
+    (mode !== "reorder" && /id=["']timeline-milestones["']/i.test(uncommented))
   ) {
     const warnings: string[] = [];
     const hasTimelineStructure =
-      /已发生关键事件/.test(uncommented) &&
-      (/正在推进|当前正在推进/.test(uncommented) || /8\.2/.test(uncommented)) &&
-      (/未来关键节点|8\.3/.test(uncommented));
-    if (!hasTimelineStructure && mode !== "reorder") {
+      /8\.1\s*已发生|已发生关键事件/.test(uncommented) &&
+      (/8\.2\s*正在推进|正在推进|当前正在推进/.test(uncommented)) &&
+      (/8\.3\s*未来关键节点|未来关键节点/.test(uncommented));
+    if (
+      !hasTimelineStructure &&
+      mode !== "reorder" &&
+      /id=["']timeline-milestones["']/i.test(uncommented)
+    ) {
       warnings.push(
-        "timeline slot 存在但未检测到 v2.8 三区块结构（已发生/正在推进/未来关键节点）",
+        "timeline-milestones 存在但未检测到三区块结构（8.1 已发生 / 8.2 正在推进 / 8.3 未来关键节点）",
       );
     }
     const industryWarn = detectSuspiciousIndustryTimeline(uncommented);
@@ -408,17 +482,17 @@ export function validateKnowledgeNetworkHtml(
   const strict = options?.strict !== false;
 
   if (mode === "reorder") {
-    return validateStrictV28(t, { ...options, strict: true, mode: "reorder" });
+    return validateStrictV291(t, { ...options, strict: true, mode: "reorder" });
   }
 
   if (!strict) {
     return { ok: true };
   }
 
-  return validateStrictV28(t, { ...options, strict: true });
+  return validateStrictV291(t, { ...options, strict: true });
 }
 
-/** 供本地/CI 验收 v2.8 样例 */
+/** 供本地/CI 验收 v2.91 样例 */
 export function validateSampleOutputChecks(html: string): {
   ok: boolean;
   checks: Record<string, boolean>;
@@ -429,13 +503,19 @@ export function validateSampleOutputChecks(html: string): {
   const checks: Record<string, boolean> = {
     hasKbShell: /kb-shell/i.test(t),
     hasKbConfig: /<!--\s*KB-CONFIG/i.test(t),
+    schemaVersion291: /schema-version:\s*2\.91/i.test(t),
     hasRevealAnchor: /revealAnchor/i.test(t),
     hasSourceIndex: /\bid=["']source-index["']/i.test(uncommented),
+    hasDataDictionary: /\bid=["']data-dictionary["']/i.test(uncommented),
+    hasVersionLedger: /\bid=["']version-ledger["']/i.test(uncommented),
     citationU1: /href=["']#source-U-1["']/i.test(uncommented),
     appendixU1: /id=["']source-U-1["']/i.test(uncommented),
   };
   for (const slot of CANONICAL_KB_SLOTS) {
     checks[`slot_${slot}`] = new RegExp(`id=["']${slot}["']`, "i").test(uncommented);
+  }
+  for (const slot of KB_APPENDIX_SLOTS) {
+    checks[`appendix_${slot}`] = new RegExp(`id=["']${slot}["']`, "i").test(uncommented);
   }
   const result = validateKnowledgeNetworkHtml(html, { strict: true, mode: "initial" });
   const errors: string[] = [];
@@ -446,10 +526,14 @@ export function validateSampleOutputChecks(html: string): {
   return { ok: errors.length === 0, checks, errors };
 }
 
-/** 测试用：从 v2.8 样例裁掉 3 个 slot，模拟旧 8 段式 HTML */
-export function buildEightSlotInvalidFixture(v28Html: string): string {
-  let t = v28Html;
-  const removed = ["capital-structure", "comps", "timeline"] as const;
+/** 测试用：从 v2.91 样例裁掉 slot，模拟不完整 HTML */
+export function buildLegacySlotInvalidFixture(v291Html: string): string {
+  let t = v291Html;
+  const removed = [
+    "regulatory-compliance",
+    "comps-benchmark",
+    "timeline-milestones",
+  ] as const;
   for (const slot of removed) {
     t = t.replace(
       new RegExp(`<li><button[^>]*data-target="${slot}"[\\s\\S]*?</li>\\s*`, "gi"),
@@ -462,6 +546,6 @@ export function buildEightSlotInvalidFixture(v28Html: string): string {
   }
   return t.replace(
     /display-order:\s*[^\n\r]+/i,
-    "display-order: snapshot, assets, legal-relationships, business-model, returns, risks, open-questions, decision-framework",
+    "display-order: snapshot, target-overview, industry-market, business-operations, legal-ownership, resource-network, valuation-returns, diligence-gaps, risks-mitigation, decision-framework",
   );
 }

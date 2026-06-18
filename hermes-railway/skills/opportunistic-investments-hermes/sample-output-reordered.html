@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI短剧及演员AI版权 · Project Knowledge Base</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#f5f0e8;--ink:#2d241e;--ink-soft:#4a4540;--ink-faint:#888;--burgundy:#722f37;--serif:"Playfair Display","Noto Serif SC",Georgia,serif;--sans:"Inter","Noto Sans SC","PingFang SC",system-ui,sans-serif}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{font-family:var(--sans);font-size:15px;line-height:1.65;color:var(--ink);background:var(--paper);background-image:url("https://www.transparenttextures.com/patterns/natural-paper.png");-webkit-font-smoothing:antialiased}
+.kb-shell{display:grid;grid-template-columns:15.5rem minmax(0,1fr);gap:0;max-width:84rem;margin:0 auto;align-items:start}
+.kb-nav{position:sticky;top:0;align-self:start;height:100vh;overflow-y:auto;padding:2.5rem 1rem 2.5rem 2rem;background:rgba(114,47,55,.04);border-right:1px solid rgba(114,47,55,.14)}
+.kb-nav-title{font-family:var(--serif);font-size:.95rem;font-style:italic;color:var(--burgundy);margin-bottom:1.1rem;line-height:1.3}
+.kb-nav ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.4rem}
+.kb-nav-btn{display:flex;align-items:center;gap:.55rem;width:100%;text-align:left;font-family:var(--sans);font-size:.78rem;font-weight:600;line-height:1.3;color:var(--burgundy);background:transparent;border:1px solid rgba(114,47,55,.28);border-radius:4px;padding:.5rem .7rem;cursor:pointer;transition:background .12s,color .12s}
+.kb-nav-btn:hover{background:rgba(114,47,55,.1)}
+.kb-nav-btn .kb-nav-num{flex-shrink:0;width:1.4rem;height:1.4rem;border-radius:50%;border:1px solid rgba(114,47,55,.4);display:inline-flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:700}
+.kb-nav-btn.active{background:var(--burgundy);color:#fff;border-color:var(--burgundy)}
+.kb-nav-btn.active .kb-nav-num{border-color:rgba(255,255,255,.55);color:#fff}
+.kb-content{padding:4rem 2.5rem;min-width:0}
+.kb-panel{display:none}
+.kb-panel.active{display:block}
+@media(max-width:860px){
+  .kb-shell{grid-template-columns:1fr}
+  .kb-nav{position:static;height:auto;border-right:none;border-bottom:1px solid rgba(114,47,55,.14);padding:1rem 1.25rem}
+  .kb-nav ul{flex-direction:row;flex-wrap:wrap;gap:.4rem}
+  .kb-nav-btn{width:auto}
+  .kb-content{padding:2.5rem 1.25rem}
+}
+.kb-summary{background:#efe7da;border-left:4px solid var(--burgundy);border-radius:0 6px 6px 0;padding:1.25rem 1.5rem;margin:0 0 2.5rem}
+.kb-summary .kb-summary-label{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.12em;color:rgba(114,47,55,.7);margin-bottom:.45rem}
+.kb-summary p{font-size:.92rem;line-height:1.7;color:var(--ink);margin:0}
+.masthead{border-bottom:2px solid var(--burgundy);padding-bottom:3rem;margin-bottom:3rem}
+.masthead-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(10.5rem,14rem);gap:2.5rem 3rem;align-items:start;margin-bottom:2rem}
+@media(max-width:760px){.masthead-split{grid-template-columns:1fr;gap:1.75rem}.masthead-meta{max-width:16rem}}
+.masthead-badges{display:flex;flex-wrap:wrap;align-items:center;gap:.5rem;margin-bottom:1.1rem}
+.conf-badge{display:inline-block;background:var(--burgundy);color:#fff;font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.58rem;font-weight:700;letter-spacing:.14em;text-transform:uppercase;padding:.32rem .6rem;border-radius:2px}
+.ai-badge{display:inline-block;font-size:.58rem;color:var(--burgundy);border:1px solid rgba(114,47,55,.28);padding:2px 6px;border-radius:2px;font-weight:600;letter-spacing:.04em;background:rgba(255,255,255,.4)}
+.masthead h1{font-family:var(--serif);font-size:clamp(1.85rem,4.2vw,3rem);color:var(--burgundy);line-height:1.12;margin-bottom:.65rem;max-width:28rem}
+.masthead h1 .sub{font-size:clamp(1.25rem,3vw,2rem);opacity:.85;font-style:italic;font-weight:400;display:block;margin-top:.35rem}
+.masthead-subtitle{font-size:.78rem;color:var(--ink-faint);font-weight:400;letter-spacing:.02em;line-height:1.45;margin-bottom:1.1rem;max-width:32rem}
+.masthead-lead{font-size:.92rem;color:var(--ink-soft);font-weight:400;line-height:1.7;max-width:36rem}
+.masthead-meta{margin:0;padding-top:.15rem}
+.masthead-meta dl{margin:0}
+.meta-row{display:grid;grid-template-columns:1fr auto;gap:.75rem 1.25rem;padding:.6rem 0;border-bottom:1px solid rgba(114,47,55,.12);align-items:center}
+.meta-row:first-child{padding-top:0}
+.meta-row:last-child{border-bottom:none;padding-bottom:0}
+.meta-row dt{font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.56rem;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#999;margin:0}
+.meta-row dd{font-size:.78rem;font-weight:600;color:var(--ink);text-align:right;margin:0;white-space:nowrap}
+.stage-pill{display:inline-block;background:#1a1a1a;color:#fff;font-family:ui-monospace,"Cascadia Mono",Consolas,monospace;font-size:.58rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.28rem .55rem;border-radius:2px}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;margin-top:2rem;background:rgba(114,47,55,.18)}
+@media(max-width:800px){.stat-row{grid-template-columns:1fr}}
+.stat-item{padding:1.25rem 1.35rem;min-height:6.5rem;display:flex;flex-direction:column;justify-content:center}
+.stat-item-a{background:#e6ddd1;color:var(--ink)}
+.stat-item-a .stat-label{color:rgba(45,36,30,.62)}
+.stat-item-a .stat-value{color:var(--burgundy)}
+.stat-item-a .stat-note{color:rgba(45,36,30,.58);font-style:italic}
+.stat-item-b{background:#8f4a52;color:#fff}
+.stat-item-b .stat-label{color:rgba(255,255,255,.78)}
+.stat-item-b .stat-value{color:#fff}
+.stat-item-b .stat-note{color:rgba(255,255,255,.82)}
+.stat-item-c{background:var(--burgundy);color:#fff}
+.stat-item-c .stat-label{color:rgba(255,255,255,.78)}
+.stat-item-c .stat-value{color:#fff}
+.stat-item-c .stat-note{color:rgba(255,255,255,.92);font-weight:700;font-style:normal;text-transform:uppercase;letter-spacing:.06em;font-size:.62rem}
+.stat-label{font-size:.65rem;text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin-bottom:.35rem}
+.stat-value{font-family:var(--serif);font-size:clamp(2rem,4vw,2.75rem);font-weight:700;line-height:1;margin:.2rem 0 .55rem}
+.stat-note{font-size:.65rem;margin:0}
+.kb-lang-toggle{display:flex;gap:.5rem;align-items:center;margin-top:.75rem}
+.lang-btn{background:none;border:none;font-family:var(--sans);font-size:.75rem;font-weight:500;color:var(--ink-faint);cursor:pointer;padding:.2rem .4rem;border-radius:3px}
+.lang-btn.active{font-weight:700;color:var(--burgundy)}
+.lang-btn:hover{color:var(--burgundy)}
+[lang="en"]{display:none}
+.kb-en-mode [lang="zh"]{display:none}
+.kb-en-mode [lang="en"]{display:block}
+.pulse{width:10px;height:10px;border-radius:50%;background:#f59e0b;display:inline-block;animation:pulse 2s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.block{margin-bottom:4rem}
+.section-title{font-family:var(--serif);font-size:1.75rem;color:var(--burgundy);margin-bottom:1rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap}
+.section-num{width:2rem;height:2rem;border-radius:50%;background:var(--burgundy);color:#fff;font-family:var(--sans);font-size:.75rem;font-weight:700;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.section-sub{color:rgba(114,47,55,.6);font-weight:700;text-transform:uppercase;letter-spacing:.15em;font-size:.7rem;margin-bottom:2rem}
+h3{font-family:var(--serif);font-size:1.15rem;font-style:italic;color:var(--burgundy);margin:2rem 0 1rem}
+p{margin-bottom:.75rem;color:#4a4540}
+table{width:100%;border-collapse:collapse;margin:1rem 0 1.5rem;font-size:.875rem}
+table th{text-align:left;padding:12px 16px;border-top:2px solid var(--burgundy);border-bottom:1px solid var(--burgundy);font-family:var(--serif);font-weight:700;color:var(--burgundy);background:rgba(114,47,55,.05)}
+table td{padding:12px 16px;border-bottom:1px solid rgba(114,47,55,.1);vertical-align:top}
+tr.highlight-row td{background:rgba(114,47,55,.08)!important;font-weight:500}
+.project-timeline{max-width:58rem}
+.project-timeline .tl-item{margin-bottom:1.45rem}
+.project-timeline .tl-head{display:flex;align-items:center;gap:.65rem;flex-wrap:wrap;margin-bottom:.28rem}
+.project-timeline .tl-kind{font-size:.62rem;font-weight:700;letter-spacing:.04em;color:var(--burgundy)}
+.project-timeline .tl-note{font-size:.76rem;color:var(--ink-soft);margin:.25rem 0 0}
+.project-timeline .tl-source{font-size:.66rem;margin-left:.35rem;vertical-align:super}
+.tl-item.timeline-ongoing::before,.tl-item.timeline-dependency::before{background:#9fb7cc}
+.tl-item.timeline-deadline::before{background:#f59e0b}
+.tag{font-size:.68rem;padding:1px 5px;border-radius:3px;white-space:nowrap}
+.tag-verified{background:#e8f5e9;color:#2e7d32}.tag-party{background:#fef9e7;color:#8b6914}
+.tag-analyst{background:#eef2f7;color:#3d5a80}.tag-unconfirmed{background:#f0eeea;color:#888}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:.68rem;font-weight:600;border:1px solid rgba(114,47,55,.15)}
+.badge-green{background:#eef6f0;color:#2d5a3d}.badge-amber{background:#faf6ef;color:#8b6914}
+.badge-red{background:rgba(114,47,55,.1);color:var(--burgundy)}.badge-blue{background:#f0f3f7;color:#3d4a5c}
+.callout{border-left:4px solid;padding:1rem 1.25rem;margin:1.25rem 0;border-radius:0 6px 6px 0}
+.callout.info{border-color:#5a7a9a;background:#f0f4f8}.callout.info .callout-title{color:var(--burgundy);font-weight:700;margin-bottom:.5rem}
+.callout.missing{border-color:#c45c26;background:#fef6ef}.callout.missing .callout-title{color:#a34b1e;font-weight:700;margin-bottom:.5rem}
+.callout.warning{border-color:var(--burgundy);background:#fdf5f4}.callout.warning .callout-title{color:var(--burgundy);font-weight:700;margin-bottom:.5rem}
+.callout.success{border-color:#4a6741;background:#f2f7f0}.callout.success .callout-title{color:#4a6741;font-weight:700;margin-bottom:.5rem}
+.callout-hint{font-size:.75rem;color:#888;font-style:italic;margin-top:.5rem}.callout ul{margin:.5rem 0 0 1.25rem}.callout li{margin-bottom:.35rem;font-size:.875rem}
+.risk-score{display:inline-flex;align-items:center;justify-content:center;min-width:1.75rem;height:1.75rem;padding:0 .35rem;border-radius:4px;font-weight:700;font-size:.7rem;color:#fff}
+.risk-critical{background:#b91c1c}.risk-high{background:#c2410c}.risk-medium{background:#ca8a04;color:#1a1a1a}.risk-low{background:#16a34a}
+.risk-matrix-table td:first-child{width:3.75rem}
+.risk-level{display:inline-flex;align-items:center;justify-content:center;min-width:2rem;min-height:2rem;padding:.22rem .35rem;border-radius:4px;font-size:.68rem;font-weight:700;line-height:1.15;color:#fff;text-align:center}
+.risk-level-critical{background:#b91c1c}.risk-level-high{background:#c2410c}.risk-level-medium{background:#ca8a04;color:#1a1a1a}.risk-level-low{background:#4a6741}
+.risk-meta,.oq-meta{font-size:.68rem;color:#888;margin-top:.3rem;line-height:1.45}
+.oq-group{border:1px solid rgba(114,47,55,.16);border-radius:6px;background:rgba(255,255,255,.42);margin:1rem 0;overflow:hidden}
+.oq-group>summary{list-style:none;cursor:pointer;padding:.95rem 1.1rem;display:flex;align-items:center;gap:.75rem;color:var(--burgundy)}
+.oq-group>summary::-webkit-details-marker{display:none}
+.oq-group>summary::before{content:"⌄";font-size:.7rem;transform:rotate(-90deg);transition:transform .12s}
+.oq-group[open]>summary::before{transform:rotate(0deg)}
+.oq-title{font-family:var(--serif);font-size:1rem;font-style:italic;flex:1}
+.oq-count{font-size:.68rem;font-weight:700;color:#888}
+.oq-list{padding:0 1.25rem 1.1rem 1.75rem;margin:0}
+.oq-item{list-style:none;margin:.7rem 0;color:var(--ink);line-height:1.75}
+.oq-num{font-weight:700;color:var(--burgundy);margin-right:.35rem}
+.oq-action{color:var(--ink-soft)}
+.timeline{position:relative;padding-left:1.5rem;margin:1rem 0}.timeline::before{content:"";position:absolute;left:.2rem;top:0;bottom:0;width:2px;background:rgba(114,47,55,.15)}
+.tl-item{position:relative;margin-bottom:1.1rem;padding-left:1.25rem}.tl-item::before{content:"";position:absolute;left:-1.35rem;top:.35rem;width:14px;height:14px;border-radius:50%;background:var(--burgundy);border:3px solid var(--paper)}
+.tl-item.pending::before{background:#f59e0b}
+.tl-date{font-size:.7rem;font-weight:700;color:var(--burgundy);text-transform:uppercase;display:inline-block;margin-right:.5rem}
+.tl-text{font-size:.875rem;color:#4a4540}
+.tl-tree{margin:1rem 0}
+.tl-year{border:1px solid rgba(114,47,55,.16);border-radius:6px;margin:.6rem 0;background:rgba(255,255,255,.4);overflow:hidden}
+.tl-year>summary{list-style:none;cursor:pointer;padding:.8rem 1.1rem;display:flex;align-items:center;gap:.7rem;font-family:var(--serif);font-size:1.1rem;color:var(--burgundy)}
+.tl-year>summary::-webkit-details-marker{display:none}
+.tl-year>summary::before{content:"▸";font-size:.7rem;transition:transform .12s}
+.tl-year[open]>summary::before{transform:rotate(90deg)}
+.tl-year-sum{margin-left:auto;font-family:var(--sans);font-size:.72rem;font-style:italic;color:var(--ink-soft);font-weight:400}
+.tl-year-body{padding:.2rem 1.1rem 1rem 1.6rem}
+.tl-month{border-left:2px solid rgba(114,47,55,.18);margin:.4rem 0 .4rem .3rem}
+.tl-month>summary{list-style:none;cursor:pointer;padding:.45rem .8rem;font-size:.82rem;font-weight:700;color:var(--burgundy)}
+.tl-month>summary::-webkit-details-marker{display:none}
+.tl-month>summary::before{content:"▸";font-size:.6rem;margin-right:.4rem;display:inline-block;transition:transform .12s}
+.tl-month[open]>summary::before{transform:rotate(90deg)}
+.tl-month-body{padding:.1rem 0 .4rem 1.1rem}
+.scenario-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:rgba(114,47,55,.15);border:1px solid rgba(114,47,55,.15);margin:1.25rem 0}
+@media(max-width:700px){.scenario-cards{grid-template-columns:1fr}}
+.scenario-card{background:var(--paper);padding:1.25rem;text-align:center}
+.scenario-card.base{background:rgba(114,47,55,.06);box-shadow:inset 0 3px 0 var(--burgundy)}
+.scenario-card .sc-label{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:#888;margin-bottom:.5rem}
+.scenario-card.base .sc-label{color:var(--burgundy)}
+.scenario-card .sc-irr{font-family:var(--serif);font-size:2rem;font-weight:700;color:var(--burgundy)}
+.scenario-card.down .sc-irr{color:#6b5344}.scenario-card.up .sc-irr{color:#4a6741}
+.scenario-card .sc-detail{font-size:.75rem;color:#666;margin-top:.5rem;line-height:1.45}
+.org-chart{background:rgba(255,255,255,.5);border:1px solid rgba(114,47,55,.1);padding:2rem;margin:1.5rem 0;border-radius:8px;text-align:center}
+.org-node{border:2px solid var(--burgundy);padding:.85rem;background:#fff;display:inline-block;min-width:11rem;margin:.25rem;font-size:.85rem}
+.org-node.highlight{background:rgba(114,47,55,.08)}
+.org-node small{display:block;font-size:.6rem;text-transform:uppercase;font-weight:700;color:#888;margin-bottom:.25rem}
+.org-node strong{font-family:var(--serif);color:var(--burgundy)}
+.org-line{width:2px;height:1.5rem;background:var(--burgundy);margin:0 auto}
+.org-branch{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap;margin-top:.5rem}
+.journey-wrap{overflow-x:auto;margin:1.25rem 0}
+.journey{display:grid;grid-template-columns:7.5rem repeat(var(--journey-cols,4),minmax(7rem,1fr));column-gap:.3rem;row-gap:.45rem;min-width:42rem}
+.journey-corner{min-height:0}
+.journey-stage{text-align:center;font-family:var(--sans);font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--burgundy);padding:.45rem .3rem;border-bottom:2px solid var(--burgundy);align-self:end}
+.journey-lane-label{font-size:.72rem;font-weight:700;color:var(--burgundy);display:flex;align-items:center;padding-right:.35rem;line-height:1.35}
+.journey-node{background:rgba(255,255,255,.5);border:1px solid rgba(114,47,55,.2);border-radius:5px;padding:.55rem .6rem;font-size:.74rem;color:var(--ink-soft)}
+.journey-node.empty{background:transparent;border:1px dashed rgba(114,47,55,.15)}
+.journey-node.priority{border-color:var(--burgundy);box-shadow:inset 0 0 0 1px rgba(114,47,55,.15)}
+.bmc{display:grid;grid-template-columns:repeat(5,1fr);grid-template-rows:auto auto;gap:1px;background:rgba(114,47,55,.18);border:1px solid rgba(114,47,55,.18);margin:1.25rem 0}
+.bmc-cell{background:var(--paper);padding:.85rem .9rem;min-height:6rem}
+.bmc-cell h5{font-family:var(--sans);font-size:.6rem;font-weight:700;text-transform:uppercase;letter-spacing:.07em;color:var(--burgundy);margin:0 0 .4rem}
+.bmc-cell ul{margin:0 0 0 1rem;padding:0;font-size:.78rem;color:var(--ink-soft);line-height:1.5}
+.bmc-cell li{margin-bottom:.2rem}
+.bmc-kp{grid-row:1/2}.bmc-ka{grid-column:2/3;grid-row:1/2}.bmc-kr{grid-column:2/3;grid-row:2/3}
+.bmc-vp{grid-column:3/4;grid-row:1/3;background:rgba(114,47,55,.06)}
+.bmc-cr{grid-column:4/5;grid-row:1/2}.bmc-ch{grid-column:4/5;grid-row:2/3}
+.bmc-cs{grid-column:5/6;grid-row:1/3}
+.bmc-cost{grid-column:1/4;grid-row:3/4}.bmc-rev{grid-column:4/6;grid-row:3/4}
+@media(max-width:760px){.bmc{grid-template-columns:1fr}.bmc-cell{grid-column:auto!important;grid-row:auto!important}}
+.pf-step{flex:1;min-width:8rem;display:flex;flex-direction:column;border:1px solid rgba(114,47,55,.2);border-radius:5px;background:rgba(255,255,255,.5);overflow:hidden}
+.process-flow{display:flex;align-items:stretch;gap:0;margin:1.25rem 0;overflow-x:auto;min-width:36rem}
+.pf-step-end{border-color:var(--burgundy)}
+.pf-step-label{font-family:var(--sans);font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--burgundy);padding:.4rem .7rem;border-bottom:1px solid rgba(114,47,55,.15);background:rgba(114,47,55,.04)}
+.pf-step-body{flex:1;padding:.6rem .7rem;font-size:.76rem;color:var(--ink-soft);line-height:1.5}
+.pf-step-margin{font-size:.65rem;font-weight:700;color:var(--burgundy);padding:.35rem .7rem;border-top:1px solid rgba(114,47,55,.15);background:rgba(114,47,55,.04);text-align:right}
+.pf-margin-total{background:var(--burgundy);color:#fff;border-top:none}
+.pf-arrow{display:flex;align-items:center;padding:0 .3rem;color:var(--burgundy);font-size:1.1rem;flex-shrink:0;opacity:.5}
+.topic{border:1px solid rgba(114,47,55,.16);border-radius:6px;margin:.85rem 0;background:rgba(255,255,255,.4);overflow:hidden}
+.topic>summary{list-style:none;cursor:pointer;padding:.85rem 1.1rem;display:flex;align-items:center;gap:.6rem;font-family:var(--serif);font-style:italic;font-size:1rem;color:var(--burgundy)}
+.topic>summary::-webkit-details-marker{display:none}
+.topic>summary::before{content:"▸";font-style:normal;font-size:.7rem;color:var(--burgundy);transition:transform .12s}
+.topic[open]>summary::before{transform:rotate(90deg)}
+.topic>summary .topic-count{margin-left:auto;font-family:var(--sans);font-style:normal;font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.08em;color:var(--ink-faint)}
+.topic-body{padding:0 1.1rem 1rem 2.1rem}
+.topic-body .topic-q{font-size:.85rem;color:var(--ink-soft);margin:.4rem 0;padding-left:.75rem;border-left:2px solid rgba(114,47,55,.2)}
+.topic-q .topic-q-status{font-size:.62rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-left:.4rem}
+.tag .tag-src{font-weight:700}
+.tag-attrib{font-size:.62rem;color:var(--ink-faint);font-style:italic;margin-left:.15rem}
+.cite-ref,.term-ref{position:relative}.cite-ref a,.term-marker{color:var(--burgundy);text-decoration:none;font-size:.75em;vertical-align:super}
+.anchor-highlight,.anchor-highlight td{background:rgba(245,158,11,.14)!important;outline:1px solid rgba(114,47,55,.28);outline-offset:-1px}
+.tooltip{display:none;position:absolute;bottom:calc(100% + 4px);left:0;z-index:100;width:320px;padding:.75rem 1rem;background:#fff;border:1px solid rgba(114,47,55,.2);font-size:.8rem;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.cite-ref:hover .tooltip,.term-ref:hover .tooltip{display:block}
+.tooltip-title{font-weight:700;color:var(--burgundy);display:block;margin-bottom:.25rem}
+.tooltip-source{display:block;font-size:.7rem;color:var(--ink-faint);margin-bottom:.25rem}
+.tooltip-preview{display:block;font-style:italic;color:var(--ink-soft)}
+.adv-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin:1rem 0}
+@media(max-width:600px){.adv-grid{grid-template-columns:1fr}}
+.adv-grid .pros{background:#f0f7f1;padding:1rem;border-radius:6px}.adv-grid .cons{background:#fdf5f4;padding:1rem;border-radius:6px}
+.adv-grid h4{font-family:var(--serif);color:var(--burgundy);margin-bottom:.5rem;font-size:.95rem}
+.adv-grid ul{margin-left:1.25rem;font-size:.85rem}
+.valuation-box{background:#fff;padding:1.5rem;border-top:2px solid var(--burgundy);margin:1rem 0;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+.valuation-box .big{font-family:var(--serif);font-size:2.25rem;font-weight:700;color:var(--burgundy)}
+.glossary-grid{display:grid;grid-template-columns:1fr 1fr;gap:.35rem 2rem;font-size:.8rem}
+@media(max-width:600px){.glossary-grid{grid-template-columns:1fr}}
+.glossary-row{display:flex;gap:1rem;border-bottom:1px solid #e0dcd5;padding:.45rem 0}
+.glossary-row .term{font-weight:700;color:var(--burgundy);width:9rem;flex-shrink:0}
+.glossary-term{font-weight:800;color:var(--burgundy);background:rgba(114,47,55,.08);border-left:3px solid var(--burgundy);padding:.2rem .45rem;border-radius:3px;display:inline-block}
+.glossary-row .def{color:#666}
+.footer{text-align:center;padding:3rem 0 2rem;border-top:2px solid var(--burgundy);margin-top:2rem}
+.footer .brand{font-family:var(--serif);font-size:1.75rem;color:var(--burgundy);font-style:italic;margin-bottom:1rem}
+.footer p{font-size:.72rem;color:#999;line-height:1.6}
+sup{font-size:.65em;color:var(--burgundy)}
+.partial-line{font-size:.8rem;color:#a34b1e;font-style:italic;border-left:2px solid #c45c26;padding-left:.5rem;margin:.5rem 0}
+.section-lead{font-size:.88rem;color:var(--ink-soft);font-style:italic;margin-bottom:1.5rem;padding:.6rem 1rem;border-left:3px solid rgba(114,47,55,.25);background:rgba(114,47,55,.03)}
+</style>
+</head>
+<body>
+
+<!-- KB-CONFIG
+schema-version: 2.91
+display-order: snapshot, target-overview, legal-ownership, regulatory-compliance, resource-network, industry-market, business-operations, comps-benchmark, valuation-returns, diligence-gaps, risks-mitigation, timeline-milestones, decision-framework
+project-type: technology
+rendering-mode: chinese-only
+multi-asset: false
+config-version: 2
+parent-version: none
+generated-at: 2026-06-16 10:00
+display-order-history:
+  2026-06-16 | intake | technology 默认顺序，v2.91 13-slot schema
+  2026-06-16 | reorder | sample reorder after footer cleanup
+-->
+
+<div class="kb-shell">
+
+  <!-- ═══════════════════════════════════════════════════
+       LEFT NAV — generated from render manifest
+       Renderer fills nav title and nav items.
+       Each item: <li><button class="kb-nav-btn" data-target="ANCHOR"><span class="kb-nav-num">NUMERAL</span>LABEL</button></li>
+       Overview button is always first and always has class="kb-nav-btn active"
+       Appendix items use style="font-size:.52rem;width:2rem" on kb-nav-num
+  ════════════════════════════════════════════════════ -->
+  <nav class="kb-nav" aria-label="板块导航">
+    <p class="kb-nav-title">项目知识网络</p>
+    <ul>
+<li><button class="kb-nav-btn active" data-target="overview"><span class="kb-nav-num">◎</span>项目总览</button></li>
+<li><button class="kb-nav-btn" data-target="snapshot"><span class="kb-nav-num">一</span><span>项目快照</span></button></li>
+<li><button class="kb-nav-btn" data-target="target-overview"><span class="kb-nav-num">二</span><span>资产构成 / 标的概况</span></button></li>
+<li><button class="kb-nav-btn" data-target="legal-ownership"><span class="kb-nav-num">三</span><span>法律结构与权属关系</span></button></li>
+<li><button class="kb-nav-btn" data-target="regulatory-compliance"><span class="kb-nav-num">四</span><span>监管合规与许可路径</span></button></li>
+<li><button class="kb-nav-btn" data-target="resource-network"><span class="kb-nav-num">五</span><span>资源网络与关键协作</span></button></li>
+<li><button class="kb-nav-btn" data-target="industry-market"><span class="kb-nav-num">六</span><span>行业背景与市场格局</span></button></li>
+<li><button class="kb-nav-btn" data-target="business-operations"><span class="kb-nav-num">七</span><span>业务模式与运营假设</span></button></li>
+<li><button class="kb-nav-btn" data-target="comps-benchmark"><span class="kb-nav-num">八</span><span>市场对标与可比案例</span></button></li>
+<li><button class="kb-nav-btn" data-target="valuation-returns"><span class="kb-nav-num">九</span><span>投资回报与敏感性分析</span></button></li>
+<li><button class="kb-nav-btn" data-target="diligence-gaps"><span class="kb-nav-num">十</span><span>待确认问题 / 尽调缺口</span></button></li>
+<li><button class="kb-nav-btn" data-target="risks-mitigation"><span class="kb-nav-num">十一</span><span>关键风险与缓释</span></button></li>
+<li><button class="kb-nav-btn" data-target="timeline-milestones"><span class="kb-nav-num">十二</span><span>项目时间轴</span></button></li>
+<li><button class="kb-nav-btn" data-target="decision-framework"><span class="kb-nav-num">十三</span><span>决策框架</span></button></li>
+<li><button class="kb-nav-btn" data-target="source-index"><span class="kb-nav-num">A</span><span>来源索引</span></button></li>
+<li><button class="kb-nav-btn" data-target="glossary"><span class="kb-nav-num">B</span><span>术语表</span></button></li>
+<li><button class="kb-nav-btn" data-target="data-dictionary"><span class="kb-nav-num">C</span><span>数据字典</span></button></li>
+<li><button class="kb-nav-btn" data-target="version-ledger"><span class="kb-nav-num">D</span><span>版本记录</span></button></li>
+</ul>
+  </nav>
+
+  <main class="kb-content">
+
+    <!-- ═══════════════════════════════════════════════════
+         OVERVIEW PANEL — masthead + kb-summary only
+         Always first, always active on load
+    ════════════════════════════════════════════════════ -->
+    <section class="block kb-panel active" id="overview">
+      <header class="masthead">
+        <div class="masthead-split">
+          <div class="masthead-main">
+            <div class="masthead-badges">
+              <span class="conf-badge">CONFIDENTIAL</span>
+              <span class="ai-badge">🤖 AI-Generated · v1.0</span>
+              <!-- Bilingual toggle: only rendered when bilingual=true -->
+              
+            </div>
+            <h1>AI短剧及演员AI版权<span class="sub">运营模式与数字资产确权分析</span></h1>
+            <p class="masthead-subtitle">AI Short Drama &amp; Actor AI Rights · Project Knowledge Base · Hermes v2.92</p>
+            <p class="masthead-lead">聚焦 AI 短剧产业链、演员 AI 授权、平台分发、合规边界与投资人回报假设；样例用于验证 Hermes v2.92 deep-reference 层与 v2.91 结构，不代表真实项目结论。</p>
+          </div>
+          <aside class="masthead-meta" aria-label="文档元数据">
+            <dl>
+              <div class="meta-row"><dt>Version</dt><dd>v1.0</dd></div>
+              <div class="meta-row"><dt>Date</dt><dd>2026-06-16</dd></div>
+              <div class="meta-row"><dt>Status</dt><dd>内部讨论</dd></div>
+              <div class="meta-row"><dt>Stage</dt><dd><span class="stage-pill">早期线索</span></dd></div>
+            </dl>
+          </aside>
+        </div>
+        <div class="stat-row">
+          <div class="stat-item stat-item-a">
+            <div class="stat-label">Factor A · Content Completeness</div>
+            <div class="stat-value">38%</div>
+            <p class="stat-note">13 个核心 slot 均已渲染，但多数依赖假设或公开资料</p>
+          </div>
+          <div class="stat-item stat-item-b">
+            <div class="stat-label">Factor B · Source Diversity</div>
+            <div class="stat-value">18%</div>
+            <p class="stat-note">来源覆盖公开研报、平台政策、法律评论与用户输入，独立项目方资料不足</p>
+          </div>
+          <div class="stat-item stat-item-c">
+            <div class="stat-label">Combined Maturity</div>
+            <div class="stat-value">30%</div>
+            <p class="stat-note">Early stage</p>
+          </div>
+        </div>
+      </header>
+
+      <div class="kb-summary">
+        <p class="kb-summary-label">项目概览 · 自动生成</p>
+        <p>本样例把公开行业信息、业务假设、权属问题、合规路径、估值回报和尽调缺口拆入 13 个 canonical slot；项目级时间轴仅使用项目自身节点，不以行业新闻填充。</p>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         CONTENT PANELS — one per active slot
+         Renderer fills all rendered slot HTML.
+         Each slot shell:
+           <section class="block kb-panel" id="ANCHOR">
+             <h2 class="section-title"><span class="section-num">NUMERAL</span>中文标题 / English Title</h2>
+             <p class="section-sub">副标题（可选）</p>
+             [section body HTML]
+           </section>
+
+         Component templates for all sections (Section 四 visualizations,
+         Org Chart, Scenario Cards, Timeline 三子块, Callouts, Topics,
+         Advantage Grid, Valuation Box) are in assets/components.html.
+    ════════════════════════════════════════════════════ -->
+    <section class="block kb-panel" id="snapshot">
+<h2 class="section-title"><span class="section-num">一</span>项目快照</h2>
+<table><thead><tr><th>项目项</th><th>内容</th><th>证据/来源</th></tr></thead><tbody><tr><td>项目类型</td><td>AI 内容版权与短剧运营机会</td><td><sup class="cite-ref"><a href="#source-A-1">[A-1]</a></sup></td></tr><tr><td>当前阶段</td><td>行业分析 + 模式验证，尚缺项目方核心资料</td><td><sup class="cite-ref"><a href="#source-U-1">[U-1]</a></sup></td></tr><tr><td>一句话判断</td><td>若演员授权链和平台分发路径可验证，可继续进入小额试点；若权利边界无法闭合，应暂缓投资。</td><td><sup class="cite-ref"><a href="#source-A-2">[A-2]</a></sup></td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="target-overview">
+<h2 class="section-title"><span class="section-num">二</span>资产构成 / 标的概况</h2>
+<table><thead><tr><th>资产/权利/能力</th><th>定义与范围</th><th>可投资性</th><th>关键证据/缺口</th></tr></thead><tbody><tr><td>演员 AI 肖像/声音授权</td><td>以合同授权方式取得特定演员肖像、声音、表演风格在 AI 内容中的使用权</td><td>可投资性取决于授权范围、期限、排他性和再授权权利</td><td>需项目方提供授权样本 <sup class="cite-ref"><a href="#source-U-1">[U-1]</a></sup></td></tr><tr><td>AI 短剧生产流程</td><td>剧本生成、分镜、人物资产、视频合成、剪辑和投放数据闭环</td><td>若能稳定降低制作成本并形成分发回款数据，可作为运营资产</td><td>当前为模式假设 <sup class="cite-ref"><a href="#source-A-1">[A-1]</a></sup></td></tr><tr><td>内容分发账号/渠道</td><td>短视频平台账号、MCN/渠道合作、海外短剧平台入口</td><td>需要确认账号控制权、分账规则和历史数据</td><td>待项目方补充 <sup class="cite-ref"><a href="#source-U-1">[U-1]</a></sup></td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="industry-market">
+<h2 class="section-title"><span class="section-num">六</span>行业背景与市场格局</h2>
+<table><thead><tr><th>主题</th><th>事实/数据</th><th>投资含义</th><th>来源</th></tr></thead><tbody><tr><td>需求驱动</td><td>短剧内容消费增长，AI 生产可缩短制作周期并降低试错成本。</td><td>机会不在单条内容爆款，而在低成本多版本测试能力。</td><td><sup class="cite-ref"><a href="#source-A-1">[A-1]</a></sup></td></tr><tr><td>监管背景</td><td>AI 生成内容、肖像声音权益、平台标识和内容审核均可能形成约束。</td><td>合规设计需要前置进入业务模型。</td><td><sup class="cite-ref"><a href="#source-A-2">[A-2]</a></sup></td></tr><tr><td>商业周期</td><td>内容平台红利通常快速转向买量竞争，渠道成本可能压缩利润。</td><td>必须看 CAC、完播率、付费转化和版权分账。</td><td><sup class="cite-ref"><a href="#source-A-3">[A-3]</a></sup></td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="business-operations">
+<h2 class="section-title"><span class="section-num">七</span>业务模式与运营假设</h2>
+<div class="journey-wrap"><div class="journey" style="--journey-cols:5"><div class="journey-corner"></div><div class="journey-stage">权利取得</div><div class="journey-stage">内容生产</div><div class="journey-stage">平台分发</div><div class="journey-stage">数据回流</div><div class="journey-stage">二次变现</div><div class="journey-lane-label">授权驱动路径</div><div class="journey-node">演员/经纪授权</div><div class="journey-node">AI 形象入库</div><div class="journey-node">短剧上线</div><div class="journey-node">ROI 与反馈</div><div class="journey-node">续约/联名</div><div class="journey-lane-label">平台运营路径</div><div class="journey-node">账号/渠道合作</div><div class="journey-node">批量内容测试</div><div class="journey-node">投放分发</div><div class="journey-node">用户留存分析</div><div class="journey-node">广告/会员/分账</div><div class="journey-lane-label">IP 扩展路径</div><div class="journey-node">原创角色资产</div><div class="journey-node">系列化生产</div><div class="journey-node">跨平台投放</div><div class="journey-node">粉丝资产沉淀</div><div class="journey-node">周边/授权</div></div></div>
+<table><thead><tr><th>应用/产品场景</th><th>价值主张</th><th>证据/缺口</th></tr></thead><tbody><tr><td>AI 短剧批量生产</td><td>用低成本验证题材、演员组合和投放素材</td><td>当前为假设，需要历史投放数据</td></tr><tr><td>演员数字分身授权</td><td>提高演员商业化频次，降低真人拍摄依赖</td><td>需合同和技术样本</td></tr></tbody></table>
+<table><thead><tr><th>客户/受众/付费方</th><th>需求</th><th>获客/渠道</th><th>验证状态</th></tr></thead><tbody><tr><td>短剧平台/内容平台</td><td>持续上新与低成本测试</td><td>平台合作或账号矩阵</td><td>未验证</td></tr><tr><td>品牌广告主</td><td>可控 IP 与定制化内容</td><td>品牌合作/代理商</td><td>待验证</td></tr></tbody></table>
+<table><thead><tr><th>收入来源</th><th>定价/费率</th><th>成本/履约</th><th>单位经济/KPI</th></tr></thead><tbody><tr><td>平台分账</td><td>按播放、广告、会员或充值分成</td><td>制作、买量、审核、版权</td><td>需计算 CAC、单集成本、回收周期</td></tr><tr><td>授权费/服务费</td><td>按项目、期限或收益分成</td><td>艺人授权、模型训练、法务</td><td>需确认毛利和续约率</td></tr></tbody></table>
+<table><thead><tr><th>待验证假设</th><th>为什么关键</th><th>验证方式</th></tr></thead><tbody><tr><td>AI 生成可把单集制作成本压至传统制作的显著折扣</td><td>决定是否具备规模化试错优势</td><td>抽样核对真实制作成本与上线周期</td></tr><tr><td>演员授权可覆盖肖像、声音、表演风格及二次剪辑</td><td>决定权利链是否闭合</td><td>审阅授权合同和平台规则</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="resource-network">
+<h2 class="section-title"><span class="section-num">五</span>资源网络与关键协作</h2>
+<table><thead><tr><th>主体/资源</th><th>关系与作用</th><th>强度/可验证性</th><th>依赖与风险</th></tr></thead><tbody><tr><td>演员/经纪资源</td><td>提供可授权的肖像、声音、粉丝基础</td><td>待验证</td><td>高度依赖个人授权和舆情</td></tr><tr><td>短剧发行/买量团队</td><td>负责平台投放、素材迭代和回款</td><td>需看历史 ROI</td><td>渠道成本上升风险</td></tr><tr><td>AI 视频生成供应商</td><td>提供人物一致性、口型、分镜和后期能力</td><td>需技术样片</td><td>模型政策与成本变化</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="legal-ownership">
+<h2 class="section-title"><span class="section-num">三</span>法律结构与权属关系</h2>
+<table><thead><tr><th>主体/权利</th><th>角色/归属</th><th>限制/负担</th><th>证据/缺口</th></tr></thead><tbody><tr><td>演员本人/经纪公司</td><td>原始权利人或授权代理</td><td>需确认代理权限、期限、地域、排他性和再授权</td><td>合同未提供 <sup class="cite-ref"><a href="#source-U-1">[U-1]</a></sup></td></tr><tr><td>项目公司/SPV</td><td>拟承接授权、内容资产和回款账户</td><td>需确认股权、控制权、IP 归属和关联交易</td><td>待补充</td></tr><tr><td>AI 生成内容作品</td><td>可能形成著作权、邻接权益或合同收益权</td><td>权利性质需由律师确认</td><td><sup class="cite-ref"><a href="#source-A-2">[A-2]</a></sup></td></tr></tbody></table>
+<table><thead><tr><th>关系</th><th>从</th><th>到</th><th>状态</th><th>风险</th></tr></thead><tbody><tr><td>授权链</td><td>演员/经纪公司</td><td>项目公司</td><td>未签署</td><td>授权范围不足会影响商业化</td></tr><tr><td>分发合作</td><td>项目公司</td><td>平台/渠道</td><td>待谈</td><td>账号控制和分账权属需清楚</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="regulatory-compliance">
+<h2 class="section-title"><span class="section-num">四</span>监管合规与许可路径</h2>
+<table><thead><tr><th>监管/规则</th><th>适用原因</th><th>状态/许可</th><th>红线/下一步</th></tr></thead><tbody><tr><td>AI 生成内容标识</td><td>AI 视频、声音和肖像合成内容上线时可能需要标识或平台审核</td><td>需按目标平台逐项确认</td><td>不得误导观众为真人拍摄</td></tr><tr><td>肖像权/声音权益/人格权</td><td>演员数字分身使用直接涉及个人权益和授权边界</td><td>合同样本缺失</td><td>授权不清则不可商业化</td></tr><tr><td>广告与消费者保护</td><td>若用于品牌广告或付费内容，需满足广告真实性和平台规范</td><td>待律师确认</td><td>不得虚假背书</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="comps-benchmark">
+<h2 class="section-title"><span class="section-num">八</span>市场对标与可比案例</h2>
+<table><thead><tr><th>可比对象</th><th>可比逻辑</th><th>指标/倍数</th><th>可借鉴/差异</th></tr></thead><tbody><tr><td>短剧平台分账模式</td><td>反映内容供给方与平台之间的收益分配</td><td>分账比例、买量 ROI、留存/付费转化</td><td>需要项目级后台数据</td></tr><tr><td>虚拟人/数字分身授权</td><td>对应艺人 IP 的可复制授权和品牌合作</td><td>授权费、项目分成、合同期限</td><td>权利条款比技术展示更关键</td></tr><tr><td>AI 视频生产工具链</td><td>反映生产降本与质量上限</td><td>单条视频成本、迭代速度、通过率</td><td>技术优势需转化成可回款内容</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="valuation-returns">
+<h2 class="section-title"><span class="section-num">九</span>投资回报与敏感性分析</h2>
+<div class="valuation-grid">
+<div class="valuation-box"><div class="valuation-label">投资额</div><div class="valuation-value">待定</div><div class="valuation-note">无项目方融资方案，暂不估值</div></div>
+<div class="valuation-box"><div class="valuation-label">回收路径</div><div class="valuation-value">平台分账 / 授权费 / 广告合作</div><div class="valuation-note">需拆分现金流归属</div></div>
+<div class="valuation-box"><div class="valuation-label">关键敏感变量</div><div class="valuation-value">授权成本、买量 ROI、完播率</div><div class="valuation-note">目前均缺一手数据</div></div>
+</div>
+<div class="scenario-grid">
+<div class="scenario-card base"><div class="sc-label">Downside</div><div class="sc-irr">不可测</div><div class="sc-detail">授权链不闭合或平台审核不通过，内容无法商业化。</div></div>
+<div class="scenario-card base"><div class="sc-label">Base</div><div class="sc-irr">待测算</div><div class="sc-detail">小规模试点验证 3-5 个演员/题材组合。</div></div>
+<div class="scenario-card base"><div class="sc-label">Upside</div><div class="sc-irr">待测算</div><div class="sc-detail">形成可复制演员授权池和稳定分发 ROI。</div></div>
+</div>
+<table><thead><tr><th>资金用途</th><th>金额/比例</th><th>说明</th></tr></thead><tbody><tr><td>授权费</td><td>待定</td><td>应分为保底、分成和续约费用</td></tr><tr><td>内容生产与买量</td><td>待定</td><td>需与回款周期匹配</td></tr><tr><td>法务与合规</td><td>待定</td><td>必须前置预算</td></tr></tbody></table>
+<table><thead><tr><th>假设</th><th>Base</th><th>Upside</th><th>Downside</th><th>证据</th></tr></thead><tbody><tr><td>买量 ROI</td><td>1.1x-1.5x</td><td>&gt;2.0x</td><td>&lt;1.0x</td><td>假设，需后台验证</td></tr><tr><td>授权成本</td><td>按项目保底+分成</td><td>低保底高分成</td><td>高保底且不可再授权</td><td>待合同确认</td></tr></tbody></table>
+<table><thead><tr><th>敏感变量</th><th>影响方向</th><th>阈值/区间</th><th>观察方式</th></tr></thead><tbody><tr><td>平台审核通过率</td><td>影响上线速度和内容库存</td><td>按平台逐项统计</td><td>上线记录</td></tr><tr><td>演员授权范围</td><td>影响可复制性和退出价值</td><td>地域/期限/排他/再授权</td><td>合同审阅</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="diligence-gaps">
+<h2 class="section-title"><span class="section-num">十</span>待确认问题 / 尽调缺口</h2>
+<div class="oq-group"><h3>P1 紧急 - 权利与商业化闭环</h3>
+<table><thead><tr><th>问题/主张</th><th>证据强度</th><th>Owner</th><th>紧急程度/阻塞</th><th>需要资料/动作</th></tr></thead><tbody><tr><td>演员授权是否覆盖肖像、声音、表演风格、二次剪辑和平台分发？</td><td>缺一手合同</td><td>法务/项目方</td><td>阻塞</td><td>提供完整授权样本</td></tr><tr><td>平台账号、分账账户和回款主体由谁控制？</td><td>缺后台资料</td><td>项目方</td><td>阻塞</td><td>提供后台截图、合同和账户说明</td></tr></tbody></table>
+</div>
+<div class="oq-group"><h3>P2 重要 - 经济模型</h3>
+<table><thead><tr><th>问题/主张</th><th>证据强度</th><th>Owner</th><th>紧急程度/阻塞</th><th>需要资料/动作</th></tr></thead><tbody><tr><td>单集制作成本、上线周期、买量 ROI、完播率和付费转化是否可验证？</td><td>仅行业假设</td><td>运营团队</td><td>重要</td><td>提供历史项目数据</td></tr><tr><td>授权成本如何影响毛利和回收周期？</td><td>缺价格条款</td><td>投资团队</td><td>重要</td><td>拆分保底、分成、续约和违约成本</td></tr></tbody></table>
+</div>
+</section>
+
+<section class="block kb-panel" id="risks-mitigation">
+<h2 class="section-title"><span class="section-num">十一</span>关键风险与缓释</h2>
+<table class="risk-matrix-table"><thead><tr><th>级别</th><th>风险</th><th>原因/触发</th><th>影响</th><th>证据</th><th>缓释/负责人/状态</th></tr></thead><tbody><tr><td>致命</td><td>演员授权链不闭合</td><td>合同未覆盖 AI 生成、二次剪辑、平台分发或再授权</td><td>内容无法商业化或引发诉讼</td><td>合同缺失 <sup class="cite-ref"><a href="#source-U-1">[U-1]</a></sup></td><td>上线前律师逐条审阅，未闭合不投放</td></tr><tr><td>高</td><td>平台审核或内容标识不通过</td><td>AI 内容政策、广告规范和肖像声音权益要求变化</td><td>上线延迟、账号受限、买量浪费</td><td><sup class="cite-ref"><a href="#source-A-2">[A-2]</a></sup></td><td>按目标平台形成合规 checklist</td></tr><tr><td>高</td><td>买量成本吞噬利润</td><td>短剧赛道竞争导致 CAC 上升</td><td>回收周期拉长，现金流承压</td><td><sup class="cite-ref"><a href="#source-A-3">[A-3]</a></sup></td><td>试点期设置 ROI 停损线</td></tr><tr><td>中</td><td>技术质量不稳定</td><td>人物一致性、口型、情绪表达和审美不达标</td><td>内容转化差，返工成本上升</td><td>需技术样片</td><td>先验收样片再签长期授权</td></tr></tbody></table>
+<table><thead><tr><th>停推条件</th><th>触发动作</th><th>Owner</th></tr></thead><tbody><tr><td>项目方无法提供授权合同、平台后台和历史现金流</td><td>暂停投资推进</td><td>投资负责人</td></tr><tr><td>授权条款禁止 AI 生成或再分发</td><td>改为纯服务采购或放弃</td><td>法务</td></tr></tbody></table>
+</section>
+
+<section class="block kb-panel" id="timeline-milestones">
+<h2 class="section-title"><span class="section-num">十二</span>项目时间轴</h2>
+<p class="section-sub">PROJECT TIMELINE · 仅记录项目自身节点，不放行业动向、市场趋势或研究动作</p><h3>8.1 已发生关键事件</h3><div class="timeline"><div class="tl-item"><span class="tl-date">2026-06-12</span><span class="tl-text"><strong>首轮内部讨论</strong> 确认研究方向为 AI 短剧及演员 AI 授权投资机会。</span></div></div><h3>8.2 正在推进</h3><div class="timeline"><div class="tl-item timeline-ongoing"><span class="tl-date">进行中</span><span class="tl-text"><strong>项目方资料请求</strong> 等待授权合同样本、平台后台、历史投放和回款数据。</span></div></div><h3>8.3 未来关键节点</h3><div class="timeline"><div class="tl-item timeline-deadline"><span class="tl-date">T+7</span><span class="tl-text"><strong>法务初筛</strong> 完成授权链、AI 内容标识和平台规则的初步审阅。</span></div></div>
+</section>
+
+<section class="block kb-panel" id="decision-framework">
+<h2 class="section-title"><span class="section-num">十三</span>决策框架</h2>
+<aside class="callout info"><div class="callout-title">条件式建议</div><p>建议进入资料请求和小额试点设计阶段；在授权链、平台回款和买量 ROI 未验证前，不进入正式投资决策。</p></aside>
+<table><thead><tr><th>投资论点</th><th>证据</th><th>前置条件</th><th>反证/风险</th></tr></thead><tbody><tr><td>AI 生产降低内容试错成本</td><td>行业资料显示生成工具可压缩制作周期 <sup class="cite-ref"><a href="#source-A-1">[A-1]</a></sup></td><td>需项目级成本和上线周期验证</td><td>质量和审核可能抵消降本</td></tr><tr><td>演员数字分身可形成可复制授权池</td><td>商业逻辑成立但合同未验证</td><td>授权必须覆盖 AI 生成和商业分发</td><td>人格权争议和舆情风险</td></tr><tr><td>平台分发数据可快速验证商业模型</td><td>短剧投放可形成日级数据回流</td><td>必须拿到后台数据</td><td>买量成本波动大</td></tr></tbody></table>
+<table><thead><tr><th>选项</th><th>好处</th><th>代价/风险</th><th>适用条件</th></tr></thead><tbody><tr><td>继续推进</td><td>锁定早期机会</td><td>资料缺口大</td><td>项目方 7 天内补齐核心资料</td></tr><tr><td>改条件推进</td><td>以试点降低风险</td><td>谈判周期拉长</td><td>设置 ROI、授权闭合和合规通过的里程碑</td></tr><tr><td>暂缓</td><td>避免在权利不清时投入</td><td>可能错过窗口</td><td>资料无法提供或授权条款不闭合</td></tr></tbody></table>
+<table><thead><tr><th>投后增值杠杆</th><th>执行动作</th><th>Owner</th><th>验证指标</th></tr></thead><tbody><tr><td>合同标准化</td><td>建立演员 AI 授权条款库</td><td>法务</td><td>授权闭合率</td></tr><tr><td>投放试验体系</td><td>按演员/题材/平台做小样本 A/B 测试</td><td>运营</td><td>ROI、完播率、回款周期</td></tr><tr><td>资产沉淀</td><td>沉淀可复用角色资产、剧本模板和分发数据</td><td>项目公司</td><td>单集成本下降、复用率</td></tr></tbody></table>
+<table><thead><tr><th>下一步</th><th>Owner</th><th>时间</th><th>交付物</th></tr></thead><tbody><tr><td>收取授权合同样本和平台账号资料</td><td>项目方</td><td>T+3</td><td>合同、后台截图、分账说明</td></tr><tr><td>形成法务初筛意见</td><td>法务</td><td>T+7</td><td>授权链与监管红线备忘录</td></tr><tr><td>搭建试点预算和 ROI 停损线</td><td>投资团队</td><td>T+10</td><td>试点财务模型</td></tr></tbody></table>
+<aside class="callout warning"><div class="callout-title">IC Readiness</div><p>当前不适合提交 IC；需至少补齐 P1 权利资料和一轮项目级运营数据。</p></aside>
+</section>
+
+    <!-- ═══════════════════════════════════════════════════
+         APPENDIX A — 来源索引 (omit entire section if empty)
+    ════════════════════════════════════════════════════ -->
+    <section class="block kb-panel" id="source-index"><h2 class="section-title"><span class="section-num">A</span>附录 A · 来源索引</h2><table><thead><tr><th>ID</th><th>类型</th><th>标题</th><th>主体</th><th>摘录/说明</th><th>影响章节</th></tr></thead><tbody><tr><td><span id="source-U-1">U-1</span></td><td>用户输入</td><td>项目早期讨论与资料请求</td><td>内部对话</td><td>项目尚缺项目方核心资料，需要以资料请求和试点设计为下一步。</td><td>snapshot, diligence-gaps, timeline-milestones</td></tr><tr><td><span id="source-A-1">A-1</span></td><td>公开资料</td><td>AI 短剧与生成式视频行业资料</td><td>公开研报/行业资料</td><td>用于判断行业需求、生产降本和内容试错逻辑。</td><td>industry-market, business-operations</td></tr><tr><td><span id="source-A-2">A-2</span></td><td>公开法规/法律评论</td><td>AI 生成内容、肖像声音权益与平台规则</td><td>公开监管/法律资料</td><td>用于识别授权链、人格权和内容标识要求。</td><td>legal-ownership, regulatory-compliance, risks-mitigation</td></tr><tr><td><span id="source-A-3">A-3</span></td><td>公开市场资料</td><td>短剧投放与分发商业模型资料</td><td>公开行业观察</td><td>用于判断买量成本、平台分账和商业周期风险。</td><td>industry-market, valuation-returns, risks-mitigation</td></tr></tbody></table></section>
+
+    <!-- ═══════════════════════════════════════════════════
+         APPENDIX B — 术语表 (omit entire section if empty)
+    ════════════════════════════════════════════════════ -->
+    <section class="block kb-panel" id="glossary"><h2 class="section-title"><span class="section-num">B</span>附录 B · 术语表</h2><div class="glossary-row" id="term-ai-生成内容"><span class="term">AI 生成内容</span><span>由生成式模型自动或半自动生成的视频、音频、图像或文本内容。</span><span>监管合规</span></div><div class="glossary-row" id="term-数字分身"><span class="term">数字分身</span><span>以算法模拟个人肖像、声音或表演风格的数字化表达。</span><span>法律权属</span></div><div class="glossary-row" id="term-买量-roi"><span class="term">买量 ROI</span><span>投放成本与由投放带来的收入或毛利之间的回报关系。</span><span>估值回报</span></div><div class="glossary-row" id="term-再授权"><span class="term">再授权</span><span>被授权方将部分权利继续授权给第三方使用的权利。</span><span>法律权属</span></div></section>
+
+    <section class="block kb-panel" id="data-dictionary"><h2 class="section-title"><span class="section-num">C</span>附录 C · 数据字典、模型假设与数据证据底稿</h2><table><thead><tr><th>字段/模型项</th><th>口径/公式</th><th>样本范围/清洗逻辑</th><th>Caveat</th></tr></thead><tbody><tr><td>CAC</td><td>获客成本，按投放成本除以新增付费用户计算。</td><td>需平台后台和投放账户导出</td><td>当前样例未接入真实数据。</td></tr><tr><td>单集制作成本</td><td>剧本/生成/剪辑/审核/返工等成本合计除以上线集数。</td><td>需项目方提供 production workpaper</td><td>AI 生成工具成本可能随模型政策变化。</td></tr><tr><td>授权闭合率</td><td>合同覆盖目标商业使用场景的比例。</td><td>由法务逐条审阅合同条款</td><td>需人工判断，不应由模型自动认定。</td></tr></tbody></table></section>
+
+    <section class="block kb-panel" id="version-ledger"><h2 class="section-title"><span class="section-num">D</span>附录 D · 版本记录</h2><table><thead><tr><th>版本</th><th>时间</th><th>父版本</th><th>来源</th><th>变更摘要</th></tr></thead><tbody><tr><td>v1.0</td><td>2026-06-16 10:00</td><td>none</td><td>Hermes</td><td>Initial Hermes v2.92 sample render with v2.91 13-slot schema and Appendix A-D</td></tr></tbody></table></section>
+
+    <!-- ═══════════════════════════════════════════════════
+    ════════════════════════════════════════════════════ -->
+    <!-- FOOTER -->
+    <footer class="footer">
+      <p class="brand">合域 AI · Opportunistic Investments · Hermes v2.92</p>
+      <p>本文档由 AI 辅助生成，仅供内部研究参考，不构成投资建议。所有数据须经独立核实后方可用于决策。</p>
+      <p style="margin-top:.5rem;color:#bbb">Generated 2026-06-16 15:08</p>
+    </footer>
+
+  </main>
+</div>
+
+<!-- Panel switcher + bilingual toggle JS — DO NOT MODIFY -->
+<script>
+(function(){
+  var btns = document.querySelectorAll('.kb-nav-btn');
+  var panels = document.querySelectorAll('.kb-panel');
+  function activate(id){
+    panels.forEach(function(p){ p.classList.toggle('active', p.id === id); });
+    btns.forEach(function(b){ b.classList.toggle('active', b.dataset.target === id); });
+  }
+  function show(id){
+    activate(id);
+    if (history.replaceState) history.replaceState(null, '', '#' + id);
+    window.scrollTo(0, 0);
+  }
+  function revealAnchor(anchorId){
+    var el = document.getElementById(anchorId);
+    if (!el) return false;
+    var panel = el.closest('.kb-panel');
+    if (panel) activate(panel.id);
+    if (history.replaceState) history.replaceState(null, '', '#' + anchorId);
+    var target = el.closest('tr') || el;
+    document.querySelectorAll('.anchor-highlight').forEach(function(x){ x.classList.remove('anchor-highlight'); });
+    target.classList.add('anchor-highlight');
+    setTimeout(function(){ target.scrollIntoView({behavior:'smooth', block:'center'}); }, 0);
+    return true;
+  }
+  btns.forEach(function(b){
+    b.addEventListener('click', function(){ show(b.dataset.target); });
+  });
+  document.querySelectorAll('.cite-ref a[href^="#"], .term-ref a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(ev){
+      var id = a.getAttribute('href').slice(1);
+      if (revealAnchor(id)) ev.preventDefault();
+    });
+  });
+  var hash = (location.hash || '').replace('#','');
+  if (hash && document.getElementById(hash)) {
+    var hashed = document.getElementById(hash);
+    if (hashed.classList.contains('kb-panel')) show(hash);
+    else revealAnchor(hash);
+  }
+  var toggle = document.getElementById('lang-toggle');
+  if (toggle) {
+    toggle.style.display = 'flex';
+    toggle.querySelectorAll('.lang-btn').forEach(function(btn){
+      btn.addEventListener('click', function(){
+        document.body.classList.toggle('kb-en-mode', btn.dataset.lang === 'en');
+        toggle.querySelectorAll('.lang-btn').forEach(function(b){
+          b.classList.toggle('active', b.dataset.lang === btn.dataset.lang);
+          b.setAttribute('aria-pressed', b.dataset.lang === btn.dataset.lang);
+        });
+      });
+    });
+  }
+})();
+</script>
+</body>
+</html>

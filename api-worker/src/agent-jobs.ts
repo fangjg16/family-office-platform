@@ -124,7 +124,7 @@ async function writeKnowledgeNetworkFromHtml(
     mode,
     previousHtml,
     strict: true,
-    touchesTimeline: mode !== "reorder" && /id=["']timeline["']/i.test(html),
+    touchesTimeline: mode !== "reorder" && /id=["']timeline-milestones["']/i.test(html),
   });
   if (!validation.ok) {
     return { ok: false, error: validation.error ?? "HTML 校验失败" };

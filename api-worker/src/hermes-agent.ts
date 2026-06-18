@@ -215,7 +215,7 @@ export function buildHermesAgentInstructions(
       : undefined;
   const intentSkillMap: Record<Exclude<SkillIntent, "standard">, string> = {
     project_intake: "project-intake",
-    knowledge_network: "knowledge-base-generation",
+    knowledge_network: "opportunistic-investments-hermes",
     ic_memo: "ic-memo",
     dd_checklist: "dd-checklist",
     dd_claim_audit: "dd-claim-audit",

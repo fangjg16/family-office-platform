@@ -1,6 +1,6 @@
 import { isKnowledgeNetworkReorderIntent } from "./knowledge-network-slot-aliases";
 
-/** 知识网络更新模式：对齐 v2.8 knowledge-base-generation / kb-config */
+/** 知识网络更新模式：Hermes v2.92 / schema v2.91 */
 
 export type KnowledgeNetworkUpdateMode = "initial" | "incremental" | "full" | "reorder";
 

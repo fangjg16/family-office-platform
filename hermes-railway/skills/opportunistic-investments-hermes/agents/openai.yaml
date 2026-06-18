@@ -1,0 +1,7 @@
+﻿interface:
+  display_name: "Opportunistic Investments Hermes"
+  short_description: "Hermes-ready v2.92 KB generation"
+  brand_color: "#722F37"
+  default_prompt: "Use $opportunistic-investments-hermes to generate or validate a v2.92 project knowledge base."
+policy:
+  allow_implicit_invocation: true
