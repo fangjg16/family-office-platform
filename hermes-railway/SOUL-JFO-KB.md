@@ -35,7 +35,9 @@ Canonical skills 路径：`/opt/data/skills`（**非** `.hermes/skills`）。
 8. `…/references/timeline-rules.md`（触及 timeline-milestones 时）
 9. `…/assets/kb-template.html`
 
-**本阶段不默认读** `references/deep/*.md`（下一阶段注入）。
+**deep refs（initial/full 读齐 7 个；incremental 按 slot 映射；reorder 不读）**
+
+`references/deep/knowledge-base-generation.md`、`project-intake.md`、`public-info-search.md`、`dd-claim-audit.md`、`compliance-check.md`、`risk-matrix.md`、`returns-analysis.md`
 
 **仅重排展示顺序**
 

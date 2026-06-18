@@ -10,7 +10,11 @@ import {
   messageTouchesMaturityScorecard,
   messageTouchesTimeline,
 } from "./hermes-knowledge-network";
-import { buildKnowledgeNetworkSlotResolutionLines } from "./knowledge-network-slot-aliases";
+import {
+  buildKnowledgeNetworkSlotResolutionLines,
+  resolveKnowledgeNetworkSlotsFromMessage,
+} from "./knowledge-network-slot-aliases";
+import { buildKnowledgeNetworkDeepRefResolutionLines } from "./knowledge-network-deep-refs";
 import { buildJfoMaterialsInstructions } from "./hermes-materials-instructions";
 import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
@@ -273,15 +277,18 @@ export function buildHermesAgentInstructions(
     const userMessage = ctx?.userMessage ?? "";
     const mode = knMode ?? "initial";
     const visualDebug = isVisualDebugKnRequest(userMessage);
+    const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(userMessage);
     lines.push(
       buildHermesKnowledgeNetworkRequiredReads({
         mode,
         touchesTimeline: messageTouchesTimeline(userMessage),
+        touchedSlots,
         touchesMaturityScorecard: messageTouchesMaturityScorecard(userMessage),
         includeStyleGuide: visualDebug,
         includeComponents: visualDebug,
       }),
       buildKnowledgeNetworkSlotResolutionLines(userMessage),
+      buildKnowledgeNetworkDeepRefResolutionLines(mode, touchedSlots),
       buildHermesKnowledgeNetworkFileProtocol(
         jfoBase,
         projectId,

@@ -1,4 +1,9 @@
 import type { HermesBridgeEnv } from "./hermes-bridge";
+import {
+  buildKnowledgeNetworkDeepRefResolutionLines,
+  resolveKnowledgeNetworkDeepRefs,
+} from "./knowledge-network-deep-refs";
+import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import { validateKnowledgeNetworkHtml } from "./knowledge-network-html-validation";
 import { resolveKnowledgeNetworkPutJobId } from "./knowledge-network-guards";
@@ -206,6 +211,8 @@ function readLine(n: number, relPath: string): string {
 export type HermesKnRequiredReadsOptions = {
   mode: KnowledgeNetworkUpdateMode;
   touchesTimeline?: boolean;
+  /** 增量模式：用户点名的 canonical slots（驱动 deep refs 子集） */
+  touchedSlots?: readonly CanonicalKbSlot[];
   /** 增量模式：用户点名 header / 成熟度评分卡时读 maturity-scoring.md */
   touchesMaturityScorecard?: boolean;
   /** 视觉/版式调试任务才读 style-guide */
@@ -232,8 +239,14 @@ export function isVisualDebugKnRequest(message: string): boolean {
 export function buildHermesKnowledgeNetworkRequiredReads(
   options: HermesKnRequiredReadsOptions,
 ): string {
-  const { mode, touchesTimeline, touchesMaturityScorecard, includeStyleGuide, includeComponents } =
-    options;
+  const {
+    mode,
+    touchesTimeline,
+    touchedSlots = [],
+    touchesMaturityScorecard,
+    includeStyleGuide,
+    includeComponents,
+  } = options;
   const lines: string[] = ["", "【知识网络 · Hermes v2.92 / v2.91 schema · 必读（read_file，按模式）】"];
 
   if (mode === "reorder") {
@@ -271,6 +284,11 @@ export function buildHermesKnowledgeNetworkRequiredReads(
   }
   add("assets/kb-template.html");
 
+  const deepRefs = resolveKnowledgeNetworkDeepRefs(mode, touchedSlots);
+  for (const deepRef of deepRefs) {
+    add(deepRef);
+  }
+
   if (includeComponents) {
     lines.push(readLine(n++, "assets/components.html"));
   }
@@ -288,8 +306,8 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     "- **timeline-milestones** 仅写项目推进节点；行业/市场背景写 industry-market/comps-benchmark/risks-mitigation。",
     "- **成熟度三张卡** `.stat-value` 必须为 0–100%；slot 计数、字母等级只能写 stat-note / stage。",
     "- **禁止** legacy v2.8 anchors（assets、business-model、timeline 等）、skills_reference.md、根目录 kb-template.html。",
-    "- **禁止** read_file examples-kb-data.json、scripts/、references/deep/（下一阶段再默认注入 deep refs）。",
-    "- 非视觉调试：**不要** read_file components.html / visual-style-guide.md。",
+    "- **deep refs**：initial/full 读齐 7 个 references/deep/*.md；incremental 仅读点名 slot 映射；reorder 不读。",
+    "- **禁止** read_file examples-kb-data.json、scripts/、components.html、visual-style-guide（非视觉调试）。",
   );
 
   if (mode === "full" || mode === "initial") {
@@ -302,6 +320,10 @@ export function buildHermesKnowledgeNetworkRequiredReads(
 }
 
 export { messageTouchesTimeline } from "./knowledge-network-slot-aliases";
+export {
+  buildKnowledgeNetworkDeepRefResolutionLines,
+  resolveKnowledgeNetworkDeepRefs,
+} from "./knowledge-network-deep-refs";
 
 function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
   modeLine: string;
