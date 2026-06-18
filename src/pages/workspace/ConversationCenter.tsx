@@ -45,7 +45,8 @@ import {
   type ProjectFileRecord,
 } from "@/lib/project-api";
 import type { KnowledgeNetworkChatEntryState } from "@/lib/knowledge-network-prompts";
-import { upsertApiProject } from "@/workspace/project-registry";
+import { getProjectById } from "@/workspace/project-registry";
+import type { WorkspaceProject } from "@/workspace/projects";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import { consumeChatSse } from "@/lib/chat-stream-client";
 import {
@@ -146,6 +147,7 @@ function ensureProjectMainThreads(
   if (focusProjectId) projectIds.add(focusProjectId);
 
   for (const pid of projectIds) {
+    if (!getProjectById(pid)) continue;
     const mainId = `${pid}-main`;
     if (byId.has(mainId)) continue;
     const built = buildConversationFromProject(pid);
@@ -161,7 +163,8 @@ function buildSidebarConversationList(
   focusProjectId?: string,
 ): SessionConversation[] {
   const withMain = ensureProjectMainThreads(convs, messagesByConversation, focusProjectId);
-  return reconcileConversationsWithMessages(withMain, messagesByConversation);
+  const reconciled = reconcileConversationsWithMessages(withMain, messagesByConversation);
+  return reconciled.filter((c) => Boolean(getProjectById(c.projectId)));
 }
 
 function pruneEmptyLiveConversations(
@@ -251,8 +254,8 @@ function reconcileConversationsWithMessages(
     if (!Array.isArray(msgs) || msgs.length === 0) continue;
     if (byId.has(conversationId)) continue;
     const projectId = inferProjectIdFromConversationId(conversationId, convs);
-    if (!projectId) continue;
-    const built = buildConversationFromProject(projectId);
+    if (!projectId || !getProjectById(projectId)) continue;
+    const built = buildConversationFromProject(projectId, project ?? undefined);
     if (!built) continue;
     byId.set(conversationId, {
       ...built,
@@ -343,6 +346,7 @@ function groupSidebarByProject(
   }
   const groups: SidebarProjectGroup[] = [];
   for (const [pid, list] of byProject) {
+    if (!getProjectById(pid)) continue;
     const sorted = [...list].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
     groups.push({
       projectId: pid,
@@ -934,20 +938,14 @@ function withCurrentPreviewTime(conversation: SessionConversation): SessionConve
   };
 }
 
-function buildConversationFromProject(projectId: string): SessionConversation | null {
+function buildConversationFromProject(
+  projectId: string,
+  projectOverride?: WorkspaceProject,
+): SessionConversation | null {
   const project =
+    projectOverride ??
     getProjectById(projectId) ??
-    ALL_PROJECTS.find((p) => p.id === projectId) ??
-    (projectId.startsWith("proj-")
-      ? {
-          id: projectId,
-          name: "云端项目",
-          category: "",
-          phase: "Active（资源筹备中）" as const,
-          summary: "",
-          guestSummary: "",
-        }
-      : null);
+    ALL_PROJECTS.find((p) => p.id === projectId);
   if (!project) return null;
   const demo = getProjectResourceDemo(projectId);
   const names: string[] = [];
@@ -1659,9 +1657,14 @@ export default function ConversationCenter() {
   }, []);
 
   const [projectLookupDone, setProjectLookupDone] = useState(false);
+  const [chatSessionProject, setChatSessionProject] = useState<WorkspaceProject | undefined>();
   const [apiProjectsTick, setApiProjectsTick] = useState(0);
 
   useEffect(() => subscribeApiProjects(() => setApiProjectsTick((n) => n + 1)), []);
+
+  useEffect(() => {
+    setChatSessionProject(undefined);
+  }, [projectId]);
 
   useEffect(() => {
     if (!projectId) {
@@ -1680,7 +1683,7 @@ export default function ConversationCenter() {
     setProjectLookupDone(false);
     void fetchProjectByIdFromApi(projectId)
       .then((row) => {
-        if (!cancelled && row) upsertApiProject(row);
+        if (!cancelled) setChatSessionProject(row ?? undefined);
       })
       .finally(() => {
         if (!cancelled) setProjectLookupDone(true);
@@ -1690,7 +1693,9 @@ export default function ConversationCenter() {
     };
   }, [projectId, apiProjectsTick]);
 
-  const project = projectId ? getProjectById(projectId) : undefined;
+  const project = projectId
+    ? (getProjectById(projectId) ?? chatSessionProject)
+    : undefined;
 
   const projectRole = useMemo(() => {
     if (!userId || !projectId) return null;
@@ -1815,7 +1820,7 @@ export default function ConversationCenter() {
     const found = conversations.find((item) => item.id === effectiveConversationId);
     if (found) return found;
     if (!isLiveAiMode) return null;
-    const built = buildConversationFromProject(projectId);
+    const built = buildConversationFromProject(projectId, project ?? undefined);
     if (!built) return null;
     return {
       ...built,
@@ -2285,7 +2290,7 @@ export default function ConversationCenter() {
       setConversations((prev) => {
         if (prev.some((c) => c.id === id)) return prev;
         const isBlank = isBlankConversationId(projectId, id);
-        const builtMain = buildConversationFromProject(projectId);
+        const builtMain = buildConversationFromProject(projectId, project);
         if (!isBlank && !builtMain) return prev;
         return [
           {
@@ -2406,7 +2411,7 @@ export default function ConversationCenter() {
     saveLastChatProjectId(projectId);
     setConversations((prev) => {
       if (prev.some((c) => c.id === effectiveConversationId)) return prev;
-      const built = buildConversationFromProject(projectId);
+      const built = buildConversationFromProject(projectId, project ?? undefined);
       if (!built) return prev;
       return [
         withCurrentPreviewTime({

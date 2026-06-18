@@ -11,6 +11,8 @@ export type RemoteChatState = {
   conversations: PersistedConversation[];
   messagesByConversation: Record<string, LiveChatMessage[]>;
   syncedAt?: string;
+  /** D1 projects 表仍存在的项目 id（侧栏过滤已删项目） */
+  projectIds?: string[];
 };
 
 export type ChatStatePatch = RemoteChatState & {
@@ -40,11 +42,13 @@ export async function fetchRemoteChatState(
     conversations?: PersistedConversation[];
     messagesByConversation?: Record<string, LiveChatMessage[]>;
     syncedAt?: string;
+    projectIds?: string[];
   };
   return {
     conversations: data.conversations ?? [],
     messagesByConversation: data.messagesByConversation ?? {},
     syncedAt: data.syncedAt,
+    projectIds: data.projectIds,
   };
 }
 
