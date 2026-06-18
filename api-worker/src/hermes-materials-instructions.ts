@@ -45,6 +45,8 @@ export function buildJfoMaterialsInstructions(
     "- 引用与事实须可追溯到 KB、上传资料摘录或公开来源。",
     "- 用户刚在对话上传文件时：必须 scope=session 或 scope=all，不能只读 package。",
     "- 若上方有【Worker 预注入 · 项目资料摘录】：可作起点，不足时仍须 manifest + 按需 textUrl。",
+    "- 若上方有【Slot Material Hints】：为文件级阅读导航（soft guidance），不替代 manifest；摘录见 digest，正文仍按需 GET textUrl。",
+    "- incremental 未点名 slot 时 hints 仅为 globalFiles 紧凑列表（最多 5 个）；initial/full 才展开 13 slot。",
     "",
     `本任务正文读取策略：${readingByTask.summary}`,
     ...readingByTask.bullets.map((b) => `- ${b}`),

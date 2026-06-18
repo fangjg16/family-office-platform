@@ -9,6 +9,8 @@ import {
 import { extractPdfPlainText } from "./pdf-text";
 import { extractSpreadsheetPlainText } from "./spreadsheet-text";
 import { buildHermesMaterialsDigest } from "./hermes-materials-digest";
+import { buildKnowledgeNetworkMaterialHints } from "./knowledge-network-material-hints";
+import { resolveKnowledgeNetworkSlotsFromMessage } from "./knowledge-network-slot-aliases";
 import {
   detectSkillIntent,
   shouldRouteToHermes,
@@ -791,6 +793,23 @@ async function handleChatViaHermes(
       if (digest) instructions += digest;
     } catch {
       /* D1 未就绪时仍依赖 Hermes jfo-r2-materials */
+    }
+  }
+
+  if (params.chatMode === "knowledge_network" && knMode && knMode !== "reorder") {
+    try {
+      const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(params.message);
+      const hints = await buildKnowledgeNetworkMaterialHints(env, {
+        projectId: params.projectId,
+        userId: params.userId,
+        conversationId: params.conversationId,
+        userMessage: params.message,
+        mode: knMode,
+        touchedSlots,
+      });
+      if (hints) instructions += hints;
+    } catch {
+      /* hints 失败不阻断 Hermes */
     }
   }
 
