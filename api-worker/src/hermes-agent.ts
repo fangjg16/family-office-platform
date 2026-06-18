@@ -6,10 +6,12 @@ import {
 import {
   buildHermesKnowledgeNetworkFileProtocol,
   buildHermesKnowledgeNetworkRequiredReads,
+  buildHermesKnowledgeNetworkSlotPatchWorkflow,
   isVisualDebugKnRequest,
   messageTouchesMaturityScorecard,
   messageTouchesTimeline,
 } from "./hermes-knowledge-network";
+import { shouldUseSlotHtmlPatchMode } from "./knowledge-network-slot-patch";
 import {
   buildKnowledgeNetworkSlotResolutionLines,
   resolveKnowledgeNetworkSlotsFromMessage,
@@ -278,27 +280,46 @@ export function buildHermesAgentInstructions(
     const mode = knMode ?? "initial";
     const visualDebug = isVisualDebugKnRequest(userMessage);
     const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(userMessage);
+    const slotPatchSlot = shouldUseSlotHtmlPatchMode(mode, touchedSlots)
+      ? touchedSlots[0]
+      : null;
+    const slotPatchMode = Boolean(slotPatchSlot);
     lines.push(
       buildHermesKnowledgeNetworkRequiredReads({
         mode,
         touchesTimeline: messageTouchesTimeline(userMessage),
         touchedSlots,
+        slotPatchMode,
         touchesMaturityScorecard: messageTouchesMaturityScorecard(userMessage),
         includeStyleGuide: visualDebug,
         includeComponents: visualDebug,
       }),
       buildKnowledgeNetworkSlotResolutionLines(userMessage),
       buildKnowledgeNetworkDeepRefResolutionLines(mode, touchedSlots),
-      buildHermesKnowledgeNetworkFileProtocol(
-        jfoBase,
-        projectId,
-        userId || "system",
-        jobId,
-        projectTitleHint,
-        mode,
-      ),
-      "预注入摘录只供事实依据；写入 HTML 时须保留 assets/kb-template.html 结构与 <!-- KB-CONFIG -->。",
     );
+    if (slotPatchSlot) {
+      lines.push(
+        buildHermesKnowledgeNetworkSlotPatchWorkflow(
+          jfoBase,
+          projectId,
+          projectTitleHint,
+          slotPatchSlot,
+        ),
+        "预注入摘录只供事实依据；slot patch 模式下 Worker 合并 JSON patch 入库，勿整页 PUT。",
+      );
+    } else {
+      lines.push(
+        buildHermesKnowledgeNetworkFileProtocol(
+          jfoBase,
+          projectId,
+          userId || "system",
+          jobId,
+          projectTitleHint,
+          mode,
+        ),
+        "预注入摘录只供事实依据；写入 HTML 时须保留 assets/kb-template.html 结构与 <!-- KB-CONFIG -->。",
+      );
+    }
   }
 
   return lines.join("\n");

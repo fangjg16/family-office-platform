@@ -1,12 +1,25 @@
 import type { SkillIntent } from "./chat-modes";
 import { extractKnowledgeNetworkHtmlLoose } from "./chat-modes";
 import { syncCompletedAgentJobToChat } from "./chat-sync";
+import {
+  finalizeHermesOutput,
+  isHermesAgentConfigured,
+  pollHermesRun,
+} from "./hermes-agent";
 import { validateKnowledgeNetworkHtml } from "./knowledge-network-html-validation";
+import {
+  applySlotHtmlPatchToKnowledgeNetworkHtml,
+  extractSlotHtmlPatchFromAnswer,
+  shouldUseSlotHtmlPatchMode,
+  slotHtmlPatchSummaryForJob,
+  validateMergedKnowledgeNetworkAfterSlotPatch,
+} from "./knowledge-network-slot-patch";
 import { formatKnVersionDisplay } from "./knowledge-network-version";
 import {
   detectKnowledgeNetworkUpdateMode,
   type KnowledgeNetworkUpdateMode,
 } from "./knowledge-network-mode";
+import { resolveKnowledgeNetworkSlotsFromMessage } from "./knowledge-network-slot-aliases";
 import {
   getProjectKnowledgeNetworkMeta,
   readProjectKnowledgeNetworkHtml,
@@ -82,11 +95,10 @@ function extractKnHtmlFromResult(result: {
   return extractKnowledgeNetworkHtmlLoose(result.answer);
 }
 
-async function resolveKnModeForJob(
+async function resolveKnUserMessage(
   env: AgentJobEnv,
   row: AgentJobRow,
-): Promise<KnowledgeNetworkUpdateMode> {
-  let message = "";
+): Promise<string> {
   const msgRow = await env.DB.prepare(
     `SELECT content FROM user_chat_messages
      WHERE user_id = ? AND pending_job_id = ?
@@ -94,9 +106,14 @@ async function resolveKnModeForJob(
   )
     .bind(row.user_id, row.id)
     .first<{ content: string }>();
-  if (msgRow?.content) message = msgRow.content;
+  return msgRow?.content?.trim() ?? "";
+}
 
-  const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+async function resolveKnModeForJob(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+): Promise<KnowledgeNetworkUpdateMode> {
+  const message = await resolveKnUserMessage(env, row);
   const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id);
   const hadKbBeforeThisJob = Boolean(
     previousHtml?.trim() && meta?.lastJobId && meta.lastJobId !== row.id,
@@ -145,6 +162,95 @@ async function writeKnowledgeNetworkFromHtml(
   return { meta, html: stored, ok: true };
 }
 
+type SlotPatchWriteResult =
+  | {
+      ok: true;
+      meta: NonNullable<Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>>;
+      html: string;
+      slot: string;
+      summary: string;
+    }
+  | { ok: false; skipped: true }
+  | { ok: false; skipped: false; error: string };
+
+async function tryWriteKnowledgeNetworkFromSlotPatch(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+  result: { answer: string },
+  knMode: KnowledgeNetworkUpdateMode,
+): Promise<SlotPatchWriteResult> {
+  const message = await resolveKnUserMessage(env, row);
+  const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(message);
+  if (!shouldUseSlotHtmlPatchMode(knMode, touchedSlots)) {
+    return { ok: false, skipped: true };
+  }
+
+  const extracted = extractSlotHtmlPatchFromAnswer(result.answer);
+  if (!extracted.ok) {
+    return { ok: false, skipped: false, error: extracted.reason };
+  }
+
+  const expectedSlot = touchedSlots[0]!;
+  if (extracted.patch.slot !== expectedSlot) {
+    return {
+      ok: false,
+      skipped: false,
+      error: `patch.slot (${extracted.patch.slot}) 与用户点名 slot (${expectedSlot}) 不一致`,
+    };
+  }
+
+  const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id, {
+    mergeVersionLedger: false,
+  });
+  if (!previousHtml?.trim()) {
+    return {
+      ok: false,
+      skipped: false,
+      error: "无当前 KB HTML，无法 slot patch（请使用首次/全量或整页 HTML）",
+    };
+  }
+
+  const applied = applySlotHtmlPatchToKnowledgeNetworkHtml(
+    previousHtml,
+    extracted.patch,
+  );
+  if (!applied.ok) {
+    return { ok: false, skipped: false, error: applied.error };
+  }
+
+  const validation = validateMergedKnowledgeNetworkAfterSlotPatch(applied.html, {
+    previousHtml,
+    touchesTimeline: extracted.patch.slot === "timeline-milestones",
+  });
+  if (!validation.ok) {
+    return {
+      ok: false,
+      skipped: false,
+      error: validation.error ?? "slot patch 合并后 strict 校验失败",
+    };
+  }
+
+  const summary = slotHtmlPatchSummaryForJob(extracted.patch);
+  const written = await writeKnowledgeNetworkFromHtml(
+    env,
+    row,
+    applied.html,
+    summary,
+    knMode,
+  );
+  if (!written.ok) {
+    return { ok: false, skipped: false, error: written.error };
+  }
+
+  return {
+    ok: true,
+    meta: written.meta,
+    html: written.html,
+    slot: extracted.patch.slot,
+    summary,
+  };
+}
+
 async function finalizeKnowledgeNetworkJobResult(
   env: AgentJobEnv,
   row: AgentJobRow,
@@ -183,7 +289,32 @@ async function finalizeKnowledgeNetworkJobResult(
     }
   }
 
-  // 路径 B：从 Hermes 回复提取 HTML 写入（PUT 失败时的主交付）
+  const knMode = await resolveKnModeForJob(env, row);
+  const patchWritten = await tryWriteKnowledgeNetworkFromSlotPatch(
+    env,
+    row,
+    result,
+    knMode,
+  );
+  if (patchWritten.ok) {
+    const vDisplay = formatKnVersionDisplay(
+      patchWritten.meta.version,
+      patchWritten.meta.versionLabel,
+    );
+    const note =
+      `\n\n已通过 **slot patch** 写入**项目知识网络 v${vDisplay}**（仅更新 \`${patchWritten.slot}\`）。`;
+    const answer = result.answer.includes("项目知识网络 v")
+      ? result.answer
+      : `${result.answer.trim() || patchWritten.summary}${note}`;
+    return {
+      status: "ok",
+      answer,
+      knowledgeNetworkHtml: patchWritten.html,
+    };
+  }
+  const patchFallbackError = patchWritten.skipped ? null : patchWritten.error;
+
+  // 路径 B：从 Hermes 回复提取整页 HTML 写入（PUT / slot patch 失败时的 fallback）
   const extracted = extractKnHtmlFromResult(result);
   if (extracted) {
     const knMode =
@@ -210,7 +341,21 @@ async function finalizeKnowledgeNetworkJobResult(
       answer:
         `${result.answer.trim() || "Hermes 已结束，但知识网络未通过校验。"}\n\n` +
         `**知识网络校验未通过**：${written.error}\n` +
+        (patchFallbackError
+          ? `（slot patch 曾尝试但失败：${patchFallbackError}）\n`
+          : "") +
         "（Worker 不会自动多轮重写；请按错误修正相关 slot 后重试，勿重复整页生成。）",
+    };
+  }
+
+  if (patchFallbackError) {
+    return {
+      status: "failed",
+      error: "知识网络交付失败",
+      answer:
+        (result.answer.trim() || "Hermes 已结束，但未返回可用知识网络。") +
+        `\n\n**slot patch 失败**：${patchFallbackError}\n` +
+        "也未检测到可用的整页 ```html fallback。",
     };
   }
 
@@ -388,4 +533,167 @@ export async function getAgentJob(
     .bind(jobId, userId)
     .first<AgentJobRow>();
   return row ?? null;
+}
+
+export async function getAgentJobById(
+  env: AgentJobEnv,
+  jobId: string,
+): Promise<AgentJobRow | null> {
+  const row = await env.DB.prepare(
+    `SELECT id, project_id, user_id, conversation_id, skill_intent, status,
+            hermes_run_id, answer, knowledge_network_html, error, created_at, updated_at
+     FROM agent_jobs WHERE id = ?`,
+  )
+    .bind(jobId)
+    .first<AgentJobRow>();
+  return row ?? null;
+}
+
+/**
+ * Hermes 已通过 curl PUT 写入 KB，但 agent_jobs 仍 running 时收尾（waitUntil 丢失或 Run 未终态）。
+ */
+export async function finalizeAgentJobAfterKnPut(
+  env: AgentJobEnv,
+  jobId: string,
+  answerSummary?: string,
+): Promise<boolean> {
+  const row = await getAgentJobById(env, jobId);
+  if (!row || (row.status !== "running" && row.status !== "pending")) return false;
+  if (row.skill_intent !== "knowledge_network") return false;
+
+  const meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+  if (meta?.lastJobId !== jobId) return false;
+
+  const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+  if (!html?.trim()) return false;
+
+  const summary = (answerSummary ?? "Hermes 文件回传").trim();
+  const note = `\n\n已同步至**项目知识网络 v${formatKnVersionDisplay(meta.version, meta.versionLabel)}**（文件 API 回传，可在项目详情预览）。`;
+  const answer = summary.includes("项目知识网络 v") ? summary : `${summary}${note}`;
+
+  await completeAgentJob(env, jobId, { answer, knowledgeNetworkHtml: html });
+  return true;
+}
+
+/** 聊天兼容模式后台最长等待 + 宽限 */
+const CHAT_FALLBACK_STALE_MS = 17 * 60_000;
+/** 超过此时长仍为 pending/running 则强制收尾（避免 D1 僵尸） */
+const ZOMBIE_ABSOLUTE_MS = 24 * 60 * 60_000;
+
+const RUN_NOT_FOUND_RE = /run not found|not found:/i;
+
+function jobAgeMs(row: AgentJobRow): number {
+  const t = Date.parse(row.created_at);
+  if (Number.isNaN(t)) return 0;
+  return Math.max(0, Date.now() - t);
+}
+
+async function reloadAgentJob(env: AgentJobEnv, jobId: string): Promise<AgentJobRow | null> {
+  return getAgentJobById(env, jobId);
+}
+
+/**
+ * 轮询 / 列表 active jobs 时同步 Hermes 终态、KN PUT 收尾，并清理超时/僵尸任务。
+ */
+export async function reconcileAgentJob(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+): Promise<{ row: AgentJobRow; hermesStatus: string | null }> {
+  if (row.status !== "pending" && row.status !== "running") {
+    return { row, hermesStatus: null };
+  }
+
+  if (row.skill_intent === "knowledge_network") {
+    const finalized = await finalizeAgentJobAfterKnPut(env, row.id);
+    if (finalized) {
+      const updated = await reloadAgentJob(env, row.id);
+      return { row: updated ?? row, hermesStatus: "completed" };
+    }
+  }
+
+  const runId = (row.hermes_run_id ?? "").trim();
+  const ageMs = jobAgeMs(row);
+
+  if (runId.startsWith("chat-fallback-")) {
+    if (ageMs > CHAT_FALLBACK_STALE_MS) {
+      await failAgentJob(
+        env,
+        row.id,
+        "聊天兼容模式任务超时（后台未在时限内完成）",
+      );
+      const updated = await reloadAgentJob(env, row.id);
+      return { row: updated ?? row, hermesStatus: "failed" };
+    }
+    return { row, hermesStatus: null };
+  }
+
+  if (runId && isHermesAgentConfigured(env)) {
+    try {
+      const snap = await pollHermesRun(env, runId);
+      const hermesStatus = snap.status;
+      const terminal = new Set(["completed", "failed", "cancelled"]);
+      const errText = (snap.error ?? "").trim();
+
+      if (snap.status === "completed") {
+        const intent = row.skill_intent as SkillIntent;
+        const finalized = finalizeHermesOutput(snap.output, intent);
+        await completeAgentJob(env, row.id, finalized);
+        const updated = await reloadAgentJob(env, row.id);
+        return { row: updated ?? row, hermesStatus: "completed" };
+      }
+
+      if (terminal.has(snap.status)) {
+        await failAgentJob(env, row.id, errText || `Hermes 任务结束：${snap.status}`);
+        const updated = await reloadAgentJob(env, row.id);
+        return { row: updated ?? row, hermesStatus: snap.status };
+      }
+
+      if (errText && RUN_NOT_FOUND_RE.test(errText)) {
+        await failAgentJob(env, row.id, errText);
+        const updated = await reloadAgentJob(env, row.id);
+        return { row: updated ?? row, hermesStatus: "failed" };
+      }
+
+      if (ageMs > ZOMBIE_ABSOLUTE_MS) {
+        await failAgentJob(env, row.id, "任务已超过 24 小时仍未完成，已自动关闭");
+        const updated = await reloadAgentJob(env, row.id);
+        return { row: updated ?? row, hermesStatus: "failed" };
+      }
+
+      return { row, hermesStatus };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (ageMs > ZOMBIE_ABSOLUTE_MS || RUN_NOT_FOUND_RE.test(msg)) {
+        await failAgentJob(env, row.id, msg);
+        const updated = await reloadAgentJob(env, row.id);
+        return { row: updated ?? row, hermesStatus: "failed" };
+      }
+      return { row, hermesStatus: null };
+    }
+  }
+
+  if (ageMs > ZOMBIE_ABSOLUTE_MS) {
+    await failAgentJob(env, row.id, "任务已过期（无引擎 Run 记录）");
+    const updated = await reloadAgentJob(env, row.id);
+    return { row: updated ?? row, hermesStatus: "failed" };
+  }
+
+  return { row, hermesStatus: null };
+}
+
+/** 拉取 active-agent-jobs 前先 reconcile，避免把僵尸任务返回给前端 */
+export async function reconcileActiveAgentJobsForUser(
+  env: AgentJobEnv,
+  userId: string,
+): Promise<void> {
+  const { results } = await env.DB.prepare(
+    `SELECT id FROM agent_jobs WHERE user_id = ? AND status IN ('pending', 'running')`,
+  )
+    .bind(userId)
+    .all<{ id: string }>();
+
+  for (const r of results ?? []) {
+    const row = await getAgentJobById(env, r.id);
+    if (row) await reconcileAgentJob(env, row);
+  }
 }

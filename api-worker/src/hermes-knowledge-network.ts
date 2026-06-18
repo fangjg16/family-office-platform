@@ -1,4 +1,5 @@
 import type { HermesBridgeEnv } from "./hermes-bridge";
+import { finalizeAgentJobAfterKnPut } from "./agent-jobs";
 import {
   buildKnowledgeNetworkDeepRefResolutionLines,
   resolveKnowledgeNetworkDeepRefs,
@@ -62,7 +63,9 @@ export async function handleHermesGetKnowledgeNetworkCurrent(
     }
     return json({ ok: true, projectId, exists: false, html: null, meta: null });
   }
-  const html = await readProjectKnowledgeNetworkHtml(env, projectId);
+  const html = await readProjectKnowledgeNetworkHtml(env, projectId, {
+    mergeVersionLedger: true,
+  });
   if (!html) {
     if (formatRaw) {
       return new Response("知识网络文件不存在", { status: 404 });
@@ -158,6 +161,7 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
       lastJobId: resolved.jobId,
       answerSummary: changelog || "Hermes 文件回传",
     });
+    await finalizeAgentJobAfterKnPut(env, resolved.jobId, changelog || "Hermes 文件回传");
     return json({
       ok: true,
       projectId,
@@ -190,6 +194,11 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
     lastJobId: resolved.jobId,
     answerSummary: changelogParam || "Hermes 文件回传",
   });
+  await finalizeAgentJobAfterKnPut(
+    env,
+    resolved.jobId,
+    changelogParam || "Hermes 文件回传",
+  );
   return json({
     ok: true,
     projectId,
@@ -214,6 +223,8 @@ export type HermesKnRequiredReadsOptions = {
   touchesTimeline?: boolean;
   /** 增量模式：用户点名的 canonical slots（驱动 deep refs 子集） */
   touchedSlots?: readonly CanonicalKbSlot[];
+  /** incremental 且用户仅点名 1 个 slot：slot-html-patch 为正常交付路径 */
+  slotPatchMode?: boolean;
   /** 增量模式：用户点名 header / 成熟度评分卡时读 maturity-scoring.md */
   touchesMaturityScorecard?: boolean;
   /** 视觉/版式调试任务才读 style-guide */
@@ -244,6 +255,7 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     mode,
     touchesTimeline,
     touchedSlots = [],
+    slotPatchMode,
     touchesMaturityScorecard,
     includeStyleGuide,
     includeComponents,
@@ -309,10 +321,19 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     "- **禁止** legacy v2.8 anchors（assets、business-model、timeline 等）、skills_reference.md、根目录 kb-template.html。",
     "- **deep refs**：initial/full 读齐 7 个 references/deep/*.md；incremental 仅读点名 slot 映射；reorder 不读。",
     "- **禁止** read_file examples-kb-data.json、scripts/、components.html、visual-style-guide（非视觉调试）。",
+    "- **附录 D version-ledger**：平台在入库时自动从 D1 版本表合并全部历史行；Hermes 只需保留该 section 结构，勿删表头，历史行可留占位。",
   );
 
   if (mode === "full" || mode === "initial") {
     lines.push("- 模式：首次/全量 — 可跳过 GET 旧版；写入完整 KB-CONFIG（13 core slots + 附录）后渲染。");
+  } else if (mode === "incremental" && slotPatchMode) {
+    lines.push(
+      "- 模式：单 slot 增量 — **正常路径**为交付 `slot-html-patch` JSON，由 Worker 合并入库。",
+      "- **禁止** jfo_kb_put.sh / curl PUT 整页 / 回复末尾整页 ```html（Hermes PUT 仅为旧版兼容，不是本任务路径）。",
+      "- sectionHtml **仅可引用**当前 Appendix A 已有 `#source-*`；**禁止**新增 citation anchor；若需新增来源索引，请改走整页 HTML fallback。",
+    );
+  } else if (mode === "incremental") {
+    lines.push("- 模式：增量 — 必须先 GET 当前版；只改用户点名的 slot。");
   } else {
     lines.push("- 模式：增量 — 必须先 GET 当前版；只改用户点名的 slot。");
   }
@@ -376,7 +397,75 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
   }
 }
 
-/** Hermes Agent 指令：文件回路 + 回复末尾 \`\`\`html 双交付 */
+/** incremental 单 slot：Hermes 交付 slot-html-patch JSON，Worker 合并入库 */
+export function buildHermesKnowledgeNetworkSlotPatchProtocol(
+  slot: CanonicalKbSlot,
+): string {
+  return `
+
+【知识网络 · Slot HTML Patch 增量交付（单 slot · schema v2.91 · 正常路径）】
+用户仅更新 **#${slot}**。本任务**正常交付**为下方 JSON patch；**不要** curl PUT，**不要**在回复末尾附整页 \\\`\\\`\\\`html。
+
+**对用户可见回复**
+1. 先写 3–8 行简体中文摘要（改了什么、证据/缺口变化）。
+2. 附 **一个** \\\`\\\`\\\`json 代码块（type 必须为 slot-html-patch）：
+\\\`\\\`\\\`json
+{
+  "type": "slot-html-patch",
+  "schemaVersion": "2.91",
+  "mode": "incremental",
+  "slot": "${slot}",
+  "replace": "section",
+  "sectionHtml": "<section class=\\"block kb-panel\\" id=\\"${slot}\\">...</section>",
+  "appendixUpdates": {
+    "sourceIndexHtml": null,
+    "glossaryHtml": null,
+    "dataDictionaryHtml": null,
+    "versionLedgerRowHtml": null
+  },
+  "summary": "仅更新 ${slot}，……"
+}
+\\\`\\\`\\\`
+3. sectionHtml 必须是**完整** \`<section id="${slot}">…</section>\`；**禁止**含 html/body/script/KB-CONFIG/nav/kb-shell。
+4. appendixUpdates 第一版**仅**可使用 versionLedgerRowHtml（完整 \`<tr>…</tr>\`，可选）；sourceIndexHtml / glossaryHtml / dataDictionaryHtml **必须**为 null。
+5. sectionHtml 内 citation **仅可引用**当前 KB Appendix A 已存在的 \`#source-*\` id；**禁止**新增来源 anchor。若需新增来源索引条目，**不要** slot patch — 改走整页 \\\`\\\`\\\`html fallback。
+6. 可先 GET 当前版作结构与已有 citation 参考；平台 Worker 负责合并、strict 校验与 D1/R2 入库。
+7. 附录 D 历史行由平台自动合并；勿在 patch 中重写整页 version-ledger。
+8. Hermes curl PUT（jfo_kb_put.sh）仅为旧版兼容；**不是**本任务正常路径。`;
+}
+
+/** 单 slot incremental 专用工作流（不注入整页 file protocol / jfo_kb_put.sh） */
+export function buildHermesKnowledgeNetworkSlotPatchWorkflow(
+  jfoBase: string,
+  projectId: string,
+  projectTitleHint: string,
+  slot: CanonicalKbSlot,
+): string {
+  const url = hermesKnowledgeNetworkCurrentUrl(jfoBase, projectId);
+  const workFile = `./kb/${projectId}/[AI]_${projectTitleHint}_知识网络.html`;
+
+  return `
+
+【知识网络 · Slot Patch 工作流（Hermes v2.92 · 单 slot incremental · 正常路径）】
+增量更新（v2.91）：仅改用户点名的 **#${slot}**；交付 slot-html-patch JSON，由 Worker 合并入库。
+资料：当前 KB（只读参考）+ 点名 slot 相关资料片段 + session 附件（按需 textUrl）。
+
+${buildHermesKnowledgeNetworkSlotPatchProtocol(slot)}
+
+**可选：只读拉取当前版（结构 / 样式 / 已有 citation 参考）**
+\`\`\`bash
+curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
+  "${url}?format=raw" -o "${workFile}" || echo "NO_CURRENT_KB"
+\`\`\`
+工作文件 \`${workFile}\` 仅供本地阅读；**禁止**整页编辑后 PUT。
+
+**再次强调（硬性）**
+- **禁止** bash ${KB_PUT_SCRIPT} / curl PUT 整页 HTML
+- **禁止** 将整页 \\\`\\\`\\\`html 作为本任务首选交付
+- 仅当 JSON patch 完全无法生成，或必须新增 Appendix A 来源索引时，才使用整页 \\\`\\\`\\\`html fallback`;
+}
+
+/** Hermes Agent 指令：整页 HTML 文件回路 + curl PUT（initial/full/多 slot incremental/reorder） */
 export function buildHermesKnowledgeNetworkFileProtocol(
   jfoBase: string,
   projectId: string,
