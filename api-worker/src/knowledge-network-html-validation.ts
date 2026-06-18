@@ -119,9 +119,9 @@ function normalizeReorderBody(html: string): string {
 }
 
 export function parseKbConfigDisplayOrder(html: string): string[] {
-  const configMatch = html.match(/<!--\s*KB-CONFIG([\s\S]*?)-->/i);
-  if (!configMatch) return [];
-  const line = configMatch[1].match(/^\s*display-order:\s*(.+)$/im);
+  const configBody = extractKbConfigCommentBody(html);
+  if (!configBody) return [];
+  const line = configBody.match(/display-order:\s*(.+)$/im);
   if (!line) return [];
   return line[1]
     .split(",")
@@ -129,10 +129,21 @@ export function parseKbConfigDisplayOrder(html: string): string[] {
     .filter(Boolean);
 }
 
-function parseKbConfigSchemaVersion(html: string): string | null {
+/** Body inside <!-- KB-CONFIG ... --> (canonical v2.91 line-oriented format). */
+export function extractKbConfigCommentBody(html: string): string | null {
   const configMatch = html.match(/<!--\s*KB-CONFIG([\s\S]*?)-->/i);
-  if (!configMatch) return null;
-  const line = configMatch[1].match(/^\s*schema-version:\s*(\S+)/im);
+  return configMatch?.[1] ?? null;
+}
+
+/**
+ * Parse schema-version from KB-CONFIG HTML comment (canonical format).
+ * Accepts `schema-version: 2.91` on any line inside the comment block.
+ * Does NOT accept JSON-only script blocks — use the line-oriented comment in kb-config.md.
+ */
+export function parseKbConfigSchemaVersion(html: string): string | null {
+  const configBody = extractKbConfigCommentBody(html);
+  if (!configBody) return null;
+  const line = configBody.match(/schema-version:\s*(\S+)/i);
   return line?.[1] ?? null;
 }
 
@@ -173,9 +184,14 @@ function validateBasicStructure(t: string): KnHtmlValidationResult | null {
   }
   const schemaVersion = parseKbConfigSchemaVersion(t);
   if (!schemaVersion) {
+    const configBody = extractKbConfigCommentBody(t);
+    const jsonOnlyHint =
+      configBody && /["']schema-version["']\s*:/i.test(configBody)
+        ? "（检测到 JSON 键名；须改为行格式 `schema-version: 2.91`，见 kb-config.md）"
+        : "";
     return {
       ok: false,
-      error: `KB-CONFIG 缺少 schema-version: ${KB_SCHEMA_VERSION}`,
+      error: `KB-CONFIG 缺少 schema-version: ${KB_SCHEMA_VERSION}${jsonOnlyHint}`,
     };
   }
   if (schemaVersion !== KB_SCHEMA_VERSION) {

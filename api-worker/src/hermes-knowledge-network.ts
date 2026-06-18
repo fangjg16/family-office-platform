@@ -202,7 +202,8 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
   });
 }
 
-const KB_SKILL_BASE = "~/.hermes/skills/opportunistic-investments-hermes";
+const KB_SKILL_BASE = "/opt/data/skills/opportunistic-investments-hermes";
+const KB_PUT_SCRIPT = `${KB_SKILL_BASE}/scripts/jfo_kb_put.sh`;
 
 function readLine(n: number, relPath: string): string {
   return `${n}. ${KB_SKILL_BASE}/${relPath}`;
@@ -337,10 +338,10 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
         modeLine:
           "全量重做（v2.91）：legacy v2.8 KB 须重建；按 kb-schema 13-slot 从零渲染；写入完整 KB-CONFIG。",
         materialsLine:
-          "资料：jfo-r2-materials manifest 后读取主要项目资料与本对话 session 附件（按需）。",
+          "资料：jfo-r2-materials manifest 后读取主要项目资料与本对话 session 附件（按需）。**禁止** web_search / 公开检索（除非用户消息明确要求「查外部资料」）。",
         getStep: "全量可跳过 GET；或 curl GET … || echo NO_CURRENT_KB",
         editStep:
-          "从 assets/kb-template.html 填充 13 core slots + Appendix A–D；schema-version: 2.91；timeline-milestones 须经 eligibility gate。",
+          "从 assets/kb-template.html 填充 13 core slots + Appendix A–D；**复制** kb-template 内 <!-- KB-CONFIG --> 行格式（含 `schema-version: 2.91` 独立一行）；timeline-milestones 须经 eligibility gate。",
       };
     case "reorder":
       return {
@@ -370,7 +371,7 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
           "资料：jfo-r2-materials manifest 后按需读取主要资料 + session 附件。",
         getStep: "无旧版可跳过 GET；或 curl GET … || echo NO_CURRENT_KB",
         editStep:
-          "从 assets/kb-template.html 填充；<body> 开头写入 <!-- KB-CONFIG -->（schema-version: 2.91）。",
+          "从 assets/kb-template.html 填充；<body> 开头写入 <!-- KB-CONFIG -->（**行格式**，含独立一行 `schema-version: 2.91`）。",
       };
   }
 }
@@ -385,7 +386,6 @@ export function buildHermesKnowledgeNetworkFileProtocol(
   mode: KnowledgeNetworkUpdateMode,
 ): string {
   const url = hermesKnowledgeNetworkCurrentUrl(jfoBase, projectId);
-  const qBase = `userId=${encodeURIComponent(userId)}&jobId=${encodeURIComponent(jobId)}&mode=${encodeURIComponent(mode)}`;
   const workFile = `./kb/${projectId}/[AI]_${projectTitleHint}_知识网络.html`;
   const { modeLine, materialsLine, getStep, editStep } = knModeWorkflowLines(mode);
 
@@ -395,16 +395,20 @@ export function buildHermesKnowledgeNetworkFileProtocol(
 ${modeLine}
 ${materialsLine}
 
+**Skill 路径（Railway canonical）**
+- 只读 \`${KB_SKILL_BASE}/\` 下文件；**禁止** \`~/.hermes/skills/\` 或 \`/opt/data/home/.hermes/skills/\`。
+- deep refs 用 \`read_file ${KB_SKILL_BASE}/references/deep/…\` 或 \`skill_view opportunistic-investments-hermes\`；**禁止** \`skill_view knowledge-base-generation\`（legacy 已废弃）。
+
 **对用户可见回复**
 1. 先写 3–8 行简体中文摘要（改了哪些 slot、Populated/Stub；重排则说明新 display-order）。
-2. **curl PUT 成功且返回 ok**：摘要即可，**勿**在回复末尾重复附整页 \\\`\\\`\\\`html（平台已入库）。
-3. **PUT 失败或未执行**：同一条回复末尾须附完整整页 \\\`\\\`\\\`html … \\\`\\\`\\\`（含 <!DOCTYPE> 与 <!-- KB-CONFIG -->）。
-4. PUT 返回 400 校验失败：说明错误要点，**最多再修正并 PUT 一次**；仍失败则停止并报告，**禁止**多轮整页重写。
-5. **禁止**只写「已保存到 ${workFile}」而不交付（PUT 或代码块二选一）。
+2. **PUT 成功（脚本输出 PUT OK）**：仅摘要，**禁止**在回复末尾附整页 \\\`\\\`\\\`html。
+3. PUT 失败：说明 Worker 返回的 validation error；**最多修正 KB-CONFIG/HTML 后再 PUT 一次**；仍失败则停止，附整页 \\\`\\\`\\\`html 作 fallback。
+4. **禁止**自行拼 curl / python / urllib PUT（Bearer 会被日志脱敏破坏）；**必须**用下方固定脚本。
+5. **禁止**只写「已保存到 ${workFile}」而不 PUT 或代码块交付。
 
-**容器内工作流（有 bash 时并行执行）**
+**容器内工作流**
 工作文件：\`${workFile}\`（\`mkdir -p ./kb/${projectId}\`）
-模板：\`${KB_SKILL_BASE}/assets/kb-template.html\`（**非**根目录 kb-template.html）
+模板：\`${KB_SKILL_BASE}/assets/kb-template.html\`
 
 **A. 拉取当前版** — ${getStep}
 \`\`\`bash
@@ -413,13 +417,24 @@ curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
 \`\`\`
 
 **B. 编辑** — ${editStep}
-
-**C. curl PUT（尽量成功；带 mode=${mode} 便于入库校验）**
-\`\`\`bash
-curl -sS -X PUT -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
-  -H "Content-Type: text/html; charset=utf-8" \\
-  "${url}?${qBase}&changelog=hermes-file-put" \\
-  --data-binary @"${workFile}"
+KB-CONFIG 必须与 kb-config.md / kb-template.html **相同行格式**：
+\`\`\`html
+<!-- KB-CONFIG
+schema-version: 2.91
+display-order: snapshot, target-overview, ...
+-->
 \`\`\`
-PUT 失败时仍须完成步骤 2 的 \\\`\\\`\\\`html 代码块；平台从回复提取并入库。`;
+**禁止**仅用 JSON script 块承载 schema-version。
+
+**C. PUT（唯一允许方式）**
+\`\`\`bash
+bash ${KB_PUT_SCRIPT} \\
+  --file "${workFile}" \\
+  --api-base "${jfoBase}" \\
+  --project-id "${projectId}" \\
+  --user-id "${userId}" \\
+  --job-id "${jobId}" \\
+  --mode "${mode}"
+\`\`\`
+脚本会先校验 \`schema-version: 2.91\` 行，再 curl PUT；成功时 stdout 含 \`PUT OK\`。`;
 }

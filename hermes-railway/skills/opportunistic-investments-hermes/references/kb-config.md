@@ -17,7 +17,9 @@ display-order-history:
 
 Rules:
 
-- `schema-version: 2.91` is mandatory.
+- `schema-version: 2.91` is mandatory as a **line** inside the HTML comment (not JSON-only in `<script>`).
+- Copy the exact `<!-- KB-CONFIG` block shape from `assets/kb-template.html`.
+- **Forbidden**: `"schema-version": "2.91"` JSON-only blocks without the line-oriented comment.
 - Display order may change; slot keys and anchors may not.
 - `display-order` contains the 13 core analysis slots only.
 - Appendices are not listed in `display-order`; render them after the core slots in fixed A-D order.

@@ -46,9 +46,10 @@ for deep in knowledge-base-generation.md project-intake.md public-info-search.md
   curl_kb "references/deep/$deep" "$KB/references/deep/$deep"
 done
 
-for script in kb_config.py merge_handoff.py render_kb_html.py reorder_kb.py validate_kb_html.py; do
+for script in kb_config.py merge_handoff.py render_kb_html.py reorder_kb.py validate_kb_html.py jfo_kb_put.sh; do
   curl_kb "scripts/$script" "$KB/scripts/$script"
 done
+chmod +x "$KB/scripts/jfo_kb_put.sh" 2>/dev/null || true
 
 install_skill_curl() {
   local name="$1"
@@ -69,9 +70,14 @@ for s in $OTHER; do
   install_skill_curl "$s"
 done
 
-# 隔离旧 v2.8 skill（若仍存在）
-if [ -d "$SKILLS_ROOT/knowledge-base-generation" ] && [ ! -f "$SKILLS_ROOT/knowledge-base-generation/DEPRECATED" ]; then
-  echo "WARN: legacy knowledge-base-generation still present — consider: mv $SKILLS_ROOT/knowledge-base-generation ${SKILLS_ROOT}/knowledge-base-generation_deprecated"
+# 隔离旧 v2.8 skill（避免 Ambiguous skill name 'knowledge-base-generation'）
+LEGACY="$SKILLS_ROOT/knowledge-base-generation"
+DEPRECATED="$SKILLS_ROOT/knowledge-base-generation_deprecated"
+if [ -d "$LEGACY" ] && [ "$(basename "$LEGACY")" = "knowledge-base-generation" ]; then
+  echo "Deprecating legacy knowledge-base-generation -> knowledge-base-generation_deprecated"
+  rm -rf "$DEPRECATED" 2>/dev/null || true
+  mv "$LEGACY" "$DEPRECATED"
+  echo "DEPRECATED $(date -u +%Y-%m-%dT%H:%M:%SZ) — use opportunistic-investments-hermes (v2.92)" > "$DEPRECATED/DEPRECATED"
 fi
 
 echo ""
@@ -85,6 +91,9 @@ test -f "$KB/references/timeline-rules.md"
 test -f "$KB/references/deep/knowledge-base-generation.md"
 test -f "$KB/references/deep/compliance-check.md"
 ls "$KB/references/deep/" | wc -l | grep -q '^7$'
+test -f "$KB/scripts/jfo_kb_put.sh"
+grep -q 'schema-version: 2.91' "$KB/assets/kb-template.html"
 test -f "$KB/assets/kb-template.html"
 grep -q revealAnchor "$KB/assets/kb-template.html"
+test ! -d "$LEGACY" || echo "WARN: legacy dir still at $LEGACY (expected deprecated)"
 echo "OK: Hermes v2.92 skill layout verified at $KB"
