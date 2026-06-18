@@ -462,6 +462,10 @@ export async function completeAgentJob(
 
   if (!rowBefore) return;
 
+  if (rowBefore.status === "completed" || rowBefore.status === "failed") {
+    return;
+  }
+
   const finalized = await finalizeJobResult(env, rowBefore, result);
 
   if (finalized.status === "failed") {

@@ -66,6 +66,10 @@ async function upsertConversation(
   now: string,
 ): Promise<void> {
   if (!c.id || !c.projectId) return;
+  const projectExists = await env.DB.prepare(`SELECT id FROM projects WHERE id = ?`)
+    .bind(c.projectId)
+    .first<{ id: string }>();
+  if (!projectExists) return;
   await env.DB.prepare(
     `INSERT INTO user_conversations (id, user_id, project_id, title, preview, updated_at, variant, files_json)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -298,6 +302,183 @@ export async function applyChatStatePatch(
   };
 }
 
+function userMessageIdForJob(jobId: string): string {
+  return `user-job-${jobId}`;
+}
+
+async function ensureConversationForAgentJob(
+  env: ChatSyncEnv,
+  job: AgentJobRow,
+  preview: string,
+  now: string,
+): Promise<void> {
+  const conversationId = (job.conversation_id ?? "").trim();
+  if (!conversationId) return;
+
+  const projectExists = await env.DB.prepare(`SELECT id FROM projects WHERE id = ?`)
+    .bind(job.project_id)
+    .first<{ id: string }>();
+  if (!projectExists) return;
+
+  const existingConv = await env.DB.prepare(
+    `SELECT id, preview FROM user_conversations WHERE user_id = ? AND id = ?`,
+  )
+    .bind(job.user_id, conversationId)
+    .first<{ id: string; preview: string }>();
+
+  if (!existingConv) {
+    await env.DB.prepare(
+      `INSERT INTO user_conversations (id, user_id, project_id, title, preview, updated_at, variant, files_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        conversationId,
+        job.user_id,
+        job.project_id,
+        job.project_id,
+        preview,
+        now,
+        "blank",
+        "[]",
+      )
+      .run();
+    return;
+  }
+
+  await env.DB.prepare(
+    `UPDATE user_conversations SET preview = ?, updated_at = ? WHERE user_id = ? AND id = ?`,
+  )
+    .bind(preview, now, job.user_id, conversationId)
+    .run();
+}
+
+/** 深度任务提交时写入用户提问 + 助手占位（不依赖浏览器 flushChatPersist） */
+export async function persistAgentJobPendingChatTurn(
+  env: ChatSyncEnv,
+  params: {
+    userId: string;
+    projectId: string;
+    conversationId: string;
+    jobId: string;
+    userMessage: string;
+    userMessageId?: string;
+    timeLabel?: string;
+    files?: { name: string }[];
+  },
+): Promise<void> {
+  const conversationId = params.conversationId.trim();
+  const userMessage = params.userMessage.trim();
+  if (!conversationId || !userMessage) return;
+
+  const projectExists = await env.DB.prepare(`SELECT id FROM projects WHERE id = ?`)
+    .bind(params.projectId)
+    .first<{ id: string }>();
+  if (!projectExists) return;
+
+  const now = params.timeLabel ?? nowIso();
+  const preview = userMessage.replace(/\s+/gu, " ").trim().slice(0, 120) || "深度分析";
+  const job: AgentJobRow = {
+    id: params.jobId,
+    project_id: params.projectId,
+    user_id: params.userId,
+    conversation_id: conversationId,
+    skill_intent: "knowledge_network",
+    status: "running",
+    hermes_run_id: null,
+    answer: null,
+    knowledge_network_html: null,
+    error: null,
+    created_at: now,
+    updated_at: now,
+  };
+  await ensureConversationForAgentJob(env, job, preview, now);
+
+  const userMsgId = params.userMessageId?.trim() || userMessageIdForJob(params.jobId);
+  const assistantMsgId = assistantMessageIdForJob(params.jobId);
+
+  const userMsg: SyncChatMessage = {
+    id: userMsgId,
+    role: "user",
+    content: userMessage,
+    files: params.files?.length ? params.files : undefined,
+    time: now,
+    sortIndex: 0,
+    pendingJobId: null,
+  };
+  const assistantMsg: SyncChatMessage = {
+    id: assistantMsgId,
+    role: "assistant",
+    content: "正在深度分析…",
+    time: now,
+    sortIndex: 1,
+    pendingJobId: params.jobId,
+  };
+
+  await upsertChatMessage(env, params.userId, conversationId, userMsg, now);
+  await auditCreatedFromSyncMessage(env, params.userId, conversationId, userMsg, 0, "agent_job");
+  await upsertChatMessage(env, params.userId, conversationId, assistantMsg, now);
+  await auditCreatedFromSyncMessage(
+    env,
+    params.userId,
+    conversationId,
+    assistantMsg,
+    1,
+    "agent_job",
+  );
+}
+
+async function ensureUserMessageForCompletedJob(
+  env: ChatSyncEnv,
+  job: AgentJobRow,
+  now: string,
+): Promise<number> {
+  const conversationId = (job.conversation_id ?? "").trim();
+  if (!conversationId) return 0;
+
+  const userId = job.user_id;
+  const userMsgId = userMessageIdForJob(job.id);
+  const existingUser = await env.DB.prepare(
+    `SELECT id, sort_index FROM user_chat_messages
+     WHERE user_id = ? AND conversation_id = ? AND role = 'user'
+     ORDER BY sort_index ASC LIMIT 1`,
+  )
+    .bind(userId, conversationId)
+    .first<{ id: string; sort_index: number }>();
+  if (existingUser) return existingUser.sort_index;
+
+  const byJobId = await env.DB.prepare(
+    `SELECT id, sort_index FROM user_chat_messages WHERE user_id = ? AND id = ?`,
+  )
+    .bind(userId, userMsgId)
+    .first<{ id: string; sort_index: number }>();
+  if (byJobId) return byJobId.sort_index;
+
+  const conv = await env.DB.prepare(
+    `SELECT preview FROM user_conversations WHERE user_id = ? AND id = ?`,
+  )
+    .bind(userId, conversationId)
+    .first<{ preview: string }>();
+  const preview = (conv?.preview ?? "").trim();
+  const content =
+    preview &&
+    !/^(深度分析|尚未发送|基于项目资料)/u.test(preview) &&
+    !/Hermes 文件回传|项目知识网络 v|文件 API 回传/u.test(preview)
+      ? preview
+      : "生成项目知识网络 HTML";
+
+  const userMsg: SyncChatMessage = {
+    id: userMsgId,
+    role: "user",
+    content,
+    time: now,
+    sortIndex: 0,
+    pendingJobId: null,
+  };
+  await upsertChatMessage(env, userId, conversationId, userMsg, now);
+  await auditCreatedFromSyncMessage(env, userId, conversationId, userMsg, 0, "agent_job");
+  return 0;
+}
+
 /** Hermes 深度任务完成时写入聊天表（不依赖浏览器 PUT） */
 export async function syncCompletedAgentJobToChat(
   env: ChatSyncEnv,
@@ -313,42 +494,15 @@ export async function syncCompletedAgentJobToChat(
   const preview =
     result.answer.replace(/\s+/gu, " ").trim().slice(0, 120) || "深度分析已完成";
 
-  const existingConv = await env.DB.prepare(
-    `SELECT id FROM user_conversations WHERE user_id = ? AND id = ?`,
-  )
-    .bind(userId, conversationId)
-    .first<{ id: string }>();
-
-  if (!existingConv) {
-    await env.DB.prepare(
-      `INSERT INTO user_conversations (id, user_id, project_id, title, preview, updated_at, variant, files_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        conversationId,
-        userId,
-        job.project_id,
-        job.project_id,
-        preview,
-        now,
-        "blank",
-        "[]",
-      )
-      .run();
-  } else {
-    await env.DB.prepare(
-      `UPDATE user_conversations SET preview = ?, updated_at = ? WHERE user_id = ? AND id = ?`,
-    )
-      .bind(preview, now, userId, conversationId)
-      .run();
-  }
+  const userSortIndex = await ensureUserMessageForCompletedJob(env, job, now);
+  await ensureConversationForAgentJob(env, job, preview, now);
 
   const maxRow = await env.DB.prepare(
     `SELECT MAX(sort_index) AS max_idx FROM user_chat_messages WHERE user_id = ? AND conversation_id = ?`,
   )
     .bind(userId, conversationId)
     .first<{ max_idx: number | null }>();
-  const sortIndex = (maxRow?.max_idx ?? -1) + 1;
+  const sortIndex = Math.max(maxRow?.max_idx ?? -1, userSortIndex) + 1;
 
   const msg: SyncChatMessage = {
     id: messageId,
@@ -417,9 +571,17 @@ export async function handleGetChatState(
   env: ChatSyncEnv,
   userId: string,
 ): Promise<Response> {
+  const { results: projectRows } = await env.DB.prepare(`SELECT id FROM projects`).all<{
+    id: string;
+  }>();
+  const activeProjectIds = (projectRows ?? []).map((r) => r.id);
+
   const { results: convRows } = await env.DB.prepare(
-    `SELECT id, project_id, title, preview, updated_at, variant, files_json
-     FROM user_conversations WHERE user_id = ? ORDER BY updated_at DESC`,
+    `SELECT c.id, c.project_id, c.title, c.preview, c.updated_at, c.variant, c.files_json
+     FROM user_conversations c
+     INNER JOIN projects p ON p.id = c.project_id
+     WHERE c.user_id = ?
+     ORDER BY c.updated_at DESC`,
   )
     .bind(userId)
     .all<{
@@ -431,6 +593,8 @@ export async function handleGetChatState(
       variant: string | null;
       files_json: string;
     }>();
+
+  const conversationIds = new Set((convRows ?? []).map((r) => r.id));
 
   const conversations = (convRows ?? []).map((r) => {
     let files: string[] = [];
@@ -473,6 +637,7 @@ export async function handleGetChatState(
 
   const messagesByConversation: Record<string, SyncChatMessage[]> = {};
   for (const r of msgRows ?? []) {
+    if (!conversationIds.has(r.conversation_id)) continue;
     const list = messagesByConversation[r.conversation_id] ?? [];
     let files: { name: string }[] | undefined;
     if (r.files_json) {
@@ -503,6 +668,7 @@ export async function handleGetChatState(
   return json({
     ok: true,
     userId,
+    projectIds: activeProjectIds,
     conversations,
     messagesByConversation,
     syncedAt: nowIso(),

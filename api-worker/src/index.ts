@@ -5,6 +5,7 @@ import {
   handleGetActiveAgentJobs,
   handleGetChatState,
   handlePutChatState,
+  persistAgentJobPendingChatTurn,
 } from "./chat-sync";
 import { extractPdfPlainText } from "./pdf-text";
 import { extractSpreadsheetPlainText } from "./spreadsheet-text";
@@ -23,6 +24,8 @@ import {
   failAgentJob,
   getAgentJob,
   markAgentJobRunning,
+  reconcileActiveAgentJobsForUser,
+  reconcileAgentJob,
   type AgentJobRow,
 } from "./agent-jobs";
 import { buildAgentJobProgressLabel } from "./agent-job-progress";
@@ -823,6 +826,14 @@ async function handleChatViaHermes(
   if (error || !runId) {
     const fallbackId = `chat-fallback-${jobId}`;
     await markAgentJobRunning(env, jobId, fallbackId);
+    const conversationId = params.conversationId?.trim() || `${params.projectId}-main`;
+    await persistAgentJobPendingChatTurn(env, {
+      userId: params.userId,
+      projectId: params.projectId,
+      conversationId,
+      jobId,
+      userMessage: params.message,
+    });
     ctx.waitUntil(
       processHermesJobViaChat(env, jobId, params.chatMode, {
         message: params.message,
@@ -847,6 +858,14 @@ async function handleChatViaHermes(
   }
 
   await markAgentJobRunning(env, jobId, runId);
+  const conversationId = params.conversationId?.trim() || `${params.projectId}-main`;
+  await persistAgentJobPendingChatTurn(env, {
+    userId: params.userId,
+    projectId: params.projectId,
+    conversationId,
+    jobId,
+    userMessage: params.message,
+  });
   ctx.waitUntil(processHermesJobBackground(env, jobId, runId, params.chatMode));
 
   return json({
@@ -870,40 +889,7 @@ async function syncAgentJobFromHermesRun(env: Env, row: AgentJobRow): Promise<{
   row: AgentJobRow;
   hermesStatus: string | null;
 }> {
-  const runId = row.hermes_run_id || "";
-  if (
-    (row.status !== "running" && row.status !== "pending") ||
-    !runId ||
-    runId.startsWith("chat-fallback-") ||
-    !isHermesAgentConfigured(env)
-  ) {
-    return { row, hermesStatus: null };
-  }
-
-  try {
-    const snap = await pollHermesRun(env, runId);
-    const hermesStatus = snap.status;
-    const terminal = new Set(["completed", "failed", "cancelled"]);
-    if (!terminal.has(snap.status)) {
-      return { row, hermesStatus };
-    }
-
-    const intent = row.skill_intent as SkillIntent;
-    if (snap.status === "completed") {
-      const finalized = finalizeHermesOutput(snap.output, intent);
-      await completeAgentJob(env, row.id, finalized);
-    } else {
-      await failAgentJob(
-        env,
-        row.id,
-        snap.error || `Hermes 任务结束：${snap.status}`,
-      );
-    }
-    const updated = await getAgentJob(env, row.id, row.user_id);
-    return { row: updated ?? row, hermesStatus };
-  } catch {
-    return { row, hermesStatus: null };
-  }
+  return reconcileAgentJob(env, row);
 }
 
 async function handleAgentJobPoll(
@@ -1392,6 +1378,7 @@ export default {
         if (!routeUserId) {
           response = json({ error: "无效 userId" }, 400);
         } else {
+          await reconcileActiveAgentJobsForUser(env, routeUserId);
           response = await handleGetActiveAgentJobs(env, routeUserId);
         }
       } else if (path === "/api/admin/chat-audit" && request.method === "GET") {
