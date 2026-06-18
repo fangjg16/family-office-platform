@@ -45,7 +45,6 @@ import {
   type ProjectFileRecord,
 } from "@/lib/project-api";
 import type { KnowledgeNetworkChatEntryState } from "@/lib/knowledge-network-prompts";
-import { getProjectById } from "@/workspace/project-registry";
 import type { WorkspaceProject } from "@/workspace/projects";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import { consumeChatSse } from "@/lib/chat-stream-client";
@@ -254,8 +253,10 @@ function reconcileConversationsWithMessages(
     if (!Array.isArray(msgs) || msgs.length === 0) continue;
     if (byId.has(conversationId)) continue;
     const projectId = inferProjectIdFromConversationId(conversationId, convs);
-    if (!projectId || !getProjectById(projectId)) continue;
-    const built = buildConversationFromProject(projectId, project ?? undefined);
+    if (!projectId) continue;
+    const project = getProjectById(projectId);
+    if (!project) continue;
+    const built = buildConversationFromProject(projectId, project);
     if (!built) continue;
     byId.set(conversationId, {
       ...built,
