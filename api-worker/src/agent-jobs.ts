@@ -26,6 +26,7 @@ import {
   readProjectKnowledgeNetworkHtml,
   upsertProjectKnowledgeNetwork,
 } from "./project-knowledge-network";
+import { resolveKnUserMessage } from "./kn-job-user-message";
 
 export type AgentJobEnv = {
   DB: D1Database;
@@ -107,30 +108,14 @@ function extractKnHtmlFromResult(result: {
   return extractKnowledgeNetworkHtmlLoose(result.answer);
 }
 
-async function resolveKnUserMessage(
-  env: AgentJobEnv,
-  row: AgentJobRow,
-): Promise<string> {
-  const msgRow = await env.DB.prepare(
-    `SELECT content FROM user_chat_messages
-     WHERE user_id = ? AND pending_job_id = ?
-     ORDER BY sort_index DESC LIMIT 1`,
-  )
-    .bind(row.user_id, row.id)
-    .first<{ content: string }>();
-  return msgRow?.content?.trim() ?? "";
-}
-
 async function resolveKnModeForJob(
   env: AgentJobEnv,
   row: AgentJobRow,
 ): Promise<KnowledgeNetworkUpdateMode> {
   const message = await resolveKnUserMessage(env, row);
   const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id);
-  const hadKbBeforeThisJob = Boolean(
-    previousHtml?.trim() && meta?.lastJobId && meta.lastJobId !== row.id,
-  );
-  return detectKnowledgeNetworkUpdateMode(message, hadKbBeforeThisJob);
+  const hasExistingKb = Boolean(previousHtml?.trim());
+  return detectKnowledgeNetworkUpdateMode(message, hasExistingKb);
 }
 
 async function writeKnowledgeNetworkFromHtml(
