@@ -317,6 +317,27 @@ function projectDisplayName(projectId: string): string {
   return getProjectById(projectId)?.name ?? (projectId.startsWith("proj-") ? "云端项目" : projectId);
 }
 
+function isProjectMainConversation(conversationId: string, projectId: string): boolean {
+  return conversationId === `${projectId}-main`;
+}
+
+function mainConversationTitle(projectName: string): string {
+  return `${projectName} · 全局分析`;
+}
+
+/** 主会话标题随项目名实时更新；子线程仍用持久化 title */
+function resolveConversationHeaderTitle(
+  conversation: SessionConversation | null | undefined,
+  project: WorkspaceProject | undefined,
+  projectId: string,
+): string {
+  if (!project) return "项目对话";
+  if (conversation && isProjectMainConversation(conversation.id, projectId)) {
+    return mainConversationTitle(project.name);
+  }
+  return conversation?.title ?? mainConversationTitle(project.name);
+}
+
 function conversationSidebarRows(
   convs: SessionConversation[],
   messagesByConversation: Record<string, LiveChatMessage[]>,
@@ -1747,7 +1768,6 @@ export default function ConversationCenter() {
   }, [project, tier, projectRole, resourceDemo]);
 
   const permissionSidebarHint = projectRole ? permissionLineSidebar(projectRole) : "";
-  const defaultChatTitle = project ? `${project.name} · 全局分析` : "项目对话";
   const timeMeta = projectId ? getProjectTimeMeta(projectId) : getProjectTimeMeta("");
   const todayLabel = timeMeta.dayLabel;
 
@@ -1762,6 +1782,21 @@ export default function ConversationCenter() {
 
   const isLiveAiMode =
     ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT) && projectRole !== "guest";
+
+  useEffect(() => {
+    if (!projectId || !project?.name || !isLiveAiMode) return;
+    const expectedTitle = mainConversationTitle(project.name);
+    setConversations((prev) => {
+      let changed = false;
+      const next = prev.map((c) => {
+        if (!isProjectMainConversation(c.id, projectId)) return c;
+        if (c.title === expectedTitle) return c;
+        changed = true;
+        return { ...c, title: expectedTitle };
+      });
+      return changed ? next : prev;
+    });
+  }, [projectId, project?.name, isLiveAiMode]);
 
   const isCurrentConversationSending = Boolean(
     effectiveConversationId && sendingConversationId === effectiveConversationId,
@@ -3147,7 +3182,11 @@ export default function ConversationCenter() {
     );
   }
 
-  const chatTitle = activeConversation?.title ?? defaultChatTitle;
+  const chatTitle = resolveConversationHeaderTitle(
+    activeConversation,
+    project,
+    projectId,
+  );
   const chatDayLabel =
     isBlankThread
       ? new Intl.DateTimeFormat("zh-CN", {
