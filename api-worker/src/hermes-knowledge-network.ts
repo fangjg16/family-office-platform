@@ -415,14 +415,96 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
   }
 }
 
-/** incremental 单 slot：Hermes 交付 slot-html-patch JSON，Worker 合并入库 */
+/** incremental 单 slot：Hermes 交付 structured-slot-patch JSON（主路径），Worker 确定性渲染 */
+export function buildHermesKnowledgeNetworkStructuredPatchProtocol(
+  slot: CanonicalKbSlot,
+): string {
+  const payloadHint = STRUCTURED_SLOT_PAYLOAD_HINTS[slot];
+  return `
+
+【知识网络 · Structured Slot Patch 增量交付（单 slot · schema v2.91 · 主路径）】
+用户仅更新 **#${slot}**。本任务**必须**交付下方 structured-slot-patch JSON；**禁止** sectionHtml / HTML / class / curl PUT / 整页 \\\`\\\`\\\`html。
+
+**对用户可见回复**
+1. 先写 3–8 行简体中文摘要（改了什么、证据/缺口变化）。
+2. 附 **一个** \\\`\\\`\\\`json 代码块（type 必须为 structured-slot-patch）：
+\\\`\\\`\\\`json
+{
+  "type": "structured-slot-patch",
+  "schemaVersion": "2.91",
+  "mode": "incremental",
+  "slot": "${slot}",
+  "operation": "replace-slot-data",
+  "payload": ${payloadHint},
+  "summary": "本次仅更新 ${slot}。"
+}
+\\\`\\\`\\\`
+3. payload 为**纯文本结构化数据**；**禁止** HTML 标签、script、inline style、sectionHtml。
+4. evidenceSourceIds **仅可引用**当前 KB Appendix A 已存在的 source id（如 A-1、source-A-1）；**禁止**编造新来源。若需新增 Appendix A 条目，返回 \`"status": "requires_full_update"\` 并说明原因，**不要**硬填 source id。
+5. 资料不足时用 payload.gaps / gapCallouts 表达缺口或低置信度，勿编造事实。
+6. operation：\`replace-slot-data\`（默认）| \`append-items\` | \`update-fields\`；Worker 按 slot schema 渲染 v2.91 HTML 并仅替换目标 section。
+7. 附录 D 由平台自动写入；勿输出 version-ledger HTML。
+8. 旧 slot-html-patch 仅为平台兼容 fallback，**不是**本任务交付格式。`;
+
+}
+
+const STRUCTURED_SLOT_PAYLOAD_HINTS: Record<CanonicalKbSlot, string> = {
+  snapshot: `{ "stage": "…", "status": "…", "keyFacts": [{ "项目项": "…", "内容": "…", "证据/来源": "…" }], "gaps": [{ "text": "…", "confidence": "gap" }] }`,
+  "target-overview": `{ "businessSummary": [{ "paragraphs": ["…"] }], "assetSummary": [{ "资产/权利/能力": "…", "定义与范围": "…" }], "gaps": [] }`,
+  "industry-market": `{ "marketDrivers": [{ "主题": "…", "事实/数据": "…", "投资含义": "…" }], "gaps": [] }`,
+  "business-operations": `{ "journeyMap": { "stages": ["…"], "lanes": [{ "label": "…", "nodes": ["…"] }] }, "customerBuyer": [], "gaps": [] }`,
+  "legal-ownership": `{ "entities": [{ "主体/权利": "…", "角色/归属": "…" }], "relationshipEdges": [{ "relation": "…", "from": "…", "to": "…" }] }`,
+  "regulatory-compliance": `{ "jurisdictionRows": [{ "监管/规则": "…", "适用原因": "…" }], "gaps": [] }`,
+  "resource-network": `{ "parties": [{ "主体/资源": "…", "关系与作用": "…" }], "missingResources": [] }`,
+  "comps-benchmark": `{ "compsRows": [{ "可比对象": "…", "可比逻辑": "…" }], "relevanceNotes": [] }`,
+  "valuation-returns": `{ "scenarios": [{ "label": "Base", "value": "…", "detail": "…" }], "sensitivityItems": [], "gaps": [] }`,
+  "diligence-gaps": `{ "questionGroups": [{ "priority": "P1", "title": "…", "questions": [{ "question": "…", "whyItMatters": "…", "owner": "…" }] }] }`,
+  "risks-mitigation": `{ "riskRows": [{ "level": "高", "risk": "…", "cause": "…", "impact": "…", "mitigation": "…", "evidenceSourceIds": ["A-1"] }] }`,
+  "timeline-milestones": `{ "occurred": [{ "date": "2026-06-01", "title": "…", "detail": "…", "phase": "occurred" }], "inProgress": [], "future": [], "gaps": [] }`,
+  "decision-framework": `{ "recommendation": "…", "decisionTable": [{ "选项": "继续推进", "好处": "…" }], "nextActions": [] }`,
+};
+
+/** 单 slot incremental 专用工作流（structured patch 主路径） */
+export function buildHermesKnowledgeNetworkStructuredPatchWorkflow(
+  jfoBase: string,
+  projectId: string,
+  projectTitleHint: string,
+  slot: CanonicalKbSlot,
+): string {
+  const url = hermesKnowledgeNetworkCurrentUrl(jfoBase, projectId);
+  const workFile = `./kb/${projectId}/[AI]_${projectTitleHint}_知识网络.html`;
+
+  return `
+
+【知识网络 · Structured Slot Patch 工作流（Hermes v2.92 · 单 slot incremental · 主路径）】
+增量更新（v2.91）：仅改用户点名的 **#${slot}**；交付 structured-slot-patch JSON，由 Worker 确定性渲染并合并。
+资料：当前 KB（只读参考 citation）+ 点名 slot 相关资料 + session 附件（按需 textUrl）。**不要**展开完整 13-slot reading plan。
+
+${buildHermesKnowledgeNetworkStructuredPatchProtocol(slot)}
+
+**可选：只读拉取当前版（已有 Appendix A source id / 版式参考）**
+\`\`\`bash
+curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
+  "${url}?format=raw" -o "${workFile}" || echo "NO_CURRENT_KB"
+\`\`\`
+工作文件仅供阅读已有 source id；**禁止**整页编辑或 PUT。
+
+**硬性禁止**
+- **禁止** bash ${KB_PUT_SCRIPT} / curl PUT
+- **禁止** sectionHtml / slot-html-patch / 整页 \\\`\\\`\\\`html（除非 requires_full_update 后用户改走 multi-slot/full）
+- timeline-milestones：**仅**项目级节点；行业/市场新闻不得写入 timeline`;
+
+}
+
+/** incremental 单 slot：Hermes 交付 slot-html-patch JSON（兼容 fallback，非默认） */
 export function buildHermesKnowledgeNetworkSlotPatchProtocol(
   slot: CanonicalKbSlot,
 ): string {
   return `
 
-【知识网络 · Slot HTML Patch 增量交付（单 slot · schema v2.91 · 正常路径）】
-用户仅更新 **#${slot}**。本任务**正常交付**为下方 JSON patch；**不要** curl PUT，**不要**在回复末尾附整页 \\\`\\\`\\\`html。
+【知识网络 · Slot HTML Patch 增量交付（单 slot · schema v2.91 · 兼容 fallback）】
+⚠️ **非默认路径**。正常应交付 structured-slot-patch；仅当 Worker/平台明确要求 HTML patch 时才使用本格式。
+用户仅更新 **#${slot}**。交付 slot-html-patch JSON；**不要** curl PUT。
 
 **对用户可见回复**
 1. 先写 3–8 行简体中文摘要（改了什么、证据/缺口变化）。
@@ -445,14 +527,10 @@ export function buildHermesKnowledgeNetworkSlotPatchProtocol(
 }
 \\\`\\\`\\\`
 3. sectionHtml 必须是**完整** \`<section id="${slot}">…</section>\`；**禁止**含 html/body/script/KB-CONFIG/nav/kb-shell。
-4. appendixUpdates 第一版**仅**可使用 versionLedgerRowHtml（完整 \`<tr>…</tr>\`，可选）；sourceIndexHtml / glossaryHtml / dataDictionaryHtml **必须**为 null。
-5. sectionHtml 内 citation **仅可引用**当前 KB Appendix A 已存在的 \`#source-*\` id；**禁止**新增来源 anchor。若需新增来源索引条目，**不要** slot patch — 改走整页 \\\`\\\`\\\`html fallback。
-6. 可先 GET 当前版作结构与已有 citation 参考；平台 Worker 负责合并、strict 校验与 D1/R2 入库。
-7. 附录 D 历史行由平台自动合并；勿在 patch 中重写整页 version-ledger。
-8. Hermes curl PUT（jfo_kb_put.sh）仅为旧版兼容；**不是**本任务正常路径。`;
+4. citation **仅可引用**当前 KB Appendix A 已存在的 \`#source-*\` id；若需新增来源，改走整页 fallback。`;
 }
 
-/** 单 slot incremental 专用工作流（不注入整页 file protocol / jfo_kb_put.sh） */
+/** 单 slot incremental 专用工作流（slot-html-patch 兼容 fallback） */
 export function buildHermesKnowledgeNetworkSlotPatchWorkflow(
   jfoBase: string,
   projectId: string,
@@ -464,23 +542,21 @@ export function buildHermesKnowledgeNetworkSlotPatchWorkflow(
 
   return `
 
-【知识网络 · Slot Patch 工作流（Hermes v2.92 · 单 slot incremental · 正常路径）】
-增量更新（v2.91）：仅改用户点名的 **#${slot}**；交付 slot-html-patch JSON，由 Worker 合并入库。
-资料：当前 KB（只读参考）+ 点名 slot 相关资料片段 + session 附件（按需 textUrl）。
+【知识网络 · Slot HTML Patch 工作流（兼容 fallback · 非默认）】
+⚠️ 首选 structured-slot-patch。本工作流仅在无法输出结构化 JSON 时的兼容路径。
+增量更新（v2.91）：仅改用户点名的 **#${slot}**。
 
 ${buildHermesKnowledgeNetworkSlotPatchProtocol(slot)}
 
-**可选：只读拉取当前版（结构 / 样式 / 已有 citation 参考）**
+**可选：只读拉取当前版**
 \`\`\`bash
 curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
   "${url}?format=raw" -o "${workFile}" || echo "NO_CURRENT_KB"
 \`\`\`
-工作文件 \`${workFile}\` 仅供本地阅读；**禁止**整页编辑后 PUT。
 
-**再次强调（硬性）**
+**再次强调**
 - **禁止** bash ${KB_PUT_SCRIPT} / curl PUT 整页 HTML
-- **禁止** 将整页 \\\`\\\`\\\`html 作为本任务首选交付
-- 仅当 JSON patch 完全无法生成，或必须新增 Appendix A 来源索引时，才使用整页 \\\`\\\`\\\`html fallback`;
+- 首选 structured-slot-patch；仅 JSON 完全无法生成或必须新增 Appendix A 时，才用整页 \\\`\\\`\\\`html fallback`;
 }
 
 /** Hermes Agent 指令：整页 HTML 文件回路 + curl PUT（initial/full/多 slot incremental/reorder） */

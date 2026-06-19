@@ -15,6 +15,16 @@ import {
   slotHtmlPatchSummaryForJob,
   validateMergedKnowledgeNetworkAfterSlotPatch,
 } from "./knowledge-network-slot-patch";
+import {
+  applyStructuredSlotPatchToKnowledgeNetworkHtml,
+  extractStructuredSlotPatchFromAnswer,
+  isStructuredPatchBlocked,
+  shouldUseStructuredSlotPatchMode,
+  structuredSlotPatchSummaryForJob,
+  validateEvidenceSourceIdsAgainstAppendixA,
+  validateMergedKnowledgeNetworkAfterStructuredPatch,
+  validateStructuredSlotPatch,
+} from "./knowledge-network-structured-patch";
 import { formatKnVersionDisplay } from "./knowledge-network-version";
 import {
   detectKnowledgeNetworkUpdateMode,
@@ -170,6 +180,119 @@ type SlotPatchWriteResult =
   | { ok: false; skipped: true }
   | { ok: false; skipped: false; error: string };
 
+type StructuredPatchWriteResult =
+  | {
+      ok: true;
+      meta: NonNullable<Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>>;
+      html: string;
+      slot: string;
+      summary: string;
+    }
+  | { ok: false; skipped: true }
+  | { ok: false; blocked: true; reason: string }
+  | { ok: false; skipped: false; error: string };
+
+async function tryWriteKnowledgeNetworkFromStructuredSlotPatch(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+  result: { answer: string },
+  knMode: KnowledgeNetworkUpdateMode,
+): Promise<StructuredPatchWriteResult> {
+  const message = await resolveKnUserMessage(env, row);
+  const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(message);
+  if (!shouldUseStructuredSlotPatchMode(knMode, touchedSlots)) {
+    return { ok: false, skipped: true };
+  }
+
+  const extracted = extractStructuredSlotPatchFromAnswer(result.answer);
+  if (!extracted.ok) {
+    if (extracted.notFound) {
+      return { ok: false, skipped: true };
+    }
+    return { ok: false, skipped: false, error: extracted.reason };
+  }
+
+  if (isStructuredPatchBlocked(extracted)) {
+    return { ok: false, blocked: true, reason: extracted.reason };
+  }
+
+  const expectedSlot = touchedSlots[0]!;
+  if (extracted.patch.slot !== expectedSlot) {
+    return {
+      ok: false,
+      skipped: false,
+      error: `patch.slot (${extracted.patch.slot}) 与用户点名 slot (${expectedSlot}) 不一致`,
+    };
+  }
+
+  const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id, {
+    mergeVersionLedger: false,
+  });
+  if (!previousHtml?.trim()) {
+    return {
+      ok: false,
+      skipped: false,
+      error: "无当前 KB HTML，无法 structured patch（请使用首次/全量或整页 HTML）",
+    };
+  }
+
+  const evidenceErr = validateEvidenceSourceIdsAgainstAppendixA(
+    previousHtml,
+    extracted.patch.payload,
+  );
+  if (evidenceErr) {
+    return { ok: false, skipped: false, error: evidenceErr };
+  }
+
+  const validated = validateStructuredSlotPatch(extracted.patch);
+  if (!validated.ok) {
+    return { ok: false, skipped: false, error: validated.reason };
+  }
+  if (isStructuredPatchBlocked(validated)) {
+    return { ok: false, blocked: true, reason: validated.reason };
+  }
+
+  const applied = applyStructuredSlotPatchToKnowledgeNetworkHtml(
+    previousHtml,
+    extracted.patch,
+  );
+  if (!applied.ok) {
+    return { ok: false, skipped: false, error: applied.error };
+  }
+
+  const validation = validateMergedKnowledgeNetworkAfterStructuredPatch(applied.html, {
+    previousHtml,
+    touchesTimeline: extracted.patch.slot === "timeline-milestones",
+  });
+  if (!validation.ok) {
+    return {
+      ok: false,
+      skipped: false,
+      error: validation.error ?? "structured patch 合并后 strict 校验失败",
+    };
+  }
+
+  const summary = structuredSlotPatchSummaryForJob(extracted.patch);
+  const written = await writeKnowledgeNetworkFromHtml(
+    env,
+    row,
+    applied.html,
+    summary,
+    knMode,
+  );
+  if (!written.ok) {
+    return { ok: false, skipped: false, error: written.error };
+  }
+
+  return {
+    ok: true,
+    meta: written.meta,
+    html: written.html,
+    slot: extracted.patch.slot,
+    summary,
+  };
+}
+
 async function tryWriteKnowledgeNetworkFromSlotPatch(
   env: AgentJobEnv,
   row: AgentJobRow,
@@ -287,6 +410,43 @@ async function finalizeKnowledgeNetworkJobResult(
   }
 
   const knMode = await resolveKnModeForJob(env, row);
+  const structuredWritten = await tryWriteKnowledgeNetworkFromStructuredSlotPatch(
+    env,
+    row,
+    result,
+    knMode,
+  );
+  if (structuredWritten.ok) {
+    const vDisplay = formatKnVersionDisplay(
+      structuredWritten.meta.version,
+      structuredWritten.meta.versionLabel,
+    );
+    const note =
+      `\n\n已通过 **structured slot patch** 写入**项目知识网络 v${vDisplay}**（仅更新 \`${structuredWritten.slot}\`）。`;
+    const answer = result.answer.includes("项目知识网络 v")
+      ? result.answer
+      : `${result.answer.trim() || structuredWritten.summary}${note}`;
+    return {
+      status: "ok",
+      answer,
+      knowledgeNetworkHtml: structuredWritten.html,
+    };
+  }
+  if ("blocked" in structuredWritten && structuredWritten.blocked) {
+    const existingHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+    const note = `\n\n⚠️ **未写入知识网络**：${structuredWritten.reason}`;
+    return {
+      status: "ok",
+      answer: result.answer.includes("未写入知识网络")
+        ? result.answer
+        : `${result.answer.trim()}${note}`,
+      knowledgeNetworkHtml: existingHtml,
+    };
+  }
+  const structuredFallbackError = structuredWritten.skipped
+    ? null
+    : structuredWritten.error;
+
   const patchWritten = await tryWriteKnowledgeNetworkFromSlotPatch(
     env,
     row,
@@ -299,7 +459,7 @@ async function finalizeKnowledgeNetworkJobResult(
       patchWritten.meta.versionLabel,
     );
     const note =
-      `\n\n已通过 **slot patch** 写入**项目知识网络 v${vDisplay}**（仅更新 \`${patchWritten.slot}\`）。`;
+      `\n\n已通过 **slot-html-patch（兼容）** 写入**项目知识网络 v${vDisplay}**（仅更新 \`${patchWritten.slot}\`）。`;
     const answer = result.answer.includes("项目知识网络 v")
       ? result.answer
       : `${result.answer.trim() || patchWritten.summary}${note}`;
@@ -309,7 +469,12 @@ async function finalizeKnowledgeNetworkJobResult(
       knowledgeNetworkHtml: patchWritten.html,
     };
   }
-  const patchFallbackError = patchWritten.skipped ? null : patchWritten.error;
+  const patchFallbackError =
+    patchWritten.skipped && !structuredFallbackError
+      ? null
+      : patchWritten.skipped
+        ? structuredFallbackError
+        : patchWritten.error ?? structuredFallbackError;
 
   // 路径 B：从 Hermes 回复提取整页 HTML 写入（PUT / slot patch 失败时的 fallback）
   const extracted = extractKnHtmlFromResult(result);
@@ -339,7 +504,7 @@ async function finalizeKnowledgeNetworkJobResult(
         `${result.answer.trim() || "Hermes 已结束，但知识网络未通过校验。"}\n\n` +
         `**知识网络校验未通过**：${written.error}\n` +
         (patchFallbackError
-          ? `（slot patch 曾尝试但失败：${patchFallbackError}）\n`
+          ? `（structured/slot patch 曾尝试但失败：${patchFallbackError}）\n`
           : "") +
         "（Worker 不会自动多轮重写；请按错误修正相关 slot 后重试，勿重复整页生成。）",
     };
@@ -351,7 +516,7 @@ async function finalizeKnowledgeNetworkJobResult(
       error: "知识网络交付失败",
       answer:
         (result.answer.trim() || "Hermes 已结束，但未返回可用知识网络。") +
-        `\n\n**slot patch 失败**：${patchFallbackError}\n` +
+        `\n\n**structured/slot patch 失败**：${patchFallbackError}\n` +
         "也未检测到可用的整页 ```html fallback。",
     };
   }

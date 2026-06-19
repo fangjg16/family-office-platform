@@ -6,12 +6,12 @@ import {
 import {
   buildHermesKnowledgeNetworkFileProtocol,
   buildHermesKnowledgeNetworkRequiredReads,
-  buildHermesKnowledgeNetworkSlotPatchWorkflow,
+  buildHermesKnowledgeNetworkStructuredPatchWorkflow,
   isVisualDebugKnRequest,
   messageTouchesMaturityScorecard,
   messageTouchesTimeline,
 } from "./hermes-knowledge-network";
-import { shouldUseSlotHtmlPatchMode } from "./knowledge-network-slot-patch";
+import { shouldUseStructuredSlotPatchMode } from "./knowledge-network-structured-patch";
 import {
   buildKnowledgeNetworkSlotResolutionLines,
   resolveKnowledgeNetworkSlotsFromMessage,
@@ -281,7 +281,7 @@ export function buildHermesAgentInstructions(
     const mode = knMode ?? "initial";
     const visualDebug = isVisualDebugKnRequest(userMessage);
     const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(userMessage);
-    const slotPatchSlot = shouldUseSlotHtmlPatchMode(mode, touchedSlots)
+    const slotPatchSlot = shouldUseStructuredSlotPatchMode(mode, touchedSlots)
       ? touchedSlots[0]
       : null;
     const slotPatchMode = Boolean(slotPatchSlot);
@@ -300,13 +300,13 @@ export function buildHermesAgentInstructions(
     );
     if (slotPatchSlot) {
       lines.push(
-        buildHermesKnowledgeNetworkSlotPatchWorkflow(
+        buildHermesKnowledgeNetworkStructuredPatchWorkflow(
           jfoBase,
           projectId,
           projectTitleHint,
           slotPatchSlot,
         ),
-        "预注入摘录只供事实依据；slot patch 模式下 Worker 合并 JSON patch 入库，勿整页 PUT。",
+        "预注入摘录只供事实依据；structured slot patch 模式下 Worker 渲染 JSON 并合并入库，勿整页 PUT。",
       );
     } else {
       lines.push(
