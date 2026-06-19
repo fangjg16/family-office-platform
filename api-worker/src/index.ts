@@ -11,6 +11,7 @@ import { extractPdfPlainText } from "./pdf-text";
 import { extractSpreadsheetPlainText } from "./spreadsheet-text";
 import { buildHermesMaterialsDigest } from "./hermes-materials-digest";
 import { buildKnowledgeNetworkMaterialHints } from "./knowledge-network-material-hints";
+import { buildKnowledgeNetworkReadingPlan } from "./knowledge-network-reading-plan";
 import { resolveKnowledgeNetworkSlotsFromMessage } from "./knowledge-network-slot-aliases";
 import {
   detectSkillIntent,
@@ -814,6 +815,21 @@ async function handleChatViaHermes(
       if (hints) instructions += hints;
     } catch {
       /* hints 失败不阻断 Hermes */
+    }
+
+    try {
+      const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(params.message);
+      const readingPlan = await buildKnowledgeNetworkReadingPlan(env, {
+        projectId: params.projectId,
+        userId: params.userId,
+        conversationId: params.conversationId,
+        userMessage: params.message,
+        mode: knMode,
+        touchedSlots,
+      });
+      if (readingPlan) instructions += readingPlan;
+    } catch {
+      /* reading plan 失败不阻断 Hermes */
     }
   }
 

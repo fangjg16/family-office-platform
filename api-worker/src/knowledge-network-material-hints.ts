@@ -464,6 +464,17 @@ function buildSlotGroupedHints(
   };
 }
 
+/** 按指定 slot 列表生成 hints（Reading Plan 单 slot 增量交叉路由复用） */
+export function buildMaterialHintsForTargetSlots(
+  params: BuildMaterialHintsParams,
+  targetSlots: CanonicalKbSlot[],
+): MaterialHintsPayload | null {
+  if (targetSlots.length === 0) return null;
+  const payload = buildSlotGroupedHints(params, targetSlots);
+  if (!payload) return null;
+  return truncateMaterialHintsPayload(payload);
+}
+
 /** 纯函数：由资料列表生成 hints payload（供测试与主流程复用） */
 export function buildMaterialHintsFromDocuments(
   params: BuildMaterialHintsParams,
@@ -519,7 +530,7 @@ export function formatMaterialHintsBlock(
 
 type HintEnv = { DB: D1Database };
 
-async function loadDocumentsForHints(
+export async function loadDocumentsForMaterialHints(
   env: HintEnv,
   projectId: string,
   userId: string,
@@ -609,7 +620,7 @@ export async function buildKnowledgeNetworkMaterialHints(
   let documents: MaterialHintDocument[] = [];
   let chunks: ChunkRow[] = [];
   try {
-    documents = await loadDocumentsForHints(
+    documents = await loadDocumentsForMaterialHints(
       env,
       params.projectId,
       params.userId,
