@@ -1,10 +1,13 @@
 import type { AgentJobRow } from "./agent-jobs";
 import {
+  jobIdFromScopedMessageId,
+  shouldProtectMessageFromSyncDelete,
+  shouldSkipSyncUpsertOverwrite,
+} from "./chat-sync-protection";
+import {
   auditAllMessagesInConversationDeleted,
   auditDeletedBeforeUserDelete,
-  auditDeletedFromChatRow,
   auditMessageCreated,
-  listConversationMessageRows,
 } from "./chat-audit";
 
 type ChatSyncEnv = { DB: D1Database };
@@ -119,60 +122,104 @@ async function auditCreatedFromSyncMessage(
   });
 }
 
-async function replaceConversationMessages(
+export function userMessageIdForJob(jobId: string): string {
+  return `user-job-${jobId}`;
+}
+
+async function loadAgentJobStatusMap(
+  env: ChatSyncEnv,
+  userId: string,
+  jobIds: Iterable<string>,
+): Promise<Map<string, string>> {
+  const unique = [...new Set([...jobIds].filter(Boolean))];
+  const map = new Map<string, string>();
+  for (const jobId of unique) {
+    const row = await env.DB.prepare(`SELECT status FROM agent_jobs WHERE id = ? AND user_id = ?`)
+      .bind(jobId, userId)
+      .first<{ status: string }>();
+    if (row?.status) map.set(jobId, row.status);
+  }
+  return map;
+}
+
+function collectJobIdsForProtection(
+  rows: Iterable<{ id: string; pending_job_id?: string | null }>,
+  incoming: Iterable<SyncChatMessage>,
+  deletedMessageIds: DeletedMessageRef[],
+): string[] {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    const pending = (row.pending_job_id ?? "").trim();
+    if (pending) ids.add(pending);
+    const scoped = jobIdFromScopedMessageId(row.id);
+    if (scoped) ids.add(scoped);
+  }
+  for (const m of incoming) {
+    const pending =
+      typeof m.pendingJobId === "string" ? m.pendingJobId.trim() : "";
+    if (pending) ids.add(pending);
+    const scoped = jobIdFromScopedMessageId(m.id);
+    if (scoped) ids.add(scoped);
+  }
+  for (const ref of deletedMessageIds) {
+    const scoped = jobIdFromScopedMessageId(ref.messageId);
+    if (scoped) ids.add(scoped);
+  }
+  return [...ids];
+}
+
+async function upsertChatMessageFromSync(
+  env: ChatSyncEnv,
+  userId: string,
+  conversationId: string,
+  m: SyncChatMessage,
+  now: string,
+  jobStatusById: Map<string, string>,
+): Promise<boolean> {
+  if (!m.id) return false;
+
+  const existing = await env.DB.prepare(
+    `SELECT id, pending_job_id FROM user_chat_messages WHERE user_id = ? AND id = ?`,
+  )
+    .bind(userId, m.id)
+    .first<{ id: string; pending_job_id: string | null }>();
+
+  if (
+    existing &&
+    shouldSkipSyncUpsertOverwrite(existing, m, jobStatusById)
+  ) {
+    return false;
+  }
+
+  const sortIndex =
+    typeof m.sortIndex === "number" && Number.isFinite(m.sortIndex) ? m.sortIndex : 0;
+  await upsertChatMessage(env, userId, conversationId, m, now);
+  if (!existing) {
+    await auditCreatedFromSyncMessage(env, userId, conversationId, m, sortIndex, "chat_sync");
+  }
+  return true;
+}
+
+/** 仅 upsert 传入消息；不删除未出现在 payload 中的既有消息 */
+async function mergeConversationMessages(
   env: ChatSyncEnv,
   userId: string,
   conversationId: string,
   msgs: SyncChatMessage[],
   now: string,
+  jobStatusById: Map<string, string>,
 ): Promise<number> {
-  const existing = await listConversationMessageRows(env, userId, conversationId);
-  const incomingIds = new Set(msgs.map((m) => m.id).filter(Boolean));
-  for (const row of existing) {
-    if (!incomingIds.has(row.id)) {
-      await auditDeletedFromChatRow(env, userId, row, "chat_sync");
-    }
-  }
-
-  await env.DB.prepare(
-    `DELETE FROM user_chat_messages WHERE user_id = ? AND conversation_id = ?`,
-  )
-    .bind(userId, conversationId)
-    .run();
-
-  let idx = 0;
   let count = 0;
   for (const m of msgs) {
-    if (!m.id) continue;
-    const sortIndex =
-      typeof m.sortIndex === "number" && Number.isFinite(m.sortIndex) ? m.sortIndex : idx;
-    const knHtml =
-      typeof m.knowledgeNetworkHtml === "string" ? m.knowledgeNetworkHtml : null;
-    const pendingJobId =
-      typeof m.pendingJobId === "string" && m.pendingJobId.trim()
-        ? m.pendingJobId.trim()
-        : null;
-    await env.DB.prepare(
-      `INSERT INTO user_chat_messages (id, user_id, conversation_id, role, content, files_json, time_label, sort_index, knowledge_network_html, pending_job_id, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    )
-      .bind(
-        m.id,
-        userId,
-        conversationId,
-        m.role === "assistant" ? "assistant" : "user",
-        m.content ?? "",
-        m.files?.length ? JSON.stringify(m.files) : null,
-        m.time ?? now,
-        sortIndex,
-        knHtml,
-        pendingJobId,
-        now,
-      )
-      .run();
-    await auditCreatedFromSyncMessage(env, userId, conversationId, m, sortIndex, "chat_sync");
-    idx = Math.max(idx, sortIndex + 1);
-    count += 1;
+    const wrote = await upsertChatMessageFromSync(
+      env,
+      userId,
+      conversationId,
+      m,
+      now,
+      jobStatusById,
+    );
+    if (wrote) count += 1;
   }
   return count;
 }
@@ -221,7 +268,7 @@ async function upsertChatMessage(
     .run();
 }
 
-/** 增量合并写入：仅 upsert / 按会话替换消息 / 显式删除，不再整用户 DELETE */
+/** 增量合并写入：upsert 消息 + 显式 deleted*；不再整会话 DELETE 替换 */
 export async function applyChatStatePatch(
   env: ChatSyncEnv,
   userId: string,
@@ -261,8 +308,26 @@ export async function applyChatStatePatch(
   }
 
   let deletedMessages = 0;
+  const existingRows = await env.DB.prepare(
+    `SELECT id, conversation_id, pending_job_id FROM user_chat_messages WHERE user_id = ?`,
+  )
+    .bind(userId)
+    .all<{ id: string; conversation_id: string; pending_job_id: string | null }>();
+  const allIncoming = Object.values(messagesByConversation).flat();
+  const jobStatusById = await loadAgentJobStatusMap(
+    env,
+    userId,
+    collectJobIdsForProtection(existingRows.results ?? [], allIncoming, deletedMessageIds),
+  );
+
   for (const ref of deletedMessageIds) {
     if (!ref.conversationId || !ref.messageId) continue;
+    const row = (existingRows.results ?? []).find(
+      (r) => r.id === ref.messageId && r.conversation_id === ref.conversationId,
+    );
+    if (row && shouldProtectMessageFromSyncDelete(row, jobStatusById)) {
+      continue;
+    }
     await auditDeletedBeforeUserDelete(
       env,
       userId,
@@ -284,12 +349,13 @@ export async function applyChatStatePatch(
   let messageCount = 0;
   for (const [conversationId, msgs] of Object.entries(messagesByConversation)) {
     if (!conversationId || !Array.isArray(msgs)) continue;
-    messageCount += await replaceConversationMessages(
+    messageCount += await mergeConversationMessages(
       env,
       userId,
       conversationId,
       msgs,
       now,
+      jobStatusById,
     );
   }
 
@@ -300,10 +366,6 @@ export async function applyChatStatePatch(
     deletedMessages,
     syncedAt: now,
   };
-}
-
-function userMessageIdForJob(jobId: string): string {
-  return `user-job-${jobId}`;
 }
 
 async function ensureConversationForAgentJob(

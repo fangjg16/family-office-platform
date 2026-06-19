@@ -49,7 +49,7 @@ import type { KnowledgeNetworkChatEntryState } from "@/lib/knowledge-network-pro
 import type { WorkspaceProject } from "@/workspace/projects";
 import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import { consumeChatSse } from "@/lib/chat-stream-client";
-import { cancelAgentJobRemote } from "@/lib/chat-sync-api";
+import { cancelAgentJobRemote, mergeAsyncAgentJobIntoConversation } from "@/lib/chat-sync-api";
 import {
   deriveConversationTopicHeuristic,
   isSidebarTopicPreview,
@@ -2709,6 +2709,8 @@ export default function ConversationCenter() {
     const apiMessage =
       trimmed || (fileNames.length > 0 ? buildFileUploadApiMessage(fileNames) : "");
 
+    const userMsgId = `user-${Date.now()}`;
+
     const priorUserCount = (
       liveMessagesByConversation[effectiveConversationId] ?? []
     ).filter((m) => m.role === "user").length;
@@ -2724,13 +2726,12 @@ export default function ConversationCenter() {
     }
 
     appendLiveMessage(effectiveConversationId, {
-      id: `user-${Date.now()}`,
+      id: userMsgId,
       role: "user",
       content: displayText,
       files: fileNames.length > 0 ? fileNames.map((name) => ({ name })) : undefined,
       time: getCurrentDateTimeLabel(),
     });
-    flushChatPersist();
     if (isFirstUserTurn) {
       updateConversationPreview(
         deriveConversationTopicHeuristic(apiMessage || displayText),
@@ -2927,17 +2928,23 @@ export default function ConversationCenter() {
             typeof payload.assistantMessageId === "string"
               ? payload.assistantMessageId
               : `assistant-job-${jobId}`;
-          updateLiveMessage(effectiveConversationId, assistantId, {
-            id: assistantIdJob,
-            content: formatCitationMarkers(
-              String(payload.answer ?? "正在深度分析…"),
-              mergedCitationMap,
+          const placeholderAnswer = formatCitationMarkers(
+            String(payload.answer ?? "正在深度分析…"),
+            mergedCitationMap,
+          );
+          setLiveMessagesByConversation((prev) => ({
+            ...prev,
+            [effectiveConversationId]: mergeAsyncAgentJobIntoConversation(
+              prev[effectiveConversationId] ?? [],
+              {
+                jobId,
+                ephemeralUserMessageId: userMsgId,
+                ephemeralAssistantMessageId: assistantId,
+                assistantContent: placeholderAnswer,
+                timeLabel: getCurrentDateTimeLabel(),
+              },
             ),
-            pendingJobId: jobId,
-            jobProgressLabel: "任务已提交，正在连接引擎…",
-            isStreaming: false,
-            streamStatusLabel: undefined,
-          });
+          }));
           resumedAgentJobIdsRef.current.add(jobId);
           void pollAgentJobUntilDone({
             apiBase: apiBaseFromChatEndpoint(AI_CHAT_ENDPOINT),
@@ -3037,25 +3044,19 @@ export default function ConversationCenter() {
           mergedCitationMap,
         );
         setLiveError(null);
-        if (streamAssistantId) {
-          updateLiveMessage(effectiveConversationId, streamAssistantId, {
-            id: assistantId,
-            content: placeholderAnswer,
-            pendingJobId: jobId,
-            jobProgressLabel: "任务已提交，正在连接引擎…",
-            isStreaming: false,
-            streamStatusLabel: undefined,
-          });
-        } else {
-          appendLiveMessage(effectiveConversationId, {
-            id: assistantId,
-            role: "assistant",
-            content: placeholderAnswer,
-            time: getCurrentDateTimeLabel(),
-            pendingJobId: jobId,
-            jobProgressLabel: "任务已提交，正在连接引擎…",
-          });
-        }
+        setLiveMessagesByConversation((prev) => ({
+          ...prev,
+          [effectiveConversationId]: mergeAsyncAgentJobIntoConversation(
+            prev[effectiveConversationId] ?? [],
+            {
+              jobId,
+              ephemeralUserMessageId: userMsgId,
+              ephemeralAssistantMessageId: streamAssistantId ?? undefined,
+              assistantContent: placeholderAnswer,
+              timeLabel: getCurrentDateTimeLabel(),
+            },
+          ),
+        }));
         resumedAgentJobIdsRef.current.add(jobId);
         void pollAgentJobUntilDone({
           apiBase: apiBaseFromChatEndpoint(AI_CHAT_ENDPOINT),

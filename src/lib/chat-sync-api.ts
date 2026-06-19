@@ -30,6 +30,65 @@ export type ActiveAgentJobSummary = {
   assistantMessageId: string;
 };
 
+export function userMessageIdForJob(jobId: string): string {
+  return `user-job-${jobId}`;
+}
+
+export function assistantMessageIdForJob(jobId: string): string {
+  return `assistant-job-${jobId}`;
+}
+
+/** 异步任务返回后，将 ephemeral id 对齐为服务端 job id 体系 */
+export function mergeAsyncAgentJobIntoConversation(
+  messages: LiveChatMessage[],
+  opts: {
+    jobId: string;
+    ephemeralUserMessageId?: string;
+    ephemeralAssistantMessageId?: string;
+    assistantContent: string;
+    timeLabel?: string;
+  },
+): LiveChatMessage[] {
+  const userJobId = userMessageIdForJob(opts.jobId);
+  const assistantJobId = assistantMessageIdForJob(opts.jobId);
+  const time = opts.timeLabel ?? new Date().toLocaleString("zh-CN");
+
+  let next = messages.map((m) => {
+    if (opts.ephemeralUserMessageId && m.id === opts.ephemeralUserMessageId) {
+      return { ...m, id: userJobId };
+    }
+    if (opts.ephemeralAssistantMessageId && m.id === opts.ephemeralAssistantMessageId) {
+      return {
+        ...m,
+        id: assistantJobId,
+        role: "assistant" as const,
+        content: opts.assistantContent,
+        pendingJobId: opts.jobId,
+        jobProgressLabel: m.jobProgressLabel ?? "任务已提交，正在连接引擎…",
+        isStreaming: false,
+        streamStatusLabel: undefined,
+      };
+    }
+    return m;
+  });
+
+  if (!next.some((m) => m.id === assistantJobId)) {
+    next = [
+      ...next,
+      {
+        id: assistantJobId,
+        role: "assistant" as const,
+        content: opts.assistantContent,
+        time,
+        pendingJobId: opts.jobId,
+        jobProgressLabel: "任务已提交，正在连接引擎…",
+      },
+    ];
+  }
+
+  return next;
+}
+
 export async function fetchRemoteChatState(
   userId: string,
   chatEndpoint = AI_CHAT_ENDPOINT,
@@ -88,7 +147,7 @@ export async function cancelAgentJobRemote(
   return { ok: true, status: data.status };
 }
 
-/** 刷新后恢复深度任务轮询：仅合并仍在 active-agent-jobs 中的任务 */
+/** 刷新后恢复深度任务轮询；若 D1 缺 placeholder 则从 active job 补建 */
 export async function attachActiveAgentJobsToMessages(
   userId: string,
   messagesByConversation: Record<string, LiveChatMessage[]>,
@@ -113,18 +172,41 @@ export async function attachActiveAgentJobsToMessages(
   for (const job of jobs) {
     const convId = job.conversationId;
     if (!convId) continue;
-    const list = out[convId];
-    if (!list) continue;
 
-    const idx = list.findIndex((m) => m.id === job.assistantMessageId);
-    if (idx < 0) continue;
+    const list = [...(out[convId] ?? [])];
+    let idx = list.findIndex(
+      (m) => m.id === job.assistantMessageId || m.pendingJobId === job.jobId,
+    );
+
+    if (idx < 0) {
+      const maxSort = list.reduce(
+        (n, m) => Math.max(n, typeof m.sortIndex === "number" ? m.sortIndex : -1),
+        -1,
+      );
+      list.push({
+        id: job.assistantMessageId,
+        role: "assistant",
+        content: "正在深度分析…",
+        time: new Date().toLocaleString("zh-CN"),
+        sortIndex: maxSort + 1,
+        pendingJobId: job.jobId,
+        jobProgressLabel: "深度分析进行中，刷新后已恢复等待…",
+      });
+      out[convId] = list;
+      continue;
+    }
 
     list[idx] = {
       ...list[idx],
+      id: job.assistantMessageId,
       pendingJobId: job.jobId,
       jobProgressLabel:
         list[idx].jobProgressLabel?.trim() || "深度分析进行中，刷新后已恢复等待…",
+      content: list[idx].content?.trim()
+        ? list[idx].content
+        : "正在深度分析…",
     };
+    out[convId] = list;
   }
 
   return out;
