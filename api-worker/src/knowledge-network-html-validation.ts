@@ -6,12 +6,24 @@ export type KnHtmlValidationOptions = {
   /** v2.91 strict validation (new writes); disable for legacy preview */
   strict?: boolean;
   touchesTimeline?: boolean;
+  /** 浏览器本地上传：与 full 相同启用 citation/scorecard auto-repair */
+  browserUpload?: boolean;
+  /**
+   * incremental 合并校验：不因页面其他位置既有 orphan citation 阻断单 slot patch。
+   * full/initial/upload 默认 true。
+   */
+  strictOrphanCitations?: boolean;
 };
 
 export type KnHtmlValidationResult = {
   ok: boolean;
   error?: string;
   warning?: string;
+};
+
+export type KnHtmlValidationForWriteResult = KnHtmlValidationResult & {
+  /** auto-repair 后的 HTML（仅 initial/full/upload 路径可能变更） */
+  html?: string;
 };
 
 const MAX_KN_HTML_BYTES = 2_500_000;
@@ -67,8 +79,149 @@ const ALLOWED_NAV_TARGETS = new Set([
   ...KB_APPENDIX_SLOTS,
 ]);
 
+const MATURITY_PERCENT_RE = /^(100|[1-9]?\d(?:\.\d{1,2})?)%$/;
+const MATURITY_MISSING_RE = /^[—–\-]$/u;
+
 function stripHtmlComments(html: string): string {
   return html.replace(/<!--[\s\S]*?-->/g, "");
+}
+
+const APPENDIX_SOURCE_ID_ATTR_RE = /\bid=["'](source-[A-Za-z0-9_-]+)["']/gi;
+const CITE_REF_LINK_RE =
+  /<sup\s+class=["']cite-ref["']>\s*<a\s+href=["']#(source-(?:U|A)-\d+)["'][^>]*>([\s\S]*?)<\/a>\s*<\/sup>/gi;
+
+/** 从 Appendix A section 提取 source id 列表（保留出现顺序，用于 duplicate 检测） */
+export function extractAppendixASourceIdList(html: string): string[] {
+  const sectionMatch = html.match(
+    /<section[^>]*\bid=["']source-index["'][\s\S]*?<\/section>/i,
+  );
+  if (!sectionMatch) return [];
+  const ids: string[] = [];
+  for (const m of sectionMatch[0].matchAll(APPENDIX_SOURCE_ID_ATTR_RE)) {
+    if (m[1]) ids.push(m[1]);
+  }
+  return ids;
+}
+
+/** 从 Appendix A 提取唯一 source id 集合（duplicate 时 Set 仍含该 id，须配合 duplicate 检查） */
+export function extractAppendixASourceIdSet(html: string): Set<string> {
+  return new Set(extractAppendixASourceIdList(html));
+}
+
+/** Appendix A 内重复的 source id */
+export function findDuplicateAppendixSourceIds(html: string): string[] {
+  const ids = extractAppendixASourceIdList(html);
+  const seen = new Set<string>();
+  const dups: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) dups.push(id);
+    seen.add(id);
+  }
+  return [...new Set(dups)];
+}
+
+export function validateAppendixASourceIdUniqueness(html: string): string | null {
+  const dups = findDuplicateAppendixSourceIds(html);
+  if (dups.length > 0) {
+    return `Appendix A source id 重复：${dups.join(", ")}`;
+  }
+  return null;
+}
+
+/** full/initial/upload：将无 Appendix anchor 的可点击 citation 降级为 cite-gap 文本 */
+export function repairOrphanCitationLinks(html: string): {
+  html: string;
+  repairedIds: string[];
+} {
+  const appendixIds = extractAppendixASourceIdSet(html);
+  const repairedIds: string[] = [];
+  const next = html.replace(CITE_REF_LINK_RE, (full, sourceId: string, label: string) => {
+    if (appendixIds.has(sourceId)) return full;
+    repairedIds.push(sourceId);
+    const short = sourceId.replace(/^source-/, "");
+    return `<sup class="cite-ref"><span class="cite-gap">[${short} 来源待补]</span></sup>`;
+  });
+  return { html: next, repairedIds: [...new Set(repairedIds)] };
+}
+
+function shouldAutoRepairContent(mode: KnowledgeNetworkUpdateMode | undefined, browserUpload?: boolean): boolean {
+  return mode === "initial" || mode === "full" || Boolean(browserUpload);
+}
+
+function tryNormalizeMaturityStatValue(raw: string): { value: string; warning?: string } {
+  const v = raw.trim();
+  if (MATURITY_MISSING_RE.test(v)) return { value: v };
+  if (MATURITY_PERCENT_RE.test(v)) {
+    const n = Number.parseFloat(v.replace("%", ""));
+    if (n >= 0 && n <= 100) return { value: v };
+  }
+  if (/^\d{1,3}(?:\.\d{1,2})?$/.test(v)) {
+    const n = Number.parseFloat(v);
+    if (n >= 0 && n <= 100) {
+      return { value: `${n}%`, warning: `成熟度「${v}」已规范为 ${n}%` };
+    }
+  }
+  const frac = v.match(/^(\d+)\s*\/\s*(\d+)$/);
+  if (frac) {
+    const num = Number.parseInt(frac[1]!, 10);
+    const den = Number.parseInt(frac[2]!, 10);
+    if (den > 0) {
+      const pct = Math.round((num / den) * 1000) / 10;
+      if (pct >= 0 && pct <= 100) {
+        return { value: `${pct}%`, warning: `成熟度「${v}」已换算为 ${pct}%` };
+      }
+    }
+  }
+  return {
+    value: "—",
+    warning: `成熟度「${v}」无法换算为百分比，已置为 —（请移至 stat-note）`,
+  };
+}
+
+/** full/initial/upload：将 stat-value 规范为百分比或 — */
+export function normalizeMaturityScorecardHtml(html: string): {
+  html: string;
+  warnings: string[];
+} {
+  const warnings: string[] = [];
+  let next = html;
+  for (const cls of ["stat-item-a", "stat-item-b", "stat-item-c"] as const) {
+    const re = new RegExp(
+      `(class=["'][^"']*${cls}[^"']*["'][\\s\\S]*?<div class="stat-value">)([^<]*)(</div>)`,
+      "i",
+    );
+    next = next.replace(re, (block, open: string, value: string, close: string) => {
+      const normalized = tryNormalizeMaturityStatValue(value);
+      if (normalized.warning) warnings.push(normalized.warning);
+      return `${open}${normalized.value}${close}`;
+    });
+  }
+  return { html: next, warnings };
+}
+
+export function prepareKnowledgeNetworkHtmlForWrite(
+  html: string,
+  options: KnHtmlValidationOptions,
+): { html: string; warnings: string[] } {
+  const warnings: string[] = [];
+  let prepared = html.trim();
+  if (!shouldAutoRepairContent(options.mode, options.browserUpload)) {
+    return { html: prepared, warnings };
+  }
+
+  const citation = repairOrphanCitationLinks(prepared);
+  prepared = citation.html;
+  if (citation.repairedIds.length > 0) {
+    warnings.push(
+      `citation 无 Appendix A anchor，已降级为来源待补：${citation.repairedIds.join(", ")}`,
+    );
+  }
+
+  const maturity = normalizeMaturityScorecardHtml(prepared);
+  prepared = maturity.html;
+  warnings.push(...maturity.warnings);
+
+  return { html: prepared, warnings };
 }
 
 export function detectSuspiciousIndustryTimeline(uncommented: string): string | undefined {
@@ -303,9 +456,6 @@ function validateAppendices(
 const MATURITY_SCORECARD_ERROR =
   "Maturity scorecard main values must be percentages; move counts/letter grades to notes.";
 
-const MATURITY_PERCENT_RE = /^(100|[1-9]?\d(?:\.\d{1,2})?)%$/;
-const MATURITY_MISSING_RE = /^[—–\-]$/u;
-
 export function extractMaturityStatValues(uncommented: string): string[] | null {
   const values: string[] = [];
   for (const cls of ["stat-item-a", "stat-item-b", "stat-item-c"] as const) {
@@ -350,15 +500,14 @@ function validateCitationsAndRevealAnchor(
   t: string,
   uncommented: string,
   requireRevealAnchor: boolean,
+  strictOrphanCitations = true,
 ): KnHtmlValidationResult | null {
   const citationTargets = [
     ...uncommented.matchAll(/href=["']#(source-(?:U|A)-\d+)["']/gi),
   ].map((m) => m[1]);
-  const sourceIds = new Set(
-    [...uncommented.matchAll(/id=["'](source-(?:U|A)-\d+)["']/gi)].map((m) => m[1]),
-  );
+  const sourceIds = extractAppendixASourceIdSet(uncommented);
   const missingSources = [...new Set(citationTargets)].filter((id) => !sourceIds.has(id));
-  if (missingSources.length > 0) {
+  if (missingSources.length > 0 && strictOrphanCitations) {
     return {
       ok: false,
       error: `citation 没有对应 source anchor：${missingSources.join(", ")}`,
@@ -400,6 +549,15 @@ function validateStrictV291(t: string, options: KnHtmlValidationOptions): KnHtml
   const legacy = validateLegacyV28Anchors(uncommented);
   if (legacy) return legacy;
 
+  const appendixDup = validateAppendixASourceIdUniqueness(t);
+  if (appendixDup) {
+    return { ok: false, error: appendixDup };
+  }
+
+  const strictOrphan =
+    options.strictOrphanCitations ??
+    (mode !== "incremental");
+
   if (mode === "reorder") {
     if (options.previousHtml) {
       const prev = options.previousHtml.trim();
@@ -427,7 +585,7 @@ function validateStrictV291(t: string, options: KnHtmlValidationOptions): KnHtml
     const appendices = validateAppendices(uncommented, navTargets);
     if (appendices) return appendices;
 
-    const citations = validateCitationsAndRevealAnchor(t, uncommented, false);
+    const citations = validateCitationsAndRevealAnchor(t, uncommented, false, strictOrphan);
     if (citations) return citations;
   } else if (requiresFullV291Structure(mode)) {
     const alignment = validateConfigNavSectionAlignment(uncommented, displayOrder);
@@ -436,7 +594,7 @@ function validateStrictV291(t: string, options: KnHtmlValidationOptions): KnHtml
     const appendices = validateAppendices(uncommented, navTargets);
     if (appendices) return appendices;
 
-    const citations = validateCitationsAndRevealAnchor(t, uncommented, true);
+    const citations = validateCitationsAndRevealAnchor(t, uncommented, true, strictOrphan);
     if (citations) return citations;
   } else {
     const anchors = presentCanonicalSlotIds(uncommented);
@@ -478,7 +636,7 @@ function validateStrictV291(t: string, options: KnHtmlValidationOptions): KnHtml
     }
   }
 
-  if (mode !== "reorder") {
+  if (mode !== "reorder" && mode !== "incremental") {
     const maturity = validateMaturityScorecard(uncommented);
     if (maturity) return maturity;
   }
@@ -506,6 +664,38 @@ export function validateKnowledgeNetworkHtml(
   }
 
   return validateStrictV291(t, { ...options, strict: true });
+}
+
+/**
+ * 入库前校验：initial/full/upload 先做 citation/scorecard auto-repair，再 strict 结构校验。
+ * incremental/reorder 不 repair 正文 citation；patch 层单独 hard reject。
+ */
+export function validateKnowledgeNetworkHtmlForWrite(
+  html: string,
+  options?: KnHtmlValidationOptions,
+): KnHtmlValidationForWriteResult {
+  const mode = options?.mode;
+  const dupErr = validateAppendixASourceIdUniqueness(html.trim());
+  if (dupErr) {
+    return { ok: false, error: dupErr };
+  }
+
+  const prep = prepareKnowledgeNetworkHtmlForWrite(html, options ?? {});
+  const preparedHtml = prep.html;
+  const validation = validateKnowledgeNetworkHtml(preparedHtml, options);
+  if (!validation.ok) {
+    return validation;
+  }
+
+  const warningParts = [validation.warning, ...prep.warnings].filter(Boolean);
+  const warning = warningParts.length > 0 ? warningParts.join("；") : undefined;
+  const usePrepared = shouldAutoRepairContent(mode, options?.browserUpload);
+
+  return {
+    ok: true,
+    warning,
+    html: usePrepared ? preparedHtml : undefined,
+  };
 }
 
 /** 供本地/CI 验收 v2.91 样例 */

@@ -7,7 +7,7 @@ import {
   isHermesAgentConfigured,
   pollHermesRun,
 } from "./hermes-agent";
-import { validateKnowledgeNetworkHtml } from "./knowledge-network-html-validation";
+import { validateKnowledgeNetworkHtmlForWrite } from "./knowledge-network-html-validation";
 import {
   applySlotHtmlPatchToKnowledgeNetworkHtml,
   extractSlotHtmlPatchFromAnswer,
@@ -144,20 +144,23 @@ async function writeKnowledgeNetworkFromHtml(
     (row.skill_intent === "knowledge_network"
       ? await resolveKnModeForJob(env, row)
       : "incremental");
-  const validation = validateKnowledgeNetworkHtml(html, {
+  const validation = validateKnowledgeNetworkHtmlForWrite(html, {
     mode,
     previousHtml,
     strict: true,
     touchesTimeline: mode !== "reorder" && /id=["']timeline-milestones["']/i.test(html),
+    browserUpload: false,
   });
   if (!validation.ok) {
     return { ok: false, error: validation.error ?? "HTML 校验失败" };
   }
 
+  const htmlToStore = validation.html ?? html;
+
   await upsertProjectKnowledgeNetwork(env, {
     projectId: row.project_id,
     userId: row.user_id,
-    html,
+    html: htmlToStore,
     lastJobId: row.id,
     answerSummary,
   });

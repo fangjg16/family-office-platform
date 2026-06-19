@@ -3,6 +3,8 @@ import {
   CANONICAL_KB_SLOTS,
   type KnHtmlValidationResult,
   validateKnowledgeNetworkHtml,
+  extractAppendixASourceIdSet,
+  validateAppendixASourceIdUniqueness,
 } from "./knowledge-network-html-validation";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 
@@ -48,7 +50,6 @@ const FORBIDDEN_PATCH_PATTERNS: ReadonlyArray<{ re: RegExp; reason: string }> = 
 ];
 
 const SOURCE_CITATION_RE = /#(source-[A-Za-z0-9_-]+)/g;
-const SOURCE_ID_ATTR_RE = /\bid=["'](source-[A-Za-z0-9_-]+)["']/gi;
 
 /** 从 HTML 片段提取 #source-* citation anchor（不含附录 A 定义行本身的 id） */
 export function extractSourceCitationIdsFromHtml(html: string): Set<string> {
@@ -59,17 +60,9 @@ export function extractSourceCitationIdsFromHtml(html: string): Set<string> {
   return ids;
 }
 
-/** 从整页 KB 的 Appendix A 提取已存在的 source id */
+/** 从整页 KB 的 Appendix A 提取已存在的 source id（唯一集合；duplicate 须另查） */
 export function extractAppendixASourceIds(html: string): Set<string> {
-  const sectionMatch = html.match(
-    /<section[^>]*\bid=["']source-index["'][\s\S]*?<\/section>/i,
-  );
-  if (!sectionMatch) return new Set();
-  const ids = new Set<string>();
-  for (const m of sectionMatch[0].matchAll(SOURCE_ID_ATTR_RE)) {
-    if (m[1]) ids.add(m[1]);
-  }
-  return ids;
+  return extractAppendixASourceIdSet(html);
 }
 
 function validateAppendixUpdatesFirstVersion(
@@ -93,6 +86,11 @@ export function validateSlotPatchSourceCitations(
   previousHtml: string,
   patch: SlotHtmlPatch,
 ): SlotHtmlPatchExtractResult {
+  const dupErr = validateAppendixASourceIdUniqueness(previousHtml);
+  if (dupErr) {
+    return { ok: false, reason: dupErr };
+  }
+
   const existing = extractAppendixASourceIds(previousHtml);
   const cited = extractSourceCitationIdsFromHtml(patch.sectionHtml);
   const rowHtml = patch.appendixUpdates?.versionLedgerRowHtml?.trim() ?? "";

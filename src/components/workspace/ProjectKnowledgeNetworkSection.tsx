@@ -128,9 +128,13 @@ export function ProjectKnowledgeNetworkSection({
         changelog: changelog.trim() || undefined,
         uploadFileName: file.name,
       });
-      setUploadSuccess(
+      const baseMsg =
         result.message ??
-          `已发布为 v${result.meta ? knVersionDisplay(result.meta) : "?"}`,
+        `已发布为 v${result.meta ? knVersionDisplay(result.meta) : "?"}`;
+      setUploadSuccess(
+        result.warning?.trim()
+          ? `${baseMsg}\n\n⚠️ 校验提示：${result.warning.trim()}`
+          : baseMsg,
       );
       await reload();
     } catch (e) {

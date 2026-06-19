@@ -6,7 +6,7 @@ import {
 } from "./knowledge-network-deep-refs";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
-import { validateKnowledgeNetworkHtml } from "./knowledge-network-html-validation";
+import { validateKnowledgeNetworkHtmlForWrite } from "./knowledge-network-html-validation";
 import { resolveKnowledgeNetworkPutJobId } from "./knowledge-network-guards";
 import {
   getProjectKnowledgeNetworkMeta,
@@ -162,7 +162,7 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
     html = String(body.html ?? "").trim();
     const changelog = String(body.changelog ?? changelogParam ?? "").trim();
     if (!html) return json({ error: "JSON 体缺少 html 字段" }, 400);
-    const validation = validateKnowledgeNetworkHtml(html, {
+    const validation = validateKnowledgeNetworkHtmlForWrite(html, {
       mode: putMode,
       previousHtml,
       strict: true,
@@ -172,10 +172,11 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
     if (!validation.ok) {
       return json({ error: validation.error ?? "HTML 校验失败" }, 400);
     }
+    const htmlToStore = validation.html ?? html;
     const meta = await upsertProjectKnowledgeNetwork(env, {
       projectId,
       userId,
-      html,
+      html: htmlToStore,
       lastJobId: resolved.jobId,
       answerSummary: changelog || "Hermes 文件回传",
     });
@@ -194,7 +195,7 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
 
   html = (await request.text()).trim();
   if (!html) return json({ error: "请求体为空" }, 400);
-  const validation = validateKnowledgeNetworkHtml(html, {
+  const validation = validateKnowledgeNetworkHtmlForWrite(html, {
     mode: putMode,
     previousHtml,
     strict: true,
@@ -205,10 +206,11 @@ export async function handleHermesPutKnowledgeNetworkCurrent(
     return json({ error: validation.error ?? "HTML 校验失败" }, 400);
   }
 
+  const htmlToStore = validation.html ?? html;
   const meta = await upsertProjectKnowledgeNetwork(env, {
     projectId,
     userId,
-    html,
+    html: htmlToStore,
     lastJobId: resolved.jobId,
     answerSummary: changelogParam || "Hermes 文件回传",
   });
@@ -241,7 +243,7 @@ export type HermesKnRequiredReadsOptions = {
   touchesTimeline?: boolean;
   /** 增量模式：用户点名的 canonical slots（驱动 deep refs 子集） */
   touchedSlots?: readonly CanonicalKbSlot[];
-  /** incremental 且用户仅点名 1 个 slot：slot-html-patch 为正常交付路径 */
+  /** incremental 且用户仅点名 1 个 slot：structured-slot-patch 为正常交付路径 */
   slotPatchMode?: boolean;
   /** 增量模式：用户点名 header / 成熟度评分卡时读 maturity-scoring.md */
   touchesMaturityScorecard?: boolean;
@@ -346,9 +348,10 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     lines.push("- 模式：首次/全量 — 可跳过 GET 旧版；写入完整 KB-CONFIG（13 core slots + 附录）后渲染。");
   } else if (mode === "incremental" && slotPatchMode) {
     lines.push(
-      "- 模式：单 slot 增量 — **正常路径**为交付 `slot-html-patch` JSON，由 Worker 合并入库。",
-      "- **禁止** jfo_kb_put.sh / curl PUT 整页 / 回复末尾整页 ```html（Hermes PUT 仅为旧版兼容，不是本任务路径）。",
-      "- sectionHtml **仅可引用**当前 Appendix A 已有 `#source-*`；**禁止**新增 citation anchor；若需新增来源索引，请改走整页 HTML fallback。",
+      "- 模式：单 slot 增量 — **主路径**为交付 `structured-slot-patch` JSON，由 Worker 确定性渲染并合并入库。",
+      "- **禁止** jfo_kb_put.sh / curl PUT 整页 / 回复末尾整页 ```html / sectionHtml（Hermes PUT 仅为旧版兼容）。",
+      "- `slot-html-patch` 仅为平台 backward-compatible fallback，**不是**默认交付格式。",
+      "- evidenceSourceIds **仅可引用**当前 Appendix A 已有 source id；若需新增来源索引，返回 requires_full_update 或改走整页 fallback。",
     );
   } else if (mode === "incremental") {
     lines.push("- 模式：增量 — 必须先 GET 当前版；只改用户点名的 slot。");

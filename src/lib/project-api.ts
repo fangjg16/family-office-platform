@@ -430,6 +430,7 @@ export type UploadProjectKnowledgeNetworkResult = {
   hasKnowledgeNetwork: boolean;
   meta: ProjectKnowledgeNetworkMeta | null;
   message?: string;
+  warning?: string | null;
 };
 
 /** 本地上传 HTML，覆盖当前版（旧版归档，版本号 +1） */

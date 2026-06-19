@@ -5,7 +5,7 @@ import {
   validateKnowledgeNetworkHtml,
 } from "./knowledge-network-html-validation";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
-import { extractAppendixASourceIds } from "./knowledge-network-slot-patch";
+import { extractAppendixASourceIdSet, validateAppendixASourceIdUniqueness } from "./knowledge-network-html-validation";
 import {
   STRUCTURED_SLOT_PATCH_SCHEMA_VERSION,
   STRUCTURED_SLOT_PATCH_TYPE,
@@ -348,7 +348,10 @@ export function validateEvidenceSourceIdsAgainstAppendixA(
   previousHtml: string,
   payload: unknown,
 ): string | null {
-  const existing = extractAppendixASourceIds(previousHtml);
+  const dupErr = validateAppendixASourceIdUniqueness(previousHtml);
+  if (dupErr) return dupErr;
+
+  const existing = extractAppendixASourceIdSet(previousHtml);
   const cited = collectEvidenceSourceIds(payload);
   const unknown = [...cited].filter((id) => !existing.has(id));
   if (unknown.length > 0) {
