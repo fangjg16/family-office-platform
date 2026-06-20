@@ -15,17 +15,20 @@ Establish evidence first, route each finding to the correct canonical slot, then
 
 ## Quick Routing
 
-| User intent | Read next | Prefer scripts |
+| User intent | Read next | Prefer delivery |
 |---|---|---|
-| New KB / full refresh | Core rules (`kb-schema`, `kb-config`, `content-rules`, `slot-specific-rules`, `slot-rendering-rules`, `maturity-scoring`, `timeline-rules`) plus the default deep refs listed below | `scripts/render_kb_html.py`, `scripts/validate_kb_html.py` |
-| Incremental KB update | Current KB HTML, `references/kb-schema.md`, `references/kb-config.md`, touched slot rules, and only the deep refs mapped to the named slot(s) | `scripts/merge_handoff.py`, `scripts/render_kb_html.py`, `scripts/validate_kb_html.py` |
-| Display-order change only | Current KB HTML and `references/kb-config.md` | `scripts/reorder_kb.py`, `scripts/validate_kb_html.py` |
+| New KB / full refresh | Core rules + `references/structured-kb-data-schema.md` + `examples-kb-data.json` + default deep refs | **structured-kb-data** JSON → Worker render; PUT / full HTML **fallback only** |
+| Incremental KB update (single slot) | Current KB HTML (read-only), touched slot rules, mapped deep refs | **structured-slot-patch** JSON; slot-html-patch / full HTML fallback |
+| Incremental KB update (multi-slot) | Current KB HTML, touched slot rules | GET + edit + PUT, or structured-kb-data if user requests full refresh |
+| Display-order change only | Current KB HTML and `references/kb-config.md` | `scripts/reorder_kb.py`, PUT |
 | Research / diligence / legal / risk / valuation | `references/content-rules.md` to route findings, then the relevant slot coverage in `references/slot-specific-rules.md` | produce JSON handoff; merge/render only if KB is updated |
 | Handoff from another workflow | `references/handoff-schema.md` | `scripts/merge_handoff.py` |
 
 ## Required Assets
 
-- Use `assets/kb-template.html` as the only KB shell. Do not rewrite its CSS or JS.
+- For **initial/full**: read `references/structured-kb-data-schema.md` and `examples-kb-data.json`; deliver **structured-kb-data** JSON. Worker renders `assets/kb-template.html` shell — Hermes must **not** hand-write the full page by default.
+- For **incremental single-slot**: deliver **structured-slot-patch** JSON; Worker merges into existing HTML.
+- For **PUT / HTML fallback** (when JSON cannot be delivered): use `assets/kb-template.html` as the only KB shell. Do not rewrite its CSS or JS.
 - Use `references/kb-schema.md` for the v2.91 slot set.
 - Use `references/kb-config.md` for display-order and project type defaults.
 - Use `references/content-rules.md` for routing evidence into slots.
@@ -71,14 +74,15 @@ Do not read deep refs for display-order-only `reorder` tasks.
 
 ## Deterministic Workflow For KB Work
 
-1. Parse or create structured KB data using `references/kb-schema.md`.
+1. Parse or create structured KB data using `references/kb-schema.md` and `references/structured-kb-data-schema.md` (initial/full) or structured-slot-patch (single-slot incremental).
 2. Apply `references/content-rules.md` to route each finding to one or more canonical slots.
 3. Apply `references/slot-specific-rules.md` for every slot being filled or materially refreshed.
 4. Apply `references/slot-rendering-rules.md` so slot-specific visual structure is not flattened.
-5. Keep `KB-CONFIG` as the display-layer source of truth using `references/kb-config.md`.
-6. Render HTML with `scripts/render_kb_html.py` whenever possible instead of hand-writing the page.
-7. Validate with `scripts/validate_kb_html.py` before delivering.
-8. For display-order changes, run `scripts/reorder_kb.py`; do not regenerate content.
+5. **Initial/full**: deliver one `structured-kb-data` JSON block; Worker renders KB-CONFIG, nav, slots, and appendices A–C.
+6. **Incremental single-slot**: deliver one `structured-slot-patch` JSON block; Worker renders and merges the target section only.
+7. **Fallback only**: render HTML with `scripts/render_kb_html.py` or PUT via `jfo_kb_put.sh` when JSON delivery is impossible.
+8. Validate with `scripts/validate_kb_html.py` before PUT fallback delivery.
+9. For display-order changes, run `scripts/reorder_kb.py`; do not regenerate content.
 
 ## v2.91 Gotchas
 
@@ -113,4 +117,4 @@ Do not stop at the diagram. `business-operations` must also cover customers/paye
 
 ## Output Discipline
 
-For normal chat, lead with findings and next actions. For KB work, deliver the HTML file and mention validation status. Do not include large template source in chat unless the user explicitly asks.
+For normal chat, lead with findings and next actions. For **initial/full KB work**, deliver **structured-kb-data** JSON (3–8 line summary + one ```json block). For **single-slot incremental**, deliver **structured-slot-patch** JSON. PUT / full HTML are **fallback only**. Do not include large template source in chat unless the user explicitly asks.

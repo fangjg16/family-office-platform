@@ -315,7 +315,13 @@ export function buildHermesKnowledgeNetworkRequiredReads(
   if (needsMaturityScoring) {
     add("references/maturity-scoring.md");
   }
-  add("assets/kb-template.html");
+  const isStructuredKbDataMode = mode === "initial" || mode === "full";
+  if (isStructuredKbDataMode) {
+    add("references/structured-kb-data-schema.md");
+    add("examples-kb-data.json");
+  } else {
+    add("assets/kb-template.html");
+  }
 
   const deepRefs = resolveKnowledgeNetworkDeepRefs(mode, touchedSlots);
   for (const deepRef of deepRefs) {
@@ -329,23 +335,33 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     lines.push(readLine(n++, "references/visual-style-guide.md"));
   }
 
-  lines.push(
+  const ruleSummary = [
     "",
     "规则摘要（Hermes v2.92 · schema v2.91）：",
     "- 13 个 core canonical slot + Appendix A–D；展示顺序由 <!-- KB-CONFIG --> display-order 驱动（schema-version: 2.91）。",
     "- legacy v2.8 / 11-slot KB 须全量重建（Route A），禁止增量 patch 旧 anchor。",
     "- 资料仅经 jfo-r2-materials：manifest/digest → 按需 textUrl，禁止机械全文拉取。",
-    "- 正文 citation（如 #source-U-1）须对应 Appendix A id；保留 assets/kb-template.html 内 revealAnchor。",
+    "- 正文 citation（如 #source-U-1）须对应 Appendix A id；Worker 渲染时自动生成 nav / KB-CONFIG / revealAnchor。",
     "- **timeline-milestones** 仅写项目推进节点；行业/市场背景写 industry-market/comps-benchmark/risks-mitigation。",
     "- **成熟度三张卡** `.stat-value` 必须为 0–100%；slot 计数、字母等级只能写 stat-note / stage。",
     "- **禁止** legacy v2.8 anchors（assets、business-model、timeline 等）、skills_reference.md、根目录 kb-template.html。",
     "- **deep refs**：initial/full 读齐 7 个 references/deep/*.md；incremental 仅读点名 slot 映射；reorder 不读。",
-    "- **禁止** read_file examples-kb-data.json、scripts/、components.html、visual-style-guide（非视觉调试）。",
-    "- **附录 D version-ledger**：平台在入库时自动从 D1 版本表合并全部历史行；Hermes 只需保留该 section 结构，勿删表头，历史行可留占位。",
-  );
+    isStructuredKbDataMode
+      ? "- **initial/full 主路径**：交付 `structured-kb-data` JSON（见 references/structured-kb-data-schema.md 与 examples-kb-data.json）；**禁止**默认 jfo_kb_put.sh / 整页 ```html / 手写 nav / KB-CONFIG / Appendix D。"
+      : "- **禁止** read_file examples-kb-data.json、scripts/、components.html、visual-style-guide（非视觉调试）。",
+    isStructuredKbDataMode
+      ? "- PUT / 整页 HTML / kb-template.html 仅为 structured-kb-data 无法交付时的 **fallback**，不是默认路径。"
+      : "",
+    "- **附录 D version-ledger**：平台在入库时自动从 D1 版本表合并全部历史行；Hermes **禁止**输出 versionLedger 或 Appendix D HTML。",
+  ].filter(Boolean);
+  lines.push(...ruleSummary);
 
   if (mode === "full" || mode === "initial") {
-    lines.push("- 模式：首次/全量 — 可跳过 GET 旧版；写入完整 KB-CONFIG（13 core slots + 附录）后渲染。");
+    lines.push(
+      "- 模式：首次/全量 — **主路径**交付 structured-kb-data JSON（13 slots + sources）；Worker 确定性渲染 HTML 并入库。",
+      "- **禁止**默认 bash jfo_kb_put.sh / 整页 ```html / 手写 nav / KB-CONFIG / Appendix D / revealAnchor。",
+      "- PUT / 整页 HTML 仅为 fallback（structured JSON 缺失或 Worker 明确要求时）。",
+    );
   } else if (mode === "incremental" && slotPatchMode) {
     lines.push(
       "- 模式：单 slot 增量 — **主路径**为交付 `structured-slot-patch` JSON，由 Worker 确定性渲染并合并入库。",
@@ -378,12 +394,12 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
     case "full":
       return {
         modeLine:
-          "全量重做（v2.91）：legacy v2.8 KB 须重建；按 kb-schema 13-slot 从零渲染；写入完整 KB-CONFIG。",
+          "全量重做（v2.91）：legacy v2.8 KB 须重建；按 kb-schema 13-slot 产出 structured-kb-data JSON，由 Worker 渲染。",
         materialsLine:
           "资料：jfo-r2-materials manifest 后读取主要项目资料与本对话 session 附件（按需）。**禁止** web_search / 公开检索（除非用户消息明确要求「查外部资料」）。",
-        getStep: "全量可跳过 GET；或 curl GET … || echo NO_CURRENT_KB",
+        getStep: "全量可跳过 GET；或 curl GET … || echo NO_CURRENT_KB（只读参考，勿整页编辑）",
         editStep:
-          "从 assets/kb-template.html 填充 13 core slots + Appendix A–D；**复制** kb-template 内 <!-- KB-CONFIG --> 行格式（含 `schema-version: 2.91` 独立一行）；timeline-milestones 须经 eligibility gate。",
+          "填充 structured-kb-data（13 slots + sources + maturity + meta）；**禁止**手写整页 HTML / nav / KB-CONFIG / Appendix D。",
       };
     case "reorder":
       return {
@@ -408,12 +424,12 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
     default:
       return {
         modeLine:
-          "首次生成（v2.91）：无已发布版；按 kb-schema 13-slot 写入 KB-CONFIG 后渲染。",
+          "首次生成（v2.91）：无已发布版；按 kb-schema 13-slot 产出 structured-kb-data JSON，由 Worker 渲染。",
         materialsLine:
           "资料：jfo-r2-materials manifest 后按需读取主要资料 + session 附件。",
-        getStep: "无旧版可跳过 GET；或 curl GET … || echo NO_CURRENT_KB",
+        getStep: "无旧版可跳过 GET；或 curl GET … || echo NO_CURRENT_KB（只读参考）",
         editStep:
-          "从 assets/kb-template.html 填充；<body> 开头写入 <!-- KB-CONFIG -->（**行格式**，含独立一行 `schema-version: 2.91`）。",
+          "填充 structured-kb-data JSON（config/meta/maturity/slots/sources）；timeline-milestones 须经 eligibility gate。",
       };
   }
 }
@@ -466,6 +482,78 @@ const STRUCTURED_SLOT_PAYLOAD_HINTS: Record<CanonicalKbSlot, string> = {
   "timeline-milestones": `{ "occurred": [{ "date": "2026-06-01", "title": "…", "detail": "…", "phase": "occurred" }], "inProgress": [], "future": [], "gaps": [] }`,
   "decision-framework": `{ "recommendation": "…", "decisionTable": [{ "选项": "继续推进", "好处": "…" }], "nextActions": [] }`,
 };
+
+/** initial / full：Hermes 交付 structured-kb-data JSON（主路径），Worker 确定性渲染整页 */
+export function buildHermesKnowledgeNetworkStructuredKbDataProtocol(
+  mode: "initial" | "full",
+): string {
+  return `
+
+【知识网络 · Structured KB Data 全量交付（${mode} · schema v2.91 · 主路径）】
+本任务**必须**交付 **structured-kb-data** JSON；Worker 确定性渲染 nav / KB-CONFIG / 13 slots / Appendix A–C。
+
+**对用户可见回复**
+1. 先写 3–8 行简体中文摘要（覆盖哪些 slot、成熟度、主要证据与缺口）。
+2. 附 **一个** \\\`\\\`\\\`json 代码块（type 必须为 structured-kb-data）：
+\\\`\\\`\\\`json
+{
+  "type": "structured-kb-data",
+  "schemaVersion": "2.91",
+  "mode": "${mode}",
+  "summary": "…",
+  "config": { "displayOrder": ["snapshot", "…"], "projectType": "general" },
+  "meta": { "title": "…", "autoSummary": "…" },
+  "maturity": { "factorA": "42%", "factorB": "25%", "combined": "35%" },
+  "slots": { "snapshot": { … }, …13 keys… },
+  "sources": [{ "id": "U-1", "type": "…", "title": "…" }],
+  "terms": [],
+  "dataDictionary": []
+}
+\\\`\\\`\\\`
+3. slots 须含 **13 个 canonical key**；payload 形状与 incremental structured-slot-patch 相同（见 examples-kb-data.json）。
+4. sources.id **禁止 duplicate**；所有 evidenceSourceIds 须先出现在 sources 中。
+5. **禁止** versionLedger / Appendix D HTML / 整页 \\\`\\\`\\\`html / sectionHtml / 手写 nav / KB-CONFIG / revealAnchor。
+6. **禁止**默认 bash ${KB_PUT_SCRIPT}；仅当 JSON 完全无法交付时才 fallback PUT 或整页 HTML。`;
+}
+
+/** initial / full 专用工作流（structured-kb-data 主路径） */
+export function buildHermesKnowledgeNetworkStructuredKbDataWorkflow(
+  jfoBase: string,
+  projectId: string,
+  projectTitleHint: string,
+  mode: "initial" | "full",
+): string {
+  const url = hermesKnowledgeNetworkCurrentUrl(jfoBase, projectId);
+  const workFile = `./kb/${projectId}/[AI]_${projectTitleHint}_知识网络.html`;
+  const { modeLine, materialsLine, getStep, editStep } = knModeWorkflowLines(mode);
+
+  return `
+
+【知识网络 · Structured KB Data 工作流（Hermes v2.92 · ${mode} · 主路径）】
+${modeLine}
+${materialsLine}
+
+${buildHermesKnowledgeNetworkStructuredKbDataProtocol(mode)}
+
+**资料与 schema**
+- 必读 \`${KB_SKILL_BASE}/references/structured-kb-data-schema.md\` 与 \`examples-kb-data.json\`
+- slot payload 与 incremental \`structured-slot-patch\` 对齐；完整 13 slot 一次交付
+
+**可选：只读拉取旧版（legacy 参考 / source id）** — ${getStep}
+\`\`\`bash
+curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
+  "${url}?format=raw" -o "${workFile}" || echo "NO_CURRENT_KB"
+\`\`\`
+${editStep}
+
+**硬性禁止（默认路径）**
+- **禁止** bash ${KB_PUT_SCRIPT} / curl PUT 整页 HTML
+- **禁止** 回复末尾整页 \\\`\\\`\\\`html / 手写 nav / KB-CONFIG / Appendix D
+- Worker 渲染成功后自动 validate + upsert + sync chat
+
+**Fallback（仅 structured JSON 无法交付时）**
+- 见下方「文件 API fallback」段落（jfo_kb_put.sh 或整页 \\\`\\\`\\\`html）`;
+}
 
 /** 单 slot incremental 专用工作流（structured patch 主路径） */
 export function buildHermesKnowledgeNetworkStructuredPatchWorkflow(
@@ -562,7 +650,7 @@ curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
 - 首选 structured-slot-patch；仅 JSON 完全无法生成或必须新增 Appendix A 时，才用整页 \\\`\\\`\\\`html fallback`;
 }
 
-/** Hermes Agent 指令：整页 HTML 文件回路 + curl PUT（initial/full/多 slot incremental/reorder） */
+/** Hermes Agent 指令：整页 HTML 文件回路 + curl PUT（fallback / incremental / reorder） */
 export function buildHermesKnowledgeNetworkFileProtocol(
   jfoBase: string,
   projectId: string,
@@ -570,15 +658,17 @@ export function buildHermesKnowledgeNetworkFileProtocol(
   jobId: string,
   projectTitleHint: string,
   mode: KnowledgeNetworkUpdateMode,
+  options?: { asFallback?: boolean },
 ): string {
+  const asFallback = options?.asFallback ?? (mode === "initial" || mode === "full");
   const url = hermesKnowledgeNetworkCurrentUrl(jfoBase, projectId);
   const workFile = `./kb/${projectId}/[AI]_${projectTitleHint}_知识网络.html`;
   const { modeLine, materialsLine, getStep, editStep } = knModeWorkflowLines(mode);
 
   return `
 
-【知识网络 · 一次回复双交付（Hermes v2.92 硬性）】
-${modeLine}
+【知识网络 · ${asFallback ? "文件 API fallback（非默认）" : "一次回复双交付（Hermes v2.92 硬性）"}】
+${asFallback ? "⚠️ initial/full 默认须交付 structured-kb-data JSON；本段落仅在 JSON 无法交付时使用。\n" : ""}${modeLine}
 ${materialsLine}
 
 **Skill 路径（Railway canonical）**

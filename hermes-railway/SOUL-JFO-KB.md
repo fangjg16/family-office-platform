@@ -25,7 +25,7 @@
 
 路径前缀：`/opt/data/skills/opportunistic-investments-hermes/`
 
-**首次 / 全量 / 增量（写 HTML）**
+**首次 / 全量（structured-kb-data 主路径）**
 
 1. `SKILL.md`
 2. `references/kb-schema.md`（13 core slots + Appendix A–D）
@@ -34,9 +34,14 @@
 5. `references/slot-specific-rules.md`
 6. `references/slot-rendering-rules.md`
 7. `references/maturity-scoring.md`
-8. `references/timeline-rules.md`（触及 timeline-milestones 时）
-9. `assets/kb-template.html`
-10–16. `references/deep/*.md`（initial/full 7 个；incremental 按 slot；reorder 不读）
+8. `references/timeline-rules.md`
+9. `references/structured-kb-data-schema.md`
+10. `examples-kb-data.json`（payload 形状与 Worker `SlotPayloadBySlot` 对齐）
+11–17. `references/deep/*.md`（7 个）
+
+**增量（单 slot structured-slot-patch 主路径）**
+
+同上 core rules；**不读** `kb-template.html`（Worker 渲染）；按 slot 读 deep refs。
 
 **仅重排展示顺序**
 
@@ -47,18 +52,26 @@
 
 **全量重做**：**禁止** `web_search`（除非用户明确要求「查外部资料」）。
 
-### KB-CONFIG（PUT 与 Worker 校验统一）
+### 交付协议
 
-- 必须使用 **HTML 注释行格式**（与 `assets/kb-template.html` 一致）：
-  ```
-  <!-- KB-CONFIG
-  schema-version: 2.91
-  display-order: snapshot, ...
-  -->
-  ```
-- **禁止**仅用 JSON `<script>` 承载 schema-version。
+**首次 / 全量（默认）**
 
-### PUT（文件 API 主链路）
+- 交付 **一个** fenced ` ```json ` 块，`type: structured-kb-data`
+- **禁止**默认整页 ` ```html `、手写 nav / KB-CONFIG / Appendix D / revealAnchor
+- **禁止**默认 `jfo_kb_put.sh`
+- Worker 确定性渲染 → validate → upsert
+
+**Fallback（仅 JSON 无法交付）**
+
+- `jfo_kb_put.sh` curl PUT 整页 HTML，或
+- 回复末尾附整页 ` ```html `
+
+**单 slot 增量**
+
+- 主路径：`structured-slot-patch` JSON
+- Fallback：`slot-html-patch` / 整页 HTML
+
+### PUT（fallback · 非 initial/full 默认）
 
 **禁止**自行拼 curl/python PUT。必须使用：
 
@@ -73,8 +86,8 @@ bash /opt/data/skills/opportunistic-investments-hermes/scripts/jfo_kb_put.sh \
 ```
 
 - PUT 成功（输出 `PUT OK`）：回复仅 3–8 行摘要，**不附**整页 HTML。
-- PUT 400：最多修正一次；仍失败则停止并报告 validation error，可附 ` ```html ` fallback。
+- PUT 400：最多修正一次；仍失败则停止并报告 validation error。
 
 **禁止**：legacy v2.8 anchors、`skills_reference.md`、根目录 `kb-template.html`、`knowledge-base-generation/`。
 
-未完成当前模式规定的 read_file **不得**输出 HTML。
+未完成当前模式规定的 read_file **不得**输出交付物。

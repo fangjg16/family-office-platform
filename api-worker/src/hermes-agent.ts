@@ -6,6 +6,7 @@ import {
 import {
   buildHermesKnowledgeNetworkFileProtocol,
   buildHermesKnowledgeNetworkRequiredReads,
+  buildHermesKnowledgeNetworkStructuredKbDataWorkflow,
   buildHermesKnowledgeNetworkStructuredPatchWorkflow,
   isVisualDebugKnRequest,
   messageTouchesMaturityScorecard,
@@ -307,6 +308,25 @@ export function buildHermesAgentInstructions(
           slotPatchSlot,
         ),
         "预注入摘录只供事实依据；structured slot patch 模式下 Worker 渲染 JSON 并合并入库，勿整页 PUT。",
+      );
+    } else if (mode === "initial" || mode === "full") {
+      lines.push(
+        buildHermesKnowledgeNetworkStructuredKbDataWorkflow(
+          jfoBase,
+          projectId,
+          projectTitleHint,
+          mode,
+        ),
+        buildHermesKnowledgeNetworkFileProtocol(
+          jfoBase,
+          projectId,
+          userId || "system",
+          jobId,
+          projectTitleHint,
+          mode,
+          { asFallback: true },
+        ),
+        "预注入摘录只供事实依据；首次/全量默认交付 structured-kb-data JSON，Worker 确定性渲染入库。PUT/整页 HTML 仅为 fallback。",
       );
     } else {
       lines.push(

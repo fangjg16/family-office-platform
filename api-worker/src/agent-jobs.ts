@@ -15,6 +15,10 @@ import {
   slotHtmlPatchSummaryForJob,
   validateMergedKnowledgeNetworkAfterSlotPatch,
 } from "./knowledge-network-slot-patch";
+import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
+import {
+  detectKnowledgeNetworkUpdateMode,
+} from "./knowledge-network-mode";
 import {
   applyStructuredSlotPatchToKnowledgeNetworkHtml,
   extractStructuredSlotPatchFromAnswer,
@@ -25,11 +29,12 @@ import {
   validateMergedKnowledgeNetworkAfterStructuredPatch,
   validateStructuredSlotPatch,
 } from "./knowledge-network-structured-patch";
-import { formatKnVersionDisplay } from "./knowledge-network-version";
 import {
-  detectKnowledgeNetworkUpdateMode,
-  type KnowledgeNetworkUpdateMode,
-} from "./knowledge-network-mode";
+  extractStructuredKbDataFromAnswer,
+  renderStructuredKbDataToHtml,
+  shouldUseStructuredKbDataMode,
+} from "./knowledge-network-structured-kb-data";
+import { formatKnVersionDisplay } from "./knowledge-network-version";
 import { resolveKnowledgeNetworkSlotsFromMessage } from "./knowledge-network-slot-aliases";
 import {
   getProjectKnowledgeNetworkMeta,
@@ -194,6 +199,109 @@ type StructuredPatchWriteResult =
   | { ok: false; skipped: true }
   | { ok: false; blocked: true; reason: string }
   | { ok: false; skipped: false; error: string };
+
+export type StructuredKbDataWriteResult =
+  | {
+      ok: true;
+      meta: NonNullable<Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>>;
+      html: string;
+      summary: string;
+    }
+  | { ok: false; skipped: true; notFound?: boolean }
+  | { ok: false; skipped: false; error: string };
+
+/** full / initial：从 structured-kb-data JSON 渲染并入库（主路径） */
+export async function tryWriteKnowledgeNetworkFromStructuredKbData(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+  result: { answer: string },
+  knMode: KnowledgeNetworkUpdateMode,
+): Promise<StructuredKbDataWriteResult> {
+  if (!shouldUseStructuredKbDataMode(knMode)) {
+    return { ok: false, skipped: true };
+  }
+
+  const extracted = extractStructuredKbDataFromAnswer(result.answer);
+  if (!extracted.ok) {
+    if (extracted.notFound) {
+      return { ok: false, skipped: true, notFound: true };
+    }
+    return { ok: false, skipped: false, error: extracted.reason };
+  }
+
+  const rendered = renderStructuredKbDataToHtml(extracted.data);
+  if (!rendered.ok) {
+    return {
+      ok: false,
+      skipped: false,
+      error: `validation failed: ${rendered.reason}`,
+    };
+  }
+
+  const summary =
+    extracted.data.summary?.trim() ||
+    "structured-kb-data 确定性渲染入库";
+  const written = await writeKnowledgeNetworkFromHtml(
+    env,
+    row,
+    rendered.html,
+    summary,
+    knMode,
+  );
+  if (!written.ok) {
+    return {
+      ok: false,
+      skipped: false,
+      error: `validation failed: ${written.error}`,
+    };
+  }
+
+  return {
+    ok: true,
+    meta: written.meta,
+    html: written.html,
+    summary,
+  };
+}
+
+async function tryAcceptHermesPutForJob(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+  result: { answer: string },
+): Promise<JobFinalizeResult | null> {
+  let meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+
+  if (meta?.lastJobId === row.id) {
+    const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+    if (html) {
+      const note = `\n\n已同步至**项目知识网络 v${formatKnVersionDisplay(meta.version, meta.versionLabel)}**（文件 API 回传，可在项目详情预览）。`;
+      const answer = result.answer.includes("项目知识网络 v")
+        ? result.answer
+        : `${result.answer}${note}`;
+      return { status: "ok", answer, knowledgeNetworkHtml: html };
+    }
+  }
+
+  if (!meta || meta.lastJobId !== row.id) {
+    await sleep(4000);
+    meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+    if (meta?.lastJobId === row.id) {
+      const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+      if (html) {
+        const note = `\n\n已同步至**项目知识网络 v${formatKnVersionDisplay(meta.version, meta.versionLabel)}**（文件 API 回传）。`;
+        return {
+          status: "ok",
+          answer: result.answer.includes("项目知识网络 v")
+            ? result.answer
+            : `${result.answer}${note}`,
+          knowledgeNetworkHtml: html,
+        };
+      }
+    }
+  }
+
+  return null;
+}
 
 async function tryWriteKnowledgeNetworkFromStructuredSlotPatch(
   env: AgentJobEnv,
@@ -374,45 +482,125 @@ async function tryWriteKnowledgeNetworkFromSlotPatch(
   };
 }
 
-async function finalizeKnowledgeNetworkJobResult(
+export async function finalizeKnowledgeNetworkJobResult(
   env: AgentJobEnv,
   row: AgentJobRow,
   result: { answer: string; knowledgeNetworkHtml: string | null },
 ): Promise<JobFinalizeResult> {
-  let meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+  const knMode = await resolveKnModeForJob(env, row);
 
-  // 路径 A：Hermes 已 curl PUT（最理想）
-  if (meta?.lastJobId === row.id) {
-    const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
-    if (html) {
-      const note = `\n\n已同步至**项目知识网络 v${formatKnVersionDisplay(meta.version, meta.versionLabel)}**（文件 API 回传，可在项目详情预览）。`;
+  if (shouldUseStructuredKbDataMode(knMode)) {
+    let structuredFallbackError: string | null = null;
+
+    const structuredWritten = await tryWriteKnowledgeNetworkFromStructuredKbData(
+      env,
+      row,
+      result,
+      knMode,
+    );
+    if (structuredWritten.ok) {
+      const vDisplay = formatKnVersionDisplay(
+        structuredWritten.meta.version,
+        structuredWritten.meta.versionLabel,
+      );
+      const note =
+        `\n\n已通过 **structured-kb-data** 写入**项目知识网络 v${vDisplay}**（Worker 确定性渲染）。`;
       const answer = result.answer.includes("项目知识网络 v")
         ? result.answer
-        : `${result.answer}${note}`;
-      return { status: "ok", answer, knowledgeNetworkHtml: html };
+        : `${result.answer.trim() || structuredWritten.summary}${note}`;
+      return {
+        status: "ok",
+        answer,
+        knowledgeNetworkHtml: structuredWritten.html,
+      };
     }
-  }
+    structuredFallbackError = structuredWritten.skipped
+      ? null
+      : structuredWritten.error;
 
-  // 给 Hermes 几秒迟到的 PUT
-  if (!meta || meta.lastJobId !== row.id) {
-    await sleep(4000);
-    meta = await getProjectKnowledgeNetworkMeta(env, row.project_id);
-    if (meta?.lastJobId === row.id) {
-      const html = await readProjectKnowledgeNetworkHtml(env, row.project_id);
-      if (html) {
-        const note = `\n\n已同步至**项目知识网络 v${formatKnVersionDisplay(meta.version, meta.versionLabel)}**（文件 API 回传）。`;
-        return {
-          status: "ok",
-          answer: result.answer.includes("项目知识网络 v")
-            ? result.answer
-            : `${result.answer}${note}`,
-          knowledgeNetworkHtml: html,
-        };
+    const putAccepted = await tryAcceptHermesPutForJob(env, row, result);
+    if (putAccepted) {
+      return putAccepted;
+    }
+
+    const extracted = extractKnHtmlFromResult(result);
+    if (extracted) {
+      const written = await writeKnowledgeNetworkFromHtml(
+        env,
+        row,
+        extracted,
+        "从 Hermes 回复提取 HTML（structured-kb-data fallback）",
+        knMode,
+      );
+      if (written.ok) {
+        const note = `\n\n已写入**项目知识网络 v${formatKnVersionDisplay(written.meta.version, written.meta.versionLabel)}**${knowledgeNetworkExtractFallbackNote(env)}`;
+        const answer = result.answer.includes("项目知识网络 v")
+          ? result.answer
+          : `${result.answer}${note}`;
+        return { status: "ok", answer, knowledgeNetworkHtml: written.html };
       }
+      return {
+        status: "failed",
+        error: written.error,
+        answer:
+          `${result.answer.trim() || "Hermes 已结束，但知识网络未通过校验。"}\n\n` +
+          `**知识网络校验未通过**：${written.error}\n` +
+          (structuredFallbackError
+            ? `（structured-kb-data 曾尝试但失败：${structuredFallbackError}）\n`
+            : "") +
+          "（Worker 不会自动多轮重写；请修正 structured JSON 或按错误重试。）",
+      };
     }
+
+    if (structuredFallbackError) {
+      return {
+        status: "failed",
+        error: "知识网络交付失败",
+        answer:
+          (result.answer.trim() || "Hermes 已结束，但未返回可用知识网络。") +
+          `\n\n**structured-kb-data 失败**：${structuredFallbackError}\n` +
+          "也未检测到 Hermes PUT 成功或整页 ```html fallback。",
+      };
+    }
+
+    const answerTrim = result.answer.trim();
+    const viaChatFallback = (row.hermes_run_id ?? "").startsWith("chat-fallback-");
+
+    if (
+      answerTrim.length >= 200 &&
+      !/```(?:json|html)/i.test(answerTrim) &&
+      !/<html[\s>]/i.test(answerTrim)
+    ) {
+      return {
+        status: "ok",
+        answer:
+          answerTrim +
+          "\n\n（本条回复**未包含** structured-kb-data JSON 或 ```html 整页，因此**未写入**项目知识网络。若要首次/全量更新，请在回复末尾附 **一个** `type: structured-kb-data` 的 ```json 代码块。）" +
+          (viaChatFallback
+            ? "\n\n（当前为聊天兼容模式，无法 curl PUT，JSON 或 HTML 代码块为唯一交付方式。）"
+            : ""),
+        knowledgeNetworkHtml: null,
+      };
+    }
+
+    return {
+      status: "failed",
+      error: "知识网络交付失败",
+      answer:
+        (answerTrim || "Hermes 已结束，但未返回可用知识网络。") +
+        "\n\n首次/全量须在回复末尾附 **structured-kb-data** JSON（```json，`type: structured-kb-data`）；若 JSON 无法交付，可 fallback 为 Hermes PUT 或整页 ```html。" +
+        (viaChatFallback
+          ? "\n\n（当前为聊天兼容模式，无法 curl，代码块为唯一交付方式。）"
+          : ""),
+    };
   }
 
-  const knMode = await resolveKnModeForJob(env, row);
+  // incremental / reorder：PUT 优先，再 structured slot patch / slot-html / html fallback
+  const putAccepted = await tryAcceptHermesPutForJob(env, row, result);
+  if (putAccepted) {
+    return putAccepted;
+  }
+
   const structuredWritten = await tryWriteKnowledgeNetworkFromStructuredSlotPatch(
     env,
     row,

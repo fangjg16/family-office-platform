@@ -1,6 +1,7 @@
 import {
   buildHermesKnowledgeNetworkFileProtocol,
   buildHermesKnowledgeNetworkRequiredReads,
+  buildHermesKnowledgeNetworkStructuredKbDataWorkflow,
   buildHermesKnowledgeNetworkStructuredPatchWorkflow,
   isVisualDebugKnRequest,
 } from "../src/hermes-knowledge-network.ts";
@@ -11,7 +12,7 @@ import {
 } from "../src/knowledge-network-deep-refs.ts";
 import { shouldUseStructuredSlotPatchMode } from "../src/knowledge-network-structured-patch.ts";
 
-const banned = [
+const bannedIncremental = [
   "components.html",
   "visual-style-guide.md",
   "examples-kb-data.json",
@@ -43,10 +44,18 @@ function check(
   const files = r.split("\n").filter((l) => /^\d+\./.test(l)).map((l) => l.trim());
   const deepRefs = deepRefFiles(files);
   const expectedDeep = resolveKnowledgeNetworkDeepRefs(mode, touchedSlots);
+  const isStructuredFull = mode === "initial" || mode === "full";
+  const banned = isStructuredFull
+    ? ["components.html", "visual-style-guide.md", "scripts/", "assets/kb-template.html"]
+    : bannedIncremental;
   const ok = files.every((f) => !banned.some((b) => f.includes(b)));
   const deepOk =
     deepRefs.length === expectedDeep.length &&
     expectedDeep.every((d) => deepRefs.some((f) => f.includes(d)));
+  const structuredSchema = files.some((f) => f.includes("structured-kb-data-schema.md"));
+  const examplesKb = files.some((f) => f.includes("examples-kb-data.json"));
+  const kbTemplate = files.some((f) => f.includes("kb-template.html"));
+  const mentionsStructuredPrimary = r.includes("structured-kb-data");
 
   console.log(
     JSON.stringify({
@@ -59,15 +68,26 @@ function check(
       slotPatchMode,
       timelineRules: files.some((f) => f.includes("timeline-rules.md")),
       maturityScoring: files.some((f) => f.includes("maturity-scoring.md")),
+      structuredSchema,
+      examplesKb,
+      kbTemplate,
+      mentionsStructuredPrimary,
       bannedAbsent: ok,
       deepRefs,
     }),
   );
 
   if (!ok || !deepOk) process.exitCode = 1;
+  if (isStructuredFull) {
+    if (!structuredSchema || !examplesKb || kbTemplate || !mentionsStructuredPrimary) {
+      process.exitCode = 1;
+    }
+  } else if (mode === "incremental" && !slotPatchMode) {
+    if (!kbTemplate) process.exitCode = 1;
+  }
 }
 
-console.log("=== required reads · deep refs phase 2 ===\n");
+console.log("=== required reads · structured-kb-data phase 2 ===\n");
 check("initial");
 check("full");
 check("incremental");
@@ -126,6 +146,44 @@ if (
   !riskReads.includes("structured-slot-patch") ||
   !riskReads.includes("backward-compatible fallback") ||
   /正常路径.*slot-html-patch/.test(riskReads)
+) {
+  process.exitCode = 1;
+}
+
+console.log("\n=== structured-kb-data mode (initial / full) ===\n");
+const fullWorkflow = buildHermesKnowledgeNetworkStructuredKbDataWorkflow(
+  "https://jfo-api.example",
+  "proj-test",
+  "测试项目",
+  "full",
+);
+const fullReads = buildHermesKnowledgeNetworkRequiredReads({ mode: "full" });
+const fullFallback = buildHermesKnowledgeNetworkFileProtocol(
+  "https://jfo-api.example",
+  "proj-test",
+  "user-test",
+  "job-test",
+  "测试项目",
+  "full",
+  { asFallback: true },
+);
+console.log(
+  JSON.stringify({
+    fullWorkflowHasStructuredKbData: fullWorkflow.includes("structured-kb-data"),
+    fullWorkflowNoDefaultPut: !fullWorkflow.includes("**C. PUT"),
+    fullWorkflowForbidsHtml: fullWorkflow.includes("禁止") && fullWorkflow.includes("整页"),
+    fullReadsHasSchema: fullReads.includes("structured-kb-data-schema.md"),
+    fullReadsHasExamples: fullReads.includes("examples-kb-data.json"),
+    fullReadsNoKbTemplate: !fullReads.includes("assets/kb-template.html"),
+    fullFallbackMarked: fullFallback.includes("fallback"),
+  }),
+);
+if (
+  !fullWorkflow.includes("structured-kb-data") ||
+  fullWorkflow.includes("**C. PUT") ||
+  !fullReads.includes("structured-kb-data") ||
+  fullReads.includes("assets/kb-template.html") ||
+  !fullFallback.includes("fallback")
 ) {
   process.exitCode = 1;
 }

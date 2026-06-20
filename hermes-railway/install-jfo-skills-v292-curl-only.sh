@@ -37,7 +37,8 @@ curl_kb "assets/components.html" "$KB/assets/components.html"
 curl_kb "agents/openai.yaml" "$KB/agents/openai.yaml"
 
 for ref in kb-schema.md kb-config.md content-rules.md gotchas.md handoff-schema.md \
-  maturity-scoring.md slot-rendering-rules.md slot-specific-rules.md timeline-rules.md; do
+  maturity-scoring.md slot-rendering-rules.md slot-specific-rules.md timeline-rules.md \
+  structured-kb-data-schema.md; do
   curl_kb "references/$ref" "$KB/references/$ref"
 done
 
@@ -88,6 +89,10 @@ test -f "$KB/references/kb-schema.md"
 grep -q "v2.91" "$KB/references/kb-schema.md"
 test -f "$KB/references/maturity-scoring.md"
 test -f "$KB/references/timeline-rules.md"
+test -f "$KB/references/structured-kb-data-schema.md"
+grep -q "structured-kb-data" "$KB/references/structured-kb-data-schema.md"
+grep -q "structured-kb-data" "$KB/SKILL.md"
+grep -q "structured-kb-data" "$KB/examples-kb-data.json"
 test -f "$KB/references/deep/knowledge-base-generation.md"
 test -f "$KB/references/deep/compliance-check.md"
 ls "$KB/references/deep/" | wc -l | grep -q '^7$'
