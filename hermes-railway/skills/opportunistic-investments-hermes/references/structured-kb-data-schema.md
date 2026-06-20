@@ -2,7 +2,7 @@
 
 首次 / 全量 KB 的**主路径**：Hermes 只产出 JSON，Worker 确定性渲染整页 HTML。
 
-**目标不是「13 个 slot 存在」**，而是 **通过 Worker Full Quality Contract**（`coverageScore ≥ 62`，单 slot 归一化分 ≥ 55）。未达标时 Worker 返回 `repair_needed` 并触发**一次**自动 repair pass。
+**目标不是「13 个 slot 存在」**，而是 **通过 Worker Full Quality Contract 2.0**（内容质量评分：有效 row ≥ 65% 字段非空；空 row 不计分；`publishCoverage=100` 仅当全部 slot ≥85 且无空 row）。未达标时 Worker 返回 `repair_needed` 并触发**一次**自动 repair pass。
 
 ---
 
@@ -58,14 +58,20 @@
   { "text": "具体缺什么、为何重要", "confidence": "gap" }
   ```
 - `confidence`: `"gap"` = 资料缺口；`"low"` = 有说法但低置信度。
-- **禁止**用空字符串、占位符「待补充」单行 table 代替 gap callout。
+- **禁止**用空字符串、空对象 `{}`、仅表头无有效 tbody 行占位 table
+- **禁止**输出无业务含义的 row（≥65% 核心字段须非空）
+- 不知道就写 **gaps callout**，不要填空对象或「待补充」占位 cell
 - 无项目级 timeline 节点时，`timeline-milestones.gaps` 须说明「暂无已记录节点」。
 
 ---
 
-## 13 Slot Quality Contract（Worker 强制校验）
+## 13 Slot Quality Contract 2.0（Worker 强制校验）
 
-每项为 **必填字段 + 最低 item 数**。不足 → `repair_needed`。
+每项为 **有效 row 数 + 分析/缺口**。空 row、填充率 <65% 的 row **不计分**。repair 消息会列出 `空/无效 row: slot.field[index]`。
+
+**publishCoverage=100** 仅当：13 slot 均 ≥85 分 **且** 无 emptyRowIssues。
+
+**Factor A（成熟度）**：单一 BP 来源上限约 **70%**；有空 row 时上限 **75%**；Combined 单一来源上限 **45%**。
 
 ### 一、snapshot（项目快照）
 

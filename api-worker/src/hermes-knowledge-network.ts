@@ -533,19 +533,21 @@ export function buildHermesKnowledgeNetworkStructuredKbDataProtocol(
 
 /** Worker repair_needed 时注入 Hermes 的补全指令（同一 job，最多一次） */
 export function buildHermesStructuredKbRepairPrompt(repairMessage: string): string {
-  return `【structured-kb-data · Quality Contract repair（同一 job · 仅一次）】
+  return `【structured-kb-data · Quality Contract 2.0 repair（同一 job · 仅一次）】
 
-上一轮 JSON **未通过 Worker Full Quality Contract**。请**只**补全 structured-kb-data JSON，**禁止**写 HTML / PUT / sectionHtml。
+上一轮 JSON **未通过 Worker Content Completeness 2.0**。请**只**补全 structured-kb-data JSON，**禁止**写 HTML / PUT / sectionHtml。
 
-**缺项清单（须全部补齐）**
+**缺项清单（须全部补齐或转 gap）**
 ${repairMessage}
 
 **要求**
 1. 重新输出 **一个** \\\`\\\`\\\`json 代码块，type 必须为 structured-kb-data，含完整 13 slots + sources。
-2. 每 slot 满足 structured-kb-data-schema.md 最低 item 数；缺资料写 gaps callout，勿留空 table。
-3. 参考 examples-kb-data.json 的 rich 密度（journeyMap、scenarios×3、riskRows≥5、questionGroups P1/P2 等）。
-4. maturity 可填占位；Worker 会重算 Factor A/B/Combined。
-5. 先写 2–4 行摘要说明补了哪些 slot/字段，再附 JSON。`;
+2. **禁止空 row / 空字符串占位**；不知道就写 gaps，不要填空对象。
+3. 每个 table row 须有业务含义（≥65% 核心字段非空）；marketDrivers 须含投资含义/分析。
+4. 参考 examples-kb-data.json 的 rich 密度（journeyMap、scenarios×3、riskRows≥5、questionGroups P1/P2、details.topic 对应 questionGroups 等）。
+5. repair 清单中列出的 empty table 位置须补有效内容或改为 gap callout。
+6. maturity 可填占位；Worker 会重算 Factor A/B/Combined（单一 BP Factor A ≤70%）。
+7. 先写 2–4 行摘要说明补了哪些 slot/字段，再附 JSON。`;
 }
 
 /** initial / full 专用工作流（structured-kb-data 主路径） */

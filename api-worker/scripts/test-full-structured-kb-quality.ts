@@ -24,12 +24,14 @@ import {
   scoreKnowledgeNetworkHtmlCoverage,
 } from "../src/knowledge-network-html-coverage.ts";
 import { validateFullStructuredKbQuality } from "../src/knowledge-network-full-quality-contract.ts";
+import { countEmptyHtmlCells, countEmptyHtmlRows } from "../src/knowledge-network-content-row-quality.ts";
 import { validateKnowledgeNetworkHtmlForWrite } from "../src/knowledge-network-html-validation.ts";
 import { projectKnowledgeNetworkR2Key } from "../src/project-knowledge-network.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const thinPath = join(here, "fixtures/full-structured-kb-data-pet.json");
 const richPath = join(here, "fixtures/full-structured-kb-data-pet-rich.json");
+const v5EmptyPath = join(here, "fixtures/full-structured-kb-data-pet-v5-empty-rows.json");
 const v3Path = "c:/Users/jensenfang/Downloads/[AI]_proj-87c4b0718f58_知识网络_v3.html";
 
 let failed = 0;
@@ -147,13 +149,48 @@ function baseJob(overrides?: Partial<AgentJobRow>): AgentJobRow {
 
 const thin = loadJson(thinPath);
 const rich = loadJson(richPath);
+const v5Empty = loadJson(v5EmptyPath);
 const thinJson = readFileSync(thinPath, "utf8");
 const richJson = readFileSync(richPath, "utf8");
 const thinQuality = validateFullStructuredKbQuality(thin);
 const richQuality = validateFullStructuredKbQuality(rich);
+const v5EmptyQuality = validateFullStructuredKbQuality(v5Empty);
 // --- 1. thin → repair_needed ---
 report("thin fixture fails quality contract", !thinQuality.ok, `coverage=${thinQuality.coverageScore}`);
 report("thin publish gate → repairNeeded", !evaluateStructuredKbPublishGate(thin).ok);
+
+// --- 1b. v5 empty rows detected ---
+report(
+  "v5-empty fixture has emptyRowIssues",
+  v5EmptyQuality.emptyRowIssues.length >= 5,
+  `count=${v5EmptyQuality.emptyRowIssues.length}`,
+);
+report(
+  "v5-empty publishCoverage not 100",
+  v5EmptyQuality.publishCoverage < 100,
+  `publish=${v5EmptyQuality.publishCoverage}`,
+);
+report(
+  "v5-empty Factor A not 100",
+  computeDeterministicMaturity(v5Empty).factorA < 100,
+  `A=${computeDeterministicMaturity(v5Empty).factorA}%`,
+);
+report("v5-empty fails ok gate", !v5EmptyQuality.ok);
+
+const v5EmptyRendered = renderStructuredKbDataToHtml(v5Empty);
+if (v5EmptyRendered.ok) {
+  const eh = v5EmptyRendered.html;
+  const targetSec = eh.match(/id="target-overview"[\s\S]*?<\/section>/i)?.[0] ?? "";
+  report(
+    "v5-empty renderer: no empty tbody cells in target-overview",
+    countEmptyHtmlCells(targetSec) === 0,
+    `emptyCells=${countEmptyHtmlCells(targetSec)}`,
+  );
+  report(
+    "v5-empty renderer: gap callout instead of empty keyClaims table",
+    targetSec.includes("资料缺口") && !/<tbody><tr><td><\/td>/i.test(targetSec),
+  );
+}
 
 // --- 2. rich passes + components ---
 const richRendered = renderStructuredKbDataToHtml(rich);
@@ -162,13 +199,17 @@ if (richRendered.ok) {
   const html = richRendered.html;
   report("rich has quality-coverage in KB-CONFIG", /quality-coverage:\s*100/i.test(html));
   report("rich has scenario-cards", html.includes('class="scenario-cards"'));
+  report("rich diligence uses details.topic", /id="diligence-gaps"[\s\S]*<details class="topic"/i.test(html));
   report("rich full strict HTML validation", validateKnowledgeNetworkHtmlForWrite(html, { mode: "full", strict: true }).ok);
 }
 
 // --- 3. single BP maturity cap ---
 const m = computeDeterministicMaturity(rich);
 report("single BP Factor B ≤ 25%", m.factorB <= 25, `B=${m.factorB}%`);
+report("single BP Factor A ≤ 70%", m.factorA <= 70, `A=${m.factorA}%`);
 report("single BP Combined ≤ 45%", m.combined <= 45, `Combined=${m.combined}%`);
+report("rich richContractMet", richQuality.richContractMet);
+report("rich publishCoverage 100 only when rich", richQuality.publishCoverage === 100);
 
 // --- 4. old/new gate: v3 Hermes HTML 不误杀 rich JSON ---
 try {

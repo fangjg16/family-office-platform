@@ -1,4 +1,8 @@
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
+import {
+  filterValidRows,
+  isMeaningfulCell,
+} from "./knowledge-network-content-row-quality";
 import type {
   BusinessOperationsPayload,
   CompsBenchmarkPayload,
@@ -137,14 +141,19 @@ function renderMetricCards(cards?: MetricCard[]): string {
     .join("")}</div>`;
 }
 
+function renderGapLabel(text: string): string {
+  return `<aside class="callout warning"><div class="callout-title">资料缺口</div><p>${esc(text)}</p></aside>`;
+}
+
 function renderTable(
   headers: string[],
   rows: TableRow[],
   columnKeys: string[],
 ): string {
-  if (!rows.length) return "";
+  const valid = filterValidRows(rows);
+  if (!valid.length) return "";
   const head = `<thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>`;
-  const body = rows
+  const body = valid
     .map(
       (row) =>
         `<tr>${columnKeys.map((k) => `<td>${esc(String(row[k] ?? ""))}</td>`).join("")}</tr>`,
@@ -153,17 +162,33 @@ function renderTable(
   return `<table>${head}<tbody>${body}</tbody></table>`;
 }
 
+function renderTableOrGap(
+  label: string,
+  headers: string[],
+  rows: TableRow[] | undefined,
+  columnKeys: string[],
+): string {
+  const valid = filterValidRows(rows);
+  if (valid.length) return renderTable(headers, valid, columnKeys);
+  if (rows?.length) return renderGapLabel(`${label}：现有 row 无有效内容，待补资料或改写为 gap。`);
+  return renderGapLabel(`${label}：暂无有效数据。`);
+}
+
 function renderRelationshipTable(edges?: RelationshipEdge[]): string {
   if (!edges?.length) return "";
-  return renderTable(
-    ["关系", "从", "到", "状态", "风险"],
-    edges.map((e) => ({
+  const rows = edges
+    .map((e) => ({
       relation: e.relation,
       from: e.from,
       to: e.to,
       status: e.status ?? "",
       risk: e.risk ?? "",
-    })),
+    }))
+    .filter((r) => Object.values(r).some((v) => isMeaningfulCell(v)));
+  if (!rows.length) return renderGapLabel("关系网络：暂无有效关系边。");
+  return renderTable(
+    ["关系", "从", "到", "状态", "风险"],
+    rows,
     ["relation", "from", "to", "status", "risk"],
   );
 }
@@ -176,8 +201,11 @@ function scenarioVariantClass(label: string): string {
 }
 
 function renderScenarioCards(scenarios?: ScenarioRow[]): string {
-  if (!scenarios?.length) return "";
-  return `<div class="scenario-cards">${scenarios
+  const valid = (scenarios ?? []).filter(
+    (s) => isMeaningfulCell(s.label) && isMeaningfulCell(s.value ?? s.detail),
+  );
+  if (!valid.length) return renderGapLabel("情景分析：缺少 base/upside/downside 有效情景。");
+  return `<div class="scenario-cards">${valid
     .map(
       (s) =>
         `<div class="scenario-card ${scenarioVariantClass(s.label)}"><div class="sc-label">${esc(s.label)}</div>` +
@@ -244,8 +272,16 @@ function renderTimelineBlock(
   return `<h3>${esc(title)}</h3><div class="timeline project-timeline ${cssClass}">${inner}</div>`;
 }
 
+function priorityBadgeClass(priority: string): string {
+  if (priority === "P1" || priority === "最高") return "badge-red";
+  if (priority === "P2") return "badge-amber";
+  return "badge-gray";
+}
+
 function renderQuestionGroups(groups: QuestionGroup[]): string {
-  return groups
+  const validGroups = groups.filter((g) => filterValidRows(g.questions).length > 0);
+  if (!validGroups.length) return renderGapLabel("尽调缺口：暂无有效问题组。");
+  return validGroups
     .map((g) => {
       const title = g.title ?? g.priority;
       const prioTag =
@@ -254,7 +290,8 @@ function renderQuestionGroups(groups: QuestionGroup[]): string {
           : g.priority === "P2"
             ? "P2"
             : "P3";
-      const rows = g.questions.map((q) => ({
+      const validQs = filterValidRows(g.questions);
+      const rows = validQs.map((q) => ({
         question: q.question,
         strength: q.requiredEvidence ? "待补证据" : "待核实",
         owner: q.owner ?? "待定",
@@ -266,24 +303,38 @@ function renderQuestionGroups(groups: QuestionGroup[]): string {
         rows,
         ["question", "strength", "owner", "urgency", "action"],
       );
-      return `<div class="oq-group"><h3><span class="badge badge-red">${esc(prioTag)}</span> ${esc(title)}</h3>${table}</div>`;
+      return (
+        `<details class="topic" open>` +
+        `<summary><span class="badge ${priorityBadgeClass(prioTag)}">${esc(prioTag)}</span> ${esc(title)}` +
+        `<span class="topic-count">${validQs.length} 项 · ${esc(prioTag)}</span></summary>` +
+        `<div class="topic-body">${table}</div></details>`
+      );
     })
     .join("");
 }
 
 function renderRiskMatrix(rows: RiskRow[]): string {
-  if (!rows.length) return "";
-  const body = rows
+  const valid = filterValidRows(rows as TableRow[]) as RiskRow[];
+  if (!valid.length) return renderGapLabel("风险矩阵：暂无有效风险行。");
+  const body = valid
     .map((r) => {
-      const cause = [r.cause, r.trigger].filter(Boolean).join("；");
-      const mitigation = r.mitigation ?? "";
+      const mitigation = [r.mitigation, r.owner, r.status].filter(Boolean).join(" · ");
       const evidence = renderEvidenceCell(r.evidenceSourceIds);
-      return `<tr><td><span class="risk-level ${riskLevelClass(r.level)}">${esc(r.level)}</span></td><td>${esc(r.risk)}</td><td>${esc(cause)}</td>` +
-        `<td>${esc(r.impact ?? "")}</td><td>${evidence}</td><td>${esc(mitigation)}</td></tr>`;
+      return (
+        `<tr><td><span class="risk-level ${riskLevelClass(r.level)}">${esc(r.level)}</span></td>` +
+        `<td>${esc(r.risk)}</td>` +
+        `<td>${esc(r.cause ?? "")}</td>` +
+        `<td>${esc(r.trigger ?? "")}</td>` +
+        `<td>${esc(r.impact ?? "")}</td>` +
+        `<td>${evidence}</td>` +
+        `<td>${esc(mitigation)}</td></tr>`
+      );
     })
     .join("");
-  return `<table class="risk-matrix-table"><thead><tr><th>级别</th><th>风险</th><th>原因/触发</th>` +
-    `<th>影响</th><th>证据</th><th>缓释/负责人/状态</th></tr></thead><tbody>${body}</tbody></table>`;
+  return (
+    `<table class="risk-matrix-table"><thead><tr><th>级别</th><th>风险</th><th>原因</th>` +
+    `<th>触发条件</th><th>影响</th><th>证据</th><th>缓释/负责人/状态</th></tr></thead><tbody>${body}</tbody></table>`
+  );
 }
 
 export function renderSlotPayloadByCanonicalSlot(
@@ -320,19 +371,22 @@ export function renderSlotPayloadByCanonicalSlot(
       const p = payload as TargetOverviewPayload;
       return (
         renderNarratives(p.businessSummary) +
-        renderTable(
+        renderTableOrGap(
+          "资产构成",
           ["资产/权利/能力", "定义与范围", "可投资性", "关键证据/缺口"],
-          p.assetSummary ?? [],
+          p.assetSummary,
           ["资产/权利/能力", "定义与范围", "可投资性", "关键证据/缺口"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "交易要素",
           ["交易要素", "内容", "证据/缺口"],
-          p.transactionSummary ?? [],
+          p.transactionSummary,
           ["交易要素", "内容", "证据/缺口"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "关键主张",
           ["关键主张", "依据", "缺口"],
-          p.keyClaims ?? [],
+          p.keyClaims,
           ["关键主张", "依据", "缺口"],
         ) +
         renderGapCallouts(p.gaps)
@@ -341,19 +395,22 @@ export function renderSlotPayloadByCanonicalSlot(
     case "industry-market": {
       const p = payload as IndustryMarketPayload;
       return (
-        renderTable(
+        renderTableOrGap(
+          "市场驱动",
           ["主题", "事实/数据", "投资含义", "来源"],
-          p.marketDrivers ?? p.marketSize ?? [],
+          p.marketDrivers ?? p.marketSize,
           ["主题", "事实/数据", "投资含义", "来源"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "价值链",
           ["价值链环节", "描述", "壁垒/机会"],
-          p.valueChain ?? [],
+          p.valueChain,
           ["价值链环节", "描述", "壁垒/机会"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "政策/监管",
           ["政策/监管", "要点", "影响"],
-          p.policyContext ?? [],
+          p.policyContext,
           ["政策/监管", "要点", "影响"],
         ) +
         renderGapCallouts(p.gaps)
@@ -361,27 +418,34 @@ export function renderSlotPayloadByCanonicalSlot(
     }
     case "business-operations": {
       const p = payload as BusinessOperationsPayload;
+      const journey = renderJourneyMap(p.journeyMap);
+      const revenue = renderTableOrGap(
+        "收入树",
+        ["应用/产品场景", "价值主张", "证据/缺口"],
+        p.revenueTree,
+        ["应用/产品场景", "价值主张", "证据/缺口"],
+      );
+      const flywheel = renderNarratives(p.flywheel);
       return (
-        renderJourneyMap(p.journeyMap) +
-        renderTable(
-          ["应用/产品场景", "价值主张", "证据/缺口"],
-          p.revenueTree ?? [],
-          ["应用/产品场景", "价值主张", "证据/缺口"],
-        ) +
-        renderNarratives(p.flywheel) +
-        renderTable(
+        (journey || renderGapLabel("客户旅程：暂无有效 journeyMap。")) +
+        revenue +
+        flywheel +
+        renderTableOrGap(
+          "客户/付费方",
           ["客户/受众/付费方", "需求", "获客/渠道", "验证状态"],
-          p.customerBuyer ?? [],
+          p.customerBuyer,
           ["客户/受众/付费方", "需求", "获客/渠道", "验证状态"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "定价与单位经济",
           ["收入来源", "定价/费率", "成本/履约", "单位经济/KPI"],
-          p.pricing ?? [],
+          p.pricing,
           ["收入来源", "定价/费率", "成本/履约", "单位经济/KPI"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "运营瓶颈/供应链",
           ["瓶颈", "影响", "缓释"],
-          p.operatingBottlenecks ?? p.supplyChain ?? [],
+          p.operatingBottlenecks ?? p.supplyChain,
           ["瓶颈", "影响", "缓释"],
         ) +
         renderGapCallouts(p.gaps)
@@ -466,19 +530,23 @@ export function renderSlotPayloadByCanonicalSlot(
           value: r["数值"] ?? r.value ?? "",
           note: r["说明"] ?? r.note,
         })) ?? [];
+      const cashflow = renderTableOrGap(
+        "投资现金流",
+        ["资金用途", "金额/比例", "说明"],
+        p.investmentCashflow,
+        ["资金用途", "金额/比例", "说明"],
+      );
+      const sensitivity = renderTableOrGap(
+        "敏感性分析",
+        ["敏感变量", "影响方向", "阈值/区间", "观察方式"],
+        p.sensitivityItems,
+        ["敏感变量", "影响方向", "阈值/区间", "观察方式"],
+      );
       return (
         renderMetricCards(metrics) +
         renderScenarioCards(p.scenarios) +
-        renderTable(
-          ["资金用途", "金额/比例", "说明"],
-          p.investmentCashflow ?? [],
-          ["资金用途", "金额/比例", "说明"],
-        ) +
-        renderTable(
-          ["敏感变量", "影响方向", "阈值/区间", "观察方式"],
-          p.sensitivityItems ?? [],
-          ["敏感变量", "影响方向", "阈值/区间", "观察方式"],
-        ) +
+        cashflow +
+        sensitivity +
         renderGapCallouts(p.gaps)
       );
     }
@@ -525,27 +593,31 @@ export function renderSlotPayloadByCanonicalSlot(
       const p = payload as DecisionFrameworkPayload;
       const rec = p.recommendation
         ? `<aside class="callout info"><div class="callout-title">条件式建议</div><p>${esc(p.recommendation)}</p></aside>`
-        : "";
+        : renderGapLabel("决策建议：缺少 recommendation。");
       return (
         rec +
-        renderTable(
+        renderTableOrGap(
+          "Go/No-Go 条件",
           ["投资论点", "证据", "前置条件", "反证/风险"],
-          p.goNoGoConditions ?? [],
+          p.goNoGoConditions,
           ["投资论点", "证据", "前置条件", "反证/风险"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "决策选项",
           ["选项", "好处", "代价/风险", "适用条件"],
-          p.decisionTable ?? [],
+          p.decisionTable,
           ["选项", "好处", "代价/风险", "适用条件"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "下一步行动",
           ["下一步", "Owner", "时间", "交付物"],
-          p.nextActions ?? [],
+          p.nextActions,
           ["下一步", "Owner", "时间", "交付物"],
         ) +
-        renderTable(
+        renderTableOrGap(
+          "触发器",
           ["触发器", "条件", "动作"],
-          p.triggers ?? [],
+          p.triggers,
           ["触发器", "条件", "动作"],
         ) +
         renderGapCallouts(p.openConditions)

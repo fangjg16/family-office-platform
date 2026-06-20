@@ -361,7 +361,7 @@ export function renderStructuredKbDataToHtml(
   return {
     ok: true,
     html: renderFullStructuredKnowledgeNetwork(prepared, {
-      qualityCoverage: quality.coverageScore,
+      qualityCoverage: quality.publishCoverage,
     }),
     quality,
   };

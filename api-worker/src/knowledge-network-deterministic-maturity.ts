@@ -77,21 +77,30 @@ function inferTier(combined: number, sellerOnly: boolean): string {
 /** Worker 确定性成熟度：忽略 Hermes 自填 factorA/B/combined */
 export function computeDeterministicMaturity(data: StructuredKbData): DeterministicMaturity {
   const quality = validateFullStructuredKbQuality(data);
-  const factorA = quality.coverageScore;
+  let factorA = quality.coverageScore;
   const b = computeFactorB(data.sources);
   let factorB = b.score;
 
   const { sellerOnly } = countAuthoringParties(data.sources);
-  if (sellerOnly) factorB = Math.min(factorB, 25);
+  if (sellerOnly) {
+    factorB = Math.min(factorB, 25);
+    factorA = Math.min(factorA, 70);
+  }
+  if (quality.emptyRowIssues.length > 0) {
+    factorA = Math.min(factorA, 75);
+  }
+  if (!quality.richContractMet) {
+    factorA = Math.min(factorA, 85);
+  }
 
   const combined = Math.round(factorA * 0.6 + factorB * 0.4);
   const cappedCombined = sellerOnly ? Math.min(combined, 45) : combined;
 
-  const gapCount = quality.issues.length;
+  const gapCount = quality.issues.length + quality.emptyRowIssues.length;
   const factorANote =
     gapCount > 0
-      ? `13 slot 覆盖 ${factorA}/100；${gapCount} 项未达 full quality contract`
-      : `13 slot 覆盖 ${factorA}/100`;
+      ? `Content Completeness ${factorA}/100；${gapCount} 项未达 Quality Contract 2.0`
+      : `Content Completeness ${factorA}/100（rich contract）`;
 
   return {
     factorA,
