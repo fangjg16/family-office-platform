@@ -533,6 +533,38 @@ export async function pollHermesRun(env: HermesAgentEnv, runId: string): Promise
   return fetchHermesRunSnapshot(env, runId);
 }
 
+const HERMES_TERMINAL = new Set(["completed", "failed", "cancelled"]);
+
+/** 轮询直至 Hermes run 终态（structured-kb repair pass 等同 job 内二次请求） */
+export async function waitForHermesRunComplete(
+  env: HermesAgentEnv,
+  runId: string,
+  options?: { maxWaitMs?: number; pollIntervalMs?: number },
+): Promise<HermesRunPoll> {
+  const maxWaitMs = options?.maxWaitMs ?? 5 * 60_000;
+  const pollIntervalMs = options?.pollIntervalMs ?? 2500;
+  const deadline = Date.now() + maxWaitMs;
+  let last: HermesRunPoll = {
+    runId,
+    status: "running",
+    output: "",
+    error: null,
+    raw: null,
+  };
+
+  while (Date.now() < deadline) {
+    last = await pollHermesRun(env, runId);
+    if (HERMES_TERMINAL.has(last.status)) return last;
+    await new Promise((r) => setTimeout(r, pollIntervalMs));
+  }
+
+  return {
+    ...last,
+    status: "failed",
+    error: last.error || `Hermes repair run 超时（${maxWaitMs}ms）`,
+  };
+}
+
 /** 尽力取消 Hermes Run（无 cancel API 时本地终态仍生效） */
 export async function cancelHermesRun(env: HermesAgentEnv, runId: string): Promise<boolean> {
   const id = runId.trim();

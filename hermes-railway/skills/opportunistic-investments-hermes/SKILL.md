@@ -26,7 +26,7 @@ Establish evidence first, route each finding to the correct canonical slot, then
 
 ## Required Assets
 
-- For **initial/full**: read `references/structured-kb-data-schema.md` and `examples-kb-data.json`; deliver **structured-kb-data** JSON. Worker renders `assets/kb-template.html` shell — Hermes must **not** hand-write the full page by default.
+- For **initial/full**: read `references/structured-kb-data-schema.md` and `examples-kb-data.json`; deliver **structured-kb-data** JSON that passes Worker **Full Quality Contract** (slot-specific coverage, not merely 13 keys). Worker renders `assets/kb-template.html` shell — Hermes must **not** hand-write the full page by default.
 - For **incremental single-slot**: deliver **structured-slot-patch** JSON; Worker merges into existing HTML.
 - For **PUT / HTML fallback** (when JSON cannot be delivered): use `assets/kb-template.html` as the only KB shell. Do not rewrite its CSS or JS.
 - Use `references/kb-schema.md` for the v2.91 slot set.
@@ -78,7 +78,7 @@ Do not read deep refs for display-order-only `reorder` tasks.
 2. Apply `references/content-rules.md` to route each finding to one or more canonical slots.
 3. Apply `references/slot-specific-rules.md` for every slot being filled or materially refreshed.
 4. Apply `references/slot-rendering-rules.md` so slot-specific visual structure is not flattened.
-5. **Initial/full**: deliver one `structured-kb-data` JSON block; Worker renders KB-CONFIG, nav, slots, and appendices A–C.
+5. **Initial/full**: deliver one `structured-kb-data` JSON block meeting the Quality Contract; Worker renders KB-CONFIG, nav, slots, and appendices A–C. Do not thin-fill slots with minimal tables — follow `examples-kb-data.json` density. Worker recalculates maturity; Hermes self-scored percentages are not final.
 6. **Incremental single-slot**: deliver one `structured-slot-patch` JSON block; Worker renders and merges the target section only.
 7. **Fallback only**: render HTML with `scripts/render_kb_html.py` or PUT via `jfo_kb_put.sh` when JSON delivery is impossible.
 8. Validate with `scripts/validate_kb_html.py` before PUT fallback delivery.
@@ -117,4 +117,4 @@ Do not stop at the diagram. `business-operations` must also cover customers/paye
 
 ## Output Discipline
 
-For normal chat, lead with findings and next actions. For **initial/full KB work**, deliver **structured-kb-data** JSON (3–8 line summary + one ```json block). For **single-slot incremental**, deliver **structured-slot-patch** JSON. PUT / full HTML are **fallback only**. Do not include large template source in chat unless the user explicitly asks.
+For normal chat, lead with findings and next actions. For **initial/full KB work**, deliver **structured-kb-data** JSON (3–8 line summary + one ```json block) that satisfies the Quality Contract in `structured-kb-data-schema.md`. If Worker returns repair_needed, respond with a **full corrected JSON** (no HTML). For **single-slot incremental**, deliver **structured-slot-patch** JSON. PUT / full HTML are **fallback only**. Do not include large template source in chat unless the user explicitly asks.

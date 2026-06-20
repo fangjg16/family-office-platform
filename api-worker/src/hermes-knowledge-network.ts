@@ -350,6 +350,12 @@ export function buildHermesKnowledgeNetworkRequiredReads(
       ? "- **initial/full 主路径**：交付 `structured-kb-data` JSON（见 references/structured-kb-data-schema.md 与 examples-kb-data.json）；**禁止**默认 jfo_kb_put.sh / 整页 ```html / 手写 nav / KB-CONFIG / Appendix D。"
       : "- **禁止** read_file examples-kb-data.json、scripts/、components.html、visual-style-guide（非视觉调试）。",
     isStructuredKbDataMode
+      ? "- **Quality Contract**：目标不是 13 slot 存在，而是每 slot slot-specific coverage（见 structured-kb-data-schema.md）；Worker 未达标返回 repair_needed。"
+      : "",
+    isStructuredKbDataMode
+      ? "- **maturity**：factorA/B/combined 由 Worker 重算；勿虚高自填，单一 BP 时 B≤25%。"
+      : "",
+    isStructuredKbDataMode
       ? "- PUT / 整页 HTML / kb-template.html 仅为 structured-kb-data 无法交付时的 **fallback**，不是默认路径。"
       : "",
     "- **附录 D version-ledger**：平台在入库时自动从 D1 版本表合并全部历史行；Hermes **禁止**输出 versionLedger 或 Appendix D HTML。",
@@ -359,8 +365,11 @@ export function buildHermesKnowledgeNetworkRequiredReads(
   if (mode === "full" || mode === "initial") {
     lines.push(
       "- 模式：首次/全量 — **主路径**交付 structured-kb-data JSON（13 slots + sources）；Worker 确定性渲染 HTML 并入库。",
+      "- **Quality Contract**：须满足 references/structured-kb-data-schema.md 每 slot 最低 coverage；勿用薄表格凑数。",
+      "- **maturity 自填无效**：Worker 按 slot coverage + 来源多样性重算 Factor A/B/Combined。",
       "- **禁止**默认 bash jfo_kb_put.sh / 整页 ```html / 手写 nav / KB-CONFIG / Appendix D / revealAnchor。",
       "- PUT / 整页 HTML 仅为 fallback（structured JSON 缺失或 Worker 明确要求时）。",
+      "- Worker repair：未达标时同一 job 内可触发一次 JSON 补全（勿写 HTML）。",
     );
   } else if (mode === "incremental" && slotPatchMode) {
     lines.push(
@@ -492,8 +501,14 @@ export function buildHermesKnowledgeNetworkStructuredKbDataProtocol(
 【知识网络 · Structured KB Data 全量交付（${mode} · schema v2.91 · 主路径）】
 本任务**必须**交付 **structured-kb-data** JSON；Worker 确定性渲染 nav / KB-CONFIG / 13 slots / Appendix A–C。
 
+**发布门槛（Worker Quality Contract）**
+- 目标**不是**「13 个 slot key 存在」，而是每 slot 达到 **slot-specific coverage**（见 structured-kb-data-schema.md）。
+- 每 slot 须满足：必填字段 + 最低 item 数 + gap callout（缺资料时）。
+- **禁止**用 2–4 行薄 table 糊弄完整 slot；参考 examples-kb-data.json（rich 示例）。
+- \`maturity.factorA/B/combined\` **不是最终分**；Worker 会按 coverage + 来源重算（单一 BP → B≤25%）。
+
 **对用户可见回复**
-1. 先写 3–8 行简体中文摘要（覆盖哪些 slot、成熟度、主要证据与缺口）。
+1. 先写 3–8 行简体中文摘要（覆盖哪些 slot、主要证据与缺口）。
 2. 附 **一个** \\\`\\\`\\\`json 代码块（type 必须为 structured-kb-data）：
 \\\`\\\`\\\`json
 {
@@ -503,17 +518,34 @@ export function buildHermesKnowledgeNetworkStructuredKbDataProtocol(
   "summary": "…",
   "config": { "displayOrder": ["snapshot", "…"], "projectType": "general" },
   "meta": { "title": "…", "autoSummary": "…" },
-  "maturity": { "factorA": "42%", "factorB": "25%", "combined": "35%" },
+  "maturity": { "factorA": "—", "factorB": "—", "combined": "—", "tier": "Early" },
   "slots": { "snapshot": { … }, …13 keys… },
   "sources": [{ "id": "U-1", "type": "…", "title": "…" }],
   "terms": [],
   "dataDictionary": []
 }
 \\\`\\\`\\\`
-3. slots 须含 **13 个 canonical key**；payload 形状与 incremental structured-slot-patch 相同（见 examples-kb-data.json）。
+3. slots 须含 **13 个 canonical key**；payload 形状见 structured-kb-data-schema.md 与 examples-kb-data.json。
 4. sources.id **禁止 duplicate**；所有 evidenceSourceIds 须先出现在 sources 中。
 5. **禁止** versionLedger / Appendix D HTML / 整页 \\\`\\\`\\\`html / sectionHtml / 手写 nav / KB-CONFIG / revealAnchor。
 6. **禁止**默认 bash ${KB_PUT_SCRIPT}；仅当 JSON 完全无法交付时才 fallback PUT 或整页 HTML。`;
+}
+
+/** Worker repair_needed 时注入 Hermes 的补全指令（同一 job，最多一次） */
+export function buildHermesStructuredKbRepairPrompt(repairMessage: string): string {
+  return `【structured-kb-data · Quality Contract repair（同一 job · 仅一次）】
+
+上一轮 JSON **未通过 Worker Full Quality Contract**。请**只**补全 structured-kb-data JSON，**禁止**写 HTML / PUT / sectionHtml。
+
+**缺项清单（须全部补齐）**
+${repairMessage}
+
+**要求**
+1. 重新输出 **一个** \\\`\\\`\\\`json 代码块，type 必须为 structured-kb-data，含完整 13 slots + sources。
+2. 每 slot 满足 structured-kb-data-schema.md 最低 item 数；缺资料写 gaps callout，勿留空 table。
+3. 参考 examples-kb-data.json 的 rich 密度（journeyMap、scenarios×3、riskRows≥5、questionGroups P1/P2 等）。
+4. maturity 可填占位；Worker 会重算 Factor A/B/Combined。
+5. 先写 2–4 行摘要说明补了哪些 slot/字段，再附 JSON。`;
 }
 
 /** initial / full 专用工作流（structured-kb-data 主路径） */

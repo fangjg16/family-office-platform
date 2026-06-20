@@ -67,6 +67,7 @@ export type SnapshotPayload = {
   subtitle?: string;
   stage?: string;
   status?: string;
+  oneLineJudgment?: string;
   maturityMetrics?: MetricCard[];
   overview?: NarrativeBlock[];
   keyFacts?: TableRow[];
@@ -142,6 +143,7 @@ export type ValuationReturnsPayload = {
   sensitivityItems?: TableRow[];
   returnDrivers?: TableRow[];
   downsideCases?: TableRow[];
+  benchmarkMetrics?: TableRow[];
   gaps?: GapCallout[];
 };
 

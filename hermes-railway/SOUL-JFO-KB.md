@@ -57,9 +57,13 @@
 **首次 / 全量（默认）**
 
 - 交付 **一个** fenced ` ```json ` 块，`type: structured-kb-data`
+- **须通过 Worker Full Quality Contract**（见 `structured-kb-data-schema.md` 13 slot 最低 coverage；参考 `examples-kb-data.json` rich 示例）
+- **禁止**用 2–4 行薄 table 糊弄 slot；缺资料写 `gaps` callout
+- `maturity` 自填无效；Worker 按 coverage + 来源重算（单一 BP → B≤25%）
 - **禁止**默认整页 ` ```html `、手写 nav / KB-CONFIG / Appendix D / revealAnchor
 - **禁止**默认 `jfo_kb_put.sh`
 - Worker 确定性渲染 → validate → upsert
+- 未达标时 Worker 返回 `repair_needed` 并**同 job 内自动 repair 一次**（仅补 JSON，勿写 HTML）；仍失败则保留旧 KB
 
 **Fallback（仅 JSON 无法交付）**
 

@@ -55,12 +55,16 @@ export function resolveStructuredKbDisplayOrder(data: StructuredKbData): Canonic
   return order;
 }
 
-function buildKbConfigBlock(data: StructuredKbData, displayOrder: CanonicalKbSlot[]): string {
+function buildKbConfigBlock(data: StructuredKbData, displayOrder: CanonicalKbSlot[], qualityCoverage?: number): string {
   const projectType = data.config.projectType?.trim() || "general";
   const renderingMode = data.config.renderingMode ?? "chinese-only";
   const multiAsset = data.config.multiAsset === true ? "true" : "false";
   const configVersion = data.config.configVersion ?? 1;
   const intakeDate = data.meta.date?.trim() || new Date().toISOString().slice(0, 10);
+  const qualityLine =
+    typeof qualityCoverage === "number"
+      ? `quality-coverage: ${Math.round(qualityCoverage)}`
+      : "";
   return [
     "<!-- KB-CONFIG",
     "schema-version: 2.91",
@@ -69,6 +73,7 @@ function buildKbConfigBlock(data: StructuredKbData, displayOrder: CanonicalKbSlo
     `rendering-mode: ${renderingMode}`,
     `multi-asset: ${multiAsset}`,
     `config-version: ${configVersion}`,
+    ...(qualityLine ? [qualityLine] : []),
     "display-order-history:",
     `  ${intakeDate} | structured-full | Worker deterministic render`,
     "-->",
@@ -189,7 +194,11 @@ function buildMainSections(data: StructuredKbData, displayOrder: CanonicalKbSlot
     .join("\n\n");
 }
 
-function replaceTemplateBlock(template: string, data: StructuredKbData): string {
+function replaceTemplateBlock(
+  template: string,
+  data: StructuredKbData,
+  qualityCoverage?: number,
+): string {
   const displayOrder = resolveStructuredKbDisplayOrder(data);
   const version = data.meta.version?.trim() || "v1.0";
   const date = data.meta.date?.trim() || new Date().toISOString().slice(0, 10);
@@ -199,7 +208,10 @@ function replaceTemplateBlock(template: string, data: StructuredKbData): string 
   const footerBrand = data.meta.footerBrand?.trim() || "联合家办 · Project Knowledge Network";
   const timestamp = `${date} 00:00`;
 
-  let html = template.replace(/<!--\s*KB-CONFIG[\s\S]*?-->/i, buildKbConfigBlock(data, displayOrder));
+  let html = template.replace(
+    /<!--\s*KB-CONFIG[\s\S]*?-->/i,
+    buildKbConfigBlock(data, displayOrder, qualityCoverage),
+  );
 
   const replacements: Record<string, string> = {
     "{{PAGE_TITLE}}": `${data.meta.title} · 项目知识网络`,
@@ -251,7 +263,10 @@ function escTemplateValue(key: string, value: string): string {
 }
 
 /** structured-kb-data → 完整 v2.91 HTML（不含 D1 version-ledger 合并） */
-export function renderFullStructuredKnowledgeNetwork(data: StructuredKbData): string {
+export function renderFullStructuredKnowledgeNetwork(
+  data: StructuredKbData,
+  options?: { qualityCoverage?: number },
+): string {
   const template = loadWorkerKbTemplate();
-  return replaceTemplateBlock(template, data);
+  return replaceTemplateBlock(template, data, options?.qualityCoverage);
 }

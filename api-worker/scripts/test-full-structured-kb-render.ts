@@ -30,7 +30,7 @@ import {
 import type { StructuredKbData } from "../src/knowledge-network-structured-kb-data-types.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixturePath = join(here, "fixtures/full-structured-kb-data-pet.json");
+const fixturePath = join(here, "fixtures/full-structured-kb-data-pet-rich.json");
 const hermesTemplatePath = join(
   here,
   "../../hermes-railway/skills/opportunistic-investments-hermes/assets/kb-template.html",
@@ -82,6 +82,7 @@ for (const appendix of KB_APPENDIX_SLOTS) {
 }
 
 report("KB-CONFIG schema-version 2.91", /schema-version:\s*2\.91/i.test(html));
+report("KB-CONFIG quality-coverage", /quality-coverage:\s*\d+/i.test(html));
 report("nav aria-label", /class=["']kb-nav["']/i.test(html));
 report("overview panel", /\bid=["']overview["']/i.test(html));
 report("revealAnchor JS", /function revealAnchor\(anchorId\)/.test(html));

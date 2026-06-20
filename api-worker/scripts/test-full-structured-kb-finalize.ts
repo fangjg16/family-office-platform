@@ -7,6 +7,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   finalizeKnowledgeNetworkJobResult,
+  publishStructuredKbWithOptionalRepair,
   tryWriteKnowledgeNetworkFromStructuredKbData,
   type AgentJobEnv,
   type AgentJobRow,
@@ -15,7 +16,7 @@ import { renderStructuredKbDataToHtml } from "../src/knowledge-network-structure
 import { projectKnowledgeNetworkR2Key } from "../src/project-knowledge-network.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const fixturePath = join(here, "fixtures/full-structured-kb-data-pet.json");
+const fixturePath = join(here, "fixtures/full-structured-kb-data-pet-rich.json");
 const sampleHtmlPath = join(
   here,
   "../../hermes-railway/skills/opportunistic-investments-hermes/sample-output.html",
@@ -155,15 +156,35 @@ async function testStructuredSuccess(): Promise<void> {
   const env = createKnTestEnv(store);
   const row = baseJob();
   const answer = wrapStructuredAnswer(fixtureJson);
-  const written = await tryWriteKnowledgeNetworkFromStructuredKbData(
+  const written = await publishStructuredKbWithOptionalRepair(
     env,
     row,
     { answer },
     "full",
+    { repairRunner: null },
   );
   report("structured JSON → tryWrite ok", written.ok, written.ok ? "" : (written as { error: string }).error);
   report("structured JSON → meta written", Boolean(store.meta?.lastJobId === row.id));
   report("structured JSON → html in store", Boolean(store.html && store.html.includes("kb-shell")));
+}
+
+async function testThinStructuredRepairNeeded(): Promise<void> {
+  const thinPath = join(here, "fixtures/full-structured-kb-data-pet.json");
+  const thinJson = readFileSync(thinPath, "utf8");
+  const store: KnStore = { meta: null, html: null, versions: [], chatMessages: [
+    { id: "user-job-test-thin", role: "user", content: "全量重做知识网络", sort_index: 1, pending_job_id: "job-test-thin" },
+  ] };
+  const env = createKnTestEnv(store);
+  const row = baseJob({ id: "job-test-thin" });
+  const written = await publishStructuredKbWithOptionalRepair(
+    env,
+    row,
+    { answer: wrapStructuredAnswer(thinJson) },
+    "full",
+    { repairRunner: null },
+  );
+  report("thin structured → repairNeeded", !written.ok && written.repairNeeded === true);
+  report("thin structured → no meta written", store.meta === null);
 }
 
 async function testFinalizeStructuredSuccess(): Promise<void> {
@@ -268,16 +289,39 @@ async function testRenderThenValidate(): Promise<void> {
   report("render fixture for validate path", rendered.ok);
 }
 
+async function testThinRepairPassViaFinalize(): Promise<void> {
+  const thinPath = join(here, "fixtures/full-structured-kb-data-pet.json");
+  const richPathLocal = join(here, "fixtures/full-structured-kb-data-pet-rich.json");
+  const thinJson = readFileSync(thinPath, "utf8");
+  const richJsonLocal = readFileSync(richPathLocal, "utf8");
+  const store: KnStore = { meta: null, html: null, versions: [], chatMessages: [
+    { id: "user-job-repair", role: "user", content: "全量重做知识网络", sort_index: 1, pending_job_id: "job-repair" },
+  ] };
+  const env = createKnTestEnv(store);
+  const row = baseJob({ id: "job-repair" });
+
+  const result = await finalizeKnowledgeNetworkJobResult(env, row, {
+    answer: wrapStructuredAnswer(thinJson),
+    knowledgeNetworkHtml: null,
+  }, {
+    repairRunner: async () => ({ ok: true, answer: wrapStructuredAnswer(richJsonLocal) }),
+  });
+  report("finalize thin+mock repair → ok", result.status === "ok");
+  report("finalize thin+mock repair → html stored", Boolean(store.html?.includes("quality-coverage")));
+}
+
 async function main(): Promise<void> {
   console.log("=== full / initial structured-kb-data finalize ===\n");
   await testStructuredSuccess();
+  await testThinStructuredRepairNeeded();
+  await testThinRepairPassViaFinalize();
   await testFinalizeStructuredSuccess();
   await testHtmlFallbackWhenStructuredMissing();
   await testPutFallbackWhenStructuredInvalid();
   await testDuplicateSourceFailsWithoutFallback();
   await testRenderThenValidate();
 
-  console.log(`\n${failed === 0 ? "ALL PASS" : `${failed} FAILED`} (${6} scenarios)`);
+  console.log(`\n${failed === 0 ? "ALL PASS" : `${failed} FAILED`} (${8} scenarios)`);
   process.exit(failed === 0 ? 0 : 1);
 }
 

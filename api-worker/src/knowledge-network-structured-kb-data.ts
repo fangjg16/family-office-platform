@@ -1,3 +1,10 @@
+import { applyDeterministicMaturity } from "./knowledge-network-deterministic-maturity";
+import {
+  buildStructuredKbRepairMessage,
+  validateFullStructuredKbQuality,
+  type FullKbQualityResult,
+} from "./knowledge-network-full-quality-contract";
+import { isStructuredQualityRegressed } from "./knowledge-network-html-coverage";
 import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
 import { renderFullStructuredKnowledgeNetwork } from "./knowledge-network-full-renderer";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
@@ -343,14 +350,81 @@ export function extractStructuredKbDataFromJson(jsonText: string): StructuredKbD
   }
 }
 
-/** validate + deterministic render */
+/** validate + deterministic maturity + render（不阻断 quality gate，供诊断/预览） */
 export function renderStructuredKbDataToHtml(
   data: StructuredKbData,
-): { ok: true; html: string } | { ok: false; reason: string } {
+): { ok: true; html: string; quality: FullKbQualityResult } | { ok: false; reason: string } {
   const validated = validateStructuredKbData(data);
   if (!validated.ok) return { ok: false, reason: validated.reason };
-  return { ok: true, html: renderFullStructuredKnowledgeNetwork(validated.data) };
+  const quality = validateFullStructuredKbQuality(validated.data);
+  const prepared = applyDeterministicMaturity(validated.data);
+  return {
+    ok: true,
+    html: renderFullStructuredKnowledgeNetwork(prepared, {
+      qualityCoverage: quality.coverageScore,
+    }),
+    quality,
+  };
 }
+
+export type StructuredKbPublishGateResult =
+  | { ok: true; quality: FullKbQualityResult }
+  | { ok: false; repairNeeded: true; quality: FullKbQualityResult; message: string }
+  | {
+      ok: false;
+      qualityBlocked: true;
+      quality: FullKbQualityResult;
+      message: string;
+      previousScore: number;
+      nextScore: number;
+    };
+
+/** full/initial 发布前：quality contract + 相对旧 KB 的 coverage 对比 */
+export function evaluateStructuredKbPublishGate(
+  data: StructuredKbData,
+  previousHtml?: string | null,
+): StructuredKbPublishGateResult {
+  const validated = validateStructuredKbData(data);
+  if (!validated.ok) {
+    return {
+      ok: false,
+      repairNeeded: true,
+      quality: validateFullStructuredKbQuality(data),
+      message: validated.reason,
+    };
+  }
+
+  const quality = validateFullStructuredKbQuality(validated.data);
+  if (!quality.ok) {
+    return {
+      ok: false,
+      repairNeeded: true,
+      quality,
+      message: buildStructuredKbRepairMessage(quality),
+    };
+  }
+
+  if (previousHtml?.trim()) {
+    const regression = isStructuredQualityRegressed(previousHtml, quality.coverageScore);
+    if (regression.regressed) {
+      return {
+        ok: false,
+        qualityBlocked: true,
+        quality,
+        message:
+          `结构化数据不足，未覆盖旧版本（quality coverage ${regression.nextScore} < ${regression.previousScore}×0.85）。` +
+          `请补全 structured-kb-data 后重试，勿写 HTML。`,
+        previousScore: regression.previousScore ?? 0,
+        nextScore: regression.nextScore,
+      };
+    }
+  }
+
+  return { ok: true, quality };
+}
+
+export { validateFullStructuredKbQuality, buildStructuredKbRepairMessage } from "./knowledge-network-full-quality-contract";
+export { computeDeterministicMaturity, applyDeterministicMaturity } from "./knowledge-network-deterministic-maturity";
 
 export function shouldUseStructuredKbDataMode(mode: KnowledgeNetworkUpdateMode): boolean {
   return mode === "initial" || mode === "full";

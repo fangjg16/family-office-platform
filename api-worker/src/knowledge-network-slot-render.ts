@@ -1,13 +1,14 @@
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
-import { normalizeSourceId } from "./knowledge-network-slot-payload-validation";
 import type {
   BusinessOperationsPayload,
   CompsBenchmarkPayload,
   DecisionFrameworkPayload,
   DiligenceGapsPayload,
+  GapCallout,
   IndustryMarketPayload,
   LegalOwnershipPayload,
   MetricCard,
+  NarrativeBlock,
   QuestionGroup,
   RegulatoryCompliancePayload,
   RelationshipEdge,
@@ -16,6 +17,7 @@ import type {
   RisksMitigationPayload,
   ScenarioRow,
   SnapshotPayload,
+  StructuredSlotPatchAny,
   SlotPayloadBySlot,
   TableRow,
   TargetOverviewPayload,
@@ -85,7 +87,7 @@ export function extractSectionTitleBlock(previousHtml: string, slot: CanonicalKb
   return `<h2 class="section-title"><span class="section-num">${d.num}</span>${esc(d.title)}</h2>`;
 }
 
-function normalizeSourceId(id: string): string {
+function normalizeSourceIdLocal(id: string): string {
   const t = id.trim();
   return t.startsWith("source-") ? t : `source-${t}`;
 }
@@ -94,7 +96,7 @@ function renderEvidenceCell(ids?: string[]): string {
   if (!ids?.length) return "待核实";
   return ids
     .map((raw) => {
-      const id = normalizeSourceId(raw);
+      const id = normalizeSourceIdLocal(raw);
       const label = id.replace(/^source-/, "");
       return `<sup class="cite-ref"><a href="#${esc(id)}">[${esc(label)}]</a></sup>`;
     })
@@ -166,16 +168,39 @@ function renderRelationshipTable(edges?: RelationshipEdge[]): string {
   );
 }
 
-function renderScenarioGrid(scenarios?: ScenarioRow[]): string {
+function scenarioVariantClass(label: string): string {
+  const l = label.toLowerCase();
+  if (/down|悲观|下行|bear/.test(l)) return "down";
+  if (/up|乐观|上行|bull/.test(l)) return "up";
+  return "base";
+}
+
+function renderScenarioCards(scenarios?: ScenarioRow[]): string {
   if (!scenarios?.length) return "";
-  return `<div class="scenario-grid">${scenarios
+  return `<div class="scenario-cards">${scenarios
     .map(
       (s) =>
-        `<div class="scenario-card base"><div class="sc-label">${esc(s.label)}</div>` +
+        `<div class="scenario-card ${scenarioVariantClass(s.label)}"><div class="sc-label">${esc(s.label)}</div>` +
         `<div class="sc-irr">${esc(s.value)}</div>` +
         `${s.detail ? `<div class="sc-detail">${esc(s.detail)}</div>` : ""}</div>`,
     )
     .join("")}</div>`;
+}
+
+function riskLevelClass(level: string): string {
+  const l = level.trim();
+  if (/critical|极高|致命|5/i.test(l)) return "risk-level-critical";
+  if (/高|high|4/i.test(l)) return "risk-level-high";
+  if (/中|medium|3/i.test(l)) return "risk-level-medium";
+  return "risk-level-low";
+}
+
+function renderOneLineJudgment(text?: string): string {
+  if (!text?.trim()) return "";
+  return (
+    `<aside class="callout info"><div class="callout-title">一句话判断</div>` +
+    `<p>${esc(text.trim())}</p></aside>`
+  );
 }
 
 function renderJourneyMap(
@@ -216,13 +241,19 @@ function renderTimelineBlock(
         `<span class="tl-text"><strong>${esc(item.title)}</strong> ${esc(item.detail)}${evidence}</span></div>`;
     })
     .join("");
-  return `<h3>${esc(title)}</h3><div class="timeline ${cssClass}">${inner}</div>`;
+  return `<h3>${esc(title)}</h3><div class="timeline project-timeline ${cssClass}">${inner}</div>`;
 }
 
 function renderQuestionGroups(groups: QuestionGroup[]): string {
   return groups
     .map((g) => {
       const title = g.title ?? g.priority;
+      const prioTag =
+        g.priority === "P1" || g.priority === "最高"
+          ? "P1"
+          : g.priority === "P2"
+            ? "P2"
+            : "P3";
       const rows = g.questions.map((q) => ({
         question: q.question,
         strength: q.requiredEvidence ? "待补证据" : "待核实",
@@ -235,7 +266,7 @@ function renderQuestionGroups(groups: QuestionGroup[]): string {
         rows,
         ["question", "strength", "owner", "urgency", "action"],
       );
-      return `<div class="oq-group"><h3>${esc(title)}</h3>${table}</div>`;
+      return `<div class="oq-group"><h3><span class="badge badge-red">${esc(prioTag)}</span> ${esc(title)}</h3>${table}</div>`;
     })
     .join("");
 }
@@ -247,7 +278,7 @@ function renderRiskMatrix(rows: RiskRow[]): string {
       const cause = [r.cause, r.trigger].filter(Boolean).join("；");
       const mitigation = r.mitigation ?? "";
       const evidence = renderEvidenceCell(r.evidenceSourceIds);
-      return `<tr><td>${esc(r.level)}</td><td>${esc(r.risk)}</td><td>${esc(cause)}</td>` +
+      return `<tr><td><span class="risk-level ${riskLevelClass(r.level)}">${esc(r.level)}</span></td><td>${esc(r.risk)}</td><td>${esc(cause)}</td>` +
         `<td>${esc(r.impact ?? "")}</td><td>${evidence}</td><td>${esc(mitigation)}</td></tr>`;
     })
     .join("");
@@ -278,6 +309,7 @@ export function renderSlotPayloadByCanonicalSlot(
         ["col1", "col2", "col3"],
       );
       return (
+        renderOneLineJudgment(p.oneLineJudgment) +
         renderMetricCards(p.maturityMetrics) +
         renderNarratives(p.overview) +
         table +
@@ -436,7 +468,7 @@ export function renderSlotPayloadByCanonicalSlot(
         })) ?? [];
       return (
         renderMetricCards(metrics) +
-        renderScenarioGrid(p.scenarios) +
+        renderScenarioCards(p.scenarios) +
         renderTable(
           ["资金用途", "金额/比例", "说明"],
           p.investmentCashflow ?? [],

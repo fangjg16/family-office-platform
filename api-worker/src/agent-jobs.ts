@@ -6,7 +6,11 @@ import {
   finalizeHermesOutput,
   isHermesAgentConfigured,
   pollHermesRun,
+  startHermesRun,
+  waitForHermesRunComplete,
+  type HermesAgentEnv,
 } from "./hermes-agent";
+import { buildHermesStructuredKbRepairPrompt } from "./hermes-knowledge-network";
 import { validateKnowledgeNetworkHtmlForWrite } from "./knowledge-network-html-validation";
 import {
   applySlotHtmlPatchToKnowledgeNetworkHtml,
@@ -30,6 +34,7 @@ import {
   validateStructuredSlotPatch,
 } from "./knowledge-network-structured-patch";
 import {
+  evaluateStructuredKbPublishGate,
   extractStructuredKbDataFromAnswer,
   renderStructuredKbDataToHtml,
   shouldUseStructuredKbDataMode,
@@ -43,7 +48,7 @@ import {
 } from "./project-knowledge-network";
 import { resolveKnUserMessage } from "./kn-job-user-message";
 
-export type AgentJobEnv = {
+export type AgentJobEnv = HermesAgentEnv & {
   DB: D1Database;
   FILES: R2Bucket;
   /** 用于知识网络交付说明（是否已配置 Hermes→Worker 桥接密钥） */
@@ -208,7 +213,7 @@ export type StructuredKbDataWriteResult =
       summary: string;
     }
   | { ok: false; skipped: true; notFound?: boolean }
-  | { ok: false; skipped: false; error: string };
+  | { ok: false; skipped: false; error: string; repairNeeded?: boolean; qualityBlocked?: boolean };
 
 /** full / initial：从 structured-kb-data JSON 渲染并入库（主路径） */
 export async function tryWriteKnowledgeNetworkFromStructuredKbData(
@@ -227,6 +232,25 @@ export async function tryWriteKnowledgeNetworkFromStructuredKbData(
       return { ok: false, skipped: true, notFound: true };
     }
     return { ok: false, skipped: false, error: extracted.reason };
+  }
+
+  const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id);
+  const gate = evaluateStructuredKbPublishGate(extracted.data, previousHtml);
+  if (!gate.ok) {
+    if ("repairNeeded" in gate && gate.repairNeeded) {
+      return {
+        ok: false,
+        skipped: false,
+        error: gate.message,
+        repairNeeded: true,
+      };
+    }
+    return {
+      ok: false,
+      skipped: false,
+      error: gate.message,
+      qualityBlocked: true,
+    };
   }
 
   const rendered = renderStructuredKbDataToHtml(extracted.data);
@@ -262,6 +286,83 @@ export async function tryWriteKnowledgeNetworkFromStructuredKbData(
     html: written.html,
     summary,
   };
+}
+
+/** 测试注入：模拟 Hermes repair pass 返回补全 JSON */
+export type StructuredKbRepairRunner = (
+  repairMessage: string,
+  originalAnswer: string,
+  row: AgentJobRow,
+) => Promise<{ ok: true; answer: string } | { ok: false; error: string }>;
+
+async function runLiveStructuredKbRepairPass(
+  env: AgentJobEnv,
+  repairMessage: string,
+  originalAnswer: string,
+  row: AgentJobRow,
+): Promise<{ ok: true; answer: string } | { ok: false; error: string }> {
+  if (!isHermesAgentConfigured(env)) {
+    return { ok: false, error: "Hermes 未配置" };
+  }
+  const prompt = buildHermesStructuredKbRepairPrompt(repairMessage);
+  const sessionId = (row.conversation_id ?? row.id).trim();
+  const { runId, error: startErr } = await startHermesRun(env, {
+    userMessage: prompt,
+    sessionId,
+    instructions:
+      "你是联合家办 structured-kb-data repair 助手。仅补全 JSON（type=structured-kb-data），禁止 HTML/PUT。",
+    history: [{ role: "assistant", content: originalAnswer.slice(0, 12000) }],
+  });
+  if (!runId) {
+    return { ok: false, error: startErr ?? "Hermes repair run 启动失败" };
+  }
+  const snap = await waitForHermesRunComplete(env, runId);
+  if (snap.status !== "completed" || !snap.output.trim()) {
+    return {
+      ok: false,
+      error: snap.error || `Hermes repair 结束：${snap.status}`,
+    };
+  }
+  return { ok: true, answer: snap.output.trim() };
+}
+
+/**
+ * structured-kb-data 发布：首次失败后 repair_needed 时同一 job 内最多 repair 一次。
+ * quality_blocked 不触发 repair（已 pass contract 但低于旧版 structured quality）。
+ */
+export async function publishStructuredKbWithOptionalRepair(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+  result: { answer: string },
+  knMode: KnowledgeNetworkUpdateMode,
+  options?: { repairRunner?: StructuredKbRepairRunner | null },
+): Promise<StructuredKbDataWriteResult & { repairAttempted?: boolean }> {
+  const first = await tryWriteKnowledgeNetworkFromStructuredKbData(env, row, result, knMode);
+  if (first.ok || first.skipped || !first.repairNeeded) {
+    return first;
+  }
+
+  const runner =
+    options?.repairRunner === null
+      ? null
+      : (options?.repairRunner ?? runLiveStructuredKbRepairPass.bind(null, env));
+
+  if (!runner) {
+    return first;
+  }
+
+  const repaired = await runner(first.error, result.answer, row);
+  if (!repaired.ok) {
+    return first;
+  }
+
+  const second = await tryWriteKnowledgeNetworkFromStructuredKbData(
+    env,
+    row,
+    { answer: repaired.answer },
+    knMode,
+  );
+  return { ...second, repairAttempted: true };
 }
 
 async function tryAcceptHermesPutForJob(
@@ -486,25 +587,30 @@ export async function finalizeKnowledgeNetworkJobResult(
   env: AgentJobEnv,
   row: AgentJobRow,
   result: { answer: string; knowledgeNetworkHtml: string | null },
+  options?: { repairRunner?: StructuredKbRepairRunner | null },
 ): Promise<JobFinalizeResult> {
   const knMode = await resolveKnModeForJob(env, row);
 
   if (shouldUseStructuredKbDataMode(knMode)) {
     let structuredFallbackError: string | null = null;
 
-    const structuredWritten = await tryWriteKnowledgeNetworkFromStructuredKbData(
+    const structuredWritten = await publishStructuredKbWithOptionalRepair(
       env,
       row,
       result,
       knMode,
+      options,
     );
     if (structuredWritten.ok) {
       const vDisplay = formatKnVersionDisplay(
         structuredWritten.meta.version,
         structuredWritten.meta.versionLabel,
       );
+      const repairNote = structuredWritten.repairAttempted
+        ? "（经一次 structured-kb-data repair pass）"
+        : "";
       const note =
-        `\n\n已通过 **structured-kb-data** 写入**项目知识网络 v${vDisplay}**（Worker 确定性渲染）。`;
+        `\n\n已通过 **structured-kb-data** 写入**项目知识网络 v${vDisplay}**（Worker 确定性渲染${repairNote}）。`;
       const answer = result.answer.includes("项目知识网络 v")
         ? result.answer
         : `${result.answer.trim() || structuredWritten.summary}${note}`;
@@ -514,9 +620,32 @@ export async function finalizeKnowledgeNetworkJobResult(
         knowledgeNetworkHtml: structuredWritten.html,
       };
     }
-    structuredFallbackError = structuredWritten.skipped
-      ? null
-      : structuredWritten.error;
+    if (!structuredWritten.ok && !structuredWritten.skipped) {
+      if (structuredWritten.repairNeeded || structuredWritten.qualityBlocked) {
+        const label = structuredWritten.repairNeeded ? "repair_needed" : "quality_blocked";
+        const repairHint =
+          structuredWritten.repairNeeded && !isHermesAgentConfigured(env)
+            ? "\n（Hermes 未配置，无法自动 repair；请手动补 JSON 后重试。）"
+            : structuredWritten.repairNeeded && structuredWritten.repairAttempted
+              ? "\n（已尝试一次自动 repair，仍未达标。）"
+              : "";
+        return {
+          status: "failed",
+          error: structuredWritten.error,
+          answer:
+            `${result.answer.trim() || "Hermes 已结束，但 structured-kb-data 未达发布门槛。"}\n\n` +
+            `**结构化 KB ${label}**：${structuredWritten.error}\n` +
+            (structuredWritten.qualityBlocked
+              ? "已保留现有知识网络，未覆盖旧版本。"
+              : "请补全 structured-kb-data JSON 后重试（勿写 HTML）。") +
+            repairHint,
+        };
+      }
+    }
+    structuredFallbackError =
+      structuredWritten.ok || structuredWritten.skipped
+        ? null
+        : structuredWritten.error;
 
     const putAccepted = await tryAcceptHermesPutForJob(env, row, result);
     if (putAccepted) {
