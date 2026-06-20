@@ -4,6 +4,7 @@ export type ProjectKnowledgeNetworkEnv = {
 };
 
 import {
+  applyKbVersionDisplay,
   formatKnVersionDisplay,
   resolveKnVersionOnUpload,
 } from "./knowledge-network-version";
@@ -306,12 +307,10 @@ export async function upsertProjectKnowledgeNetwork(
     await archiveCurrentVersion(env, prev);
   }
   const fromUpload = Boolean(params.uploadFileName?.trim());
-  const { version, versionLabel } = fromUpload
-    ? resolveKnVersionOnUpload(prev, params.uploadFileName)
-    : {
-        version: (prev?.version ?? 0) + 1,
-        versionLabel: null as string | null,
-      };
+  const { version, versionLabel } = resolveKnVersionOnUpload(
+    prev,
+    fromUpload ? params.uploadFileName : null,
+  );
   const displayVer = formatKnVersionDisplay(version, versionLabel);
   const summary = params.answerSummary?.trim() ?? "";
   const changelog =
@@ -320,6 +319,8 @@ export async function upsertProjectKnowledgeNetwork(
       : null) ||
     changelogFromAnswer(summary) ||
     (prev ? `版本 v${displayVer} 更新` : "首次生成");
+
+  html = applyKbVersionDisplay(html, displayVer);
 
   const ledgerApplied = await mergeVersionLedgerFromDb(env, projectId, html, {
     version,

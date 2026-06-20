@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyKbVersionDisplay,
   knVersionDisplayMajor,
   parseKnVersionFromFilename,
   resolveKnVersionOnUpload,
@@ -44,6 +45,17 @@ describe("resolveKnVersionOnUpload", () => {
     const r = resolveKnVersionOnUpload(null, "page.html");
     expect(r.version).toBe(1);
     expect(r.versionLabel).toBe("1");
+  });
+});
+
+describe("applyKbVersionDisplay", () => {
+  it("replaces schema version with display version", () => {
+    const html =
+      '<dt>Version</dt><dd>v2.91-full</dd><span class="ai-badge">AI-Generated · v2.91-full</span>';
+    const out = applyKbVersionDisplay(html, "6");
+    expect(out).toContain("<dd>v6</dd>");
+    expect(out).toContain("AI-Generated · v6");
+    expect(out).not.toContain("v2.91-full");
   });
 });
 

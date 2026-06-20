@@ -84,7 +84,7 @@ export function computeDeterministicMaturity(data: StructuredKbData): Determinis
   const { sellerOnly } = countAuthoringParties(data.sources);
   if (sellerOnly) {
     factorB = Math.min(factorB, 25);
-    factorA = Math.min(factorA, 70);
+    factorA = Math.min(factorA, 50);
   }
   if (quality.emptyRowIssues.length > 0) {
     factorA = Math.min(factorA, 75);
@@ -100,7 +100,9 @@ export function computeDeterministicMaturity(data: StructuredKbData): Determinis
   const factorANote =
     gapCount > 0
       ? `Content Completeness ${factorA}/100；${gapCount} 项未达 Quality Contract 2.0`
-      : `Content Completeness ${factorA}/100（rich contract）`;
+      : sellerOnly
+        ? `Content Completeness ${factorA}/100；单一来源上限 50%（须多源验证）`
+        : `Content Completeness ${factorA}/100（rich contract）`;
 
   return {
     factorA,

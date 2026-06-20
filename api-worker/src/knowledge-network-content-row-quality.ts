@@ -20,6 +20,27 @@ export function rowFillRatio(row: Record<string, unknown>, keys?: string[]): num
   return filled / entries.length;
 }
 
+/** 按列别名取第一个有含义的值（兼容 Hermes 英文键 vs Worker 中文表头） */
+export function pickRowCell(row: Record<string, unknown>, keys: string[]): string {
+  for (const k of keys) {
+    const v = row[k];
+    if (isMeaningfulCell(v)) return String(v).trim();
+  }
+  return "";
+}
+
+/** 按渲染列定义校验：至少 minRatio 列在别名组内有有效值 */
+export function isValidTableRowForColumns(
+  row: Record<string, unknown>,
+  columns: readonly (readonly string[])[],
+  minRatio = 0.65,
+): boolean {
+  if (columns.length === 0) return false;
+  const filled = columns.filter((keys) => isMeaningfulCell(pickRowCell(row, [...keys]))).length;
+  if (filled === 0) return false;
+  return filled / columns.length >= minRatio;
+}
+
 /** 至少 minRatio（默认 65%）核心字段非空 */
 export function isValidTableRow(
   row: Record<string, unknown>,
@@ -30,9 +51,33 @@ export function isValidTableRow(
   return rowFillRatio(row, keys) >= minRatio;
 }
 
+export function filterValidRowsForColumns(
+  rows: TableRow[] | undefined,
+  columns: readonly (readonly string[])[],
+  minRatio = 0.65,
+): TableRow[] {
+  if (!rows?.length) return [];
+  return rows.filter((r) =>
+    isValidTableRowForColumns(r as Record<string, unknown>, columns, minRatio),
+  );
+}
+
 export function filterValidRows(rows: TableRow[] | undefined, minRatio = 0.65): TableRow[] {
   if (!rows?.length) return [];
   return rows.filter((r) => isValidTableRow(r as Record<string, unknown>, minRatio));
+}
+
+export function countValidRowsForColumns(
+  rows: unknown,
+  columns: readonly (readonly string[])[],
+  minRatio = 0.65,
+): number {
+  if (!Array.isArray(rows)) return 0;
+  return rows.filter((r) =>
+    typeof r === "object" &&
+    r !== null &&
+    isValidTableRowForColumns(r as Record<string, unknown>, columns, minRatio),
+  ).length;
 }
 
 export function countValidRows(rows: unknown, minRatio = 0.65): number {

@@ -175,6 +175,7 @@ report(
   computeDeterministicMaturity(v5Empty).factorA < 100,
   `A=${computeDeterministicMaturity(v5Empty).factorA}%`,
 );
+report("v5-empty single-source Factor A ≤ 50%", computeDeterministicMaturity(v5Empty).factorA <= 50);
 report("v5-empty fails ok gate", !v5EmptyQuality.ok);
 
 const v5EmptyRendered = renderStructuredKbDataToHtml(v5Empty);
@@ -206,7 +207,7 @@ if (richRendered.ok) {
 // --- 3. single BP maturity cap ---
 const m = computeDeterministicMaturity(rich);
 report("single BP Factor B ≤ 25%", m.factorB <= 25, `B=${m.factorB}%`);
-report("single BP Factor A ≤ 70%", m.factorA <= 70, `A=${m.factorA}%`);
+report("single BP Factor A ≤ 50%", m.factorA <= 50, `A=${m.factorA}%`);
 report("single BP Combined ≤ 45%", m.combined <= 45, `Combined=${m.combined}%`);
 report("rich richContractMet", richQuality.richContractMet);
 report("rich publishCoverage 100 only when rich", richQuality.publishCoverage === 100);

@@ -2,11 +2,13 @@ import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import {
   countValidRows,
+  countValidRowsForColumns,
   findEmptyRowIssuesInPayload,
   isMeaningfulCell,
   isValidTableRow,
   type EmptyRowIssue,
 } from "./knowledge-network-content-row-quality";
+import { ROW_COLUMNS } from "./knowledge-network-row-columns";
 import type { StructuredKbData } from "./knowledge-network-structured-kb-data-types";
 import type { SlotPayloadBySlot } from "./knowledge-network-structured-patch-types";
 
@@ -72,6 +74,14 @@ function validRows(payload: Record<string, unknown>, ...keys: string[]): number 
   return max;
 }
 
+function validRowsForColumns(
+  payload: Record<string, unknown>,
+  field: string,
+  columns: readonly (readonly string[])[],
+): number {
+  return countValidRowsForColumns(payload[field], columns);
+}
+
 function rowsWithAnalysis(payload: Record<string, unknown>, key: string, analysisKeys: string[]): number {
   const arr = payload[key];
   if (!Array.isArray(arr)) return 0;
@@ -115,7 +125,8 @@ function evaluateSlot(slot: CanonicalKbSlot, payload: unknown): { score: number;
     case "target-overview": {
       need(validRows(p, "assetSummary") >= 3, 25, "assetSummary", "assetSummary 至少 3 条有效行");
       need(
-        validRows(p, "keyClaims") >= 2 || narrativeParagraphs(p, "businessSummary") >= 2,
+        validRowsForColumns(p, "keyClaims", ROW_COLUMNS.keyClaims) >= 2 ||
+          narrativeParagraphs(p, "businessSummary") >= 2,
         20,
         "claims",
         "缺少有效 keyClaims 或 businessSummary 段落",
@@ -137,7 +148,7 @@ function evaluateSlot(slot: CanonicalKbSlot, payload: unknown): { score: number;
         "drivers",
         "marketDrivers 至少 3 条含投资含义的有效行",
       );
-      need(validRows(p, "valueChain") >= 2, 15, "valueChain", "valueChain 至少 2 条有效行");
+      need(validRowsForColumns(p, "valueChain", ROW_COLUMNS.valueChain) >= 2, 15, "valueChain", "valueChain 至少 2 条有效行");
       need(
         validRows(p, "policyContext") >= 1 || validRows(p, "comparableSignals") >= 1,
         10,
@@ -155,7 +166,7 @@ function evaluateSlot(slot: CanonicalKbSlot, payload: unknown): { score: number;
           (p.journeyMap.stages as unknown[]).filter((s) => isMeaningfulCell(s)).length >= 2);
       need(journeyValid, 20, "journey", "须含 journeyMap（≥2 有效 stages）");
       need(
-        validRows(p, "revenueTree") >= 2 || narrativeParagraphs(p, "flywheel") >= 1,
+        validRowsForColumns(p, "revenueTree", ROW_COLUMNS.revenueTree) >= 2 || narrativeParagraphs(p, "flywheel") >= 1,
         15,
         "revenue",
         "缺少有效 revenueTree 或 flywheel",
@@ -274,7 +285,8 @@ function evaluateSlot(slot: CanonicalKbSlot, payload: unknown): { score: number;
       need(validRows(p, "decisionTable") >= 2, 20, "decisionTable", "decisionTable 至少 2 条有效行");
       need(validRows(p, "nextActions") >= 2, 20, "nextActions", "nextActions 至少 2 条有效行");
       need(
-        validRows(p, "goNoGoConditions", "triggers") >= 1,
+        validRowsForColumns(p, "goNoGoConditions", ROW_COLUMNS.goNoGoConditions) >= 1 ||
+          validRows(p, "triggers") >= 1,
         10,
         "conditions",
         "缺少有效 go/no-go 或触发条件行",

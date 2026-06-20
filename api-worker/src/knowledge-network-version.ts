@@ -49,3 +49,14 @@ export function formatKnVersionDisplay(version: number, versionLabel: string | n
   const label = versionLabel?.trim();
   return label && label.length > 0 ? label : String(version);
 }
+
+/** 将 HTML masthead 中的 Version / AI badge 替换为 D1 展示版本（非 schema meta.version） */
+export function applyKbVersionDisplay(html: string, versionDisplay: string): string {
+  const label = versionDisplay.startsWith("v") ? versionDisplay : `v${versionDisplay}`;
+  let out = html.replace(
+    /(<dt>\s*Version\s*<\/dt>\s*<dd>)[^<]+(<\/dd>)/i,
+    `$1${label}$2`,
+  );
+  out = out.replace(/(AI-Generated · )[^<]+(<\/span>)/i, `$1${label}$2`);
+  return out;
+}

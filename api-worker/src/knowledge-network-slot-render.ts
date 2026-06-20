@@ -1,8 +1,11 @@
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import {
   filterValidRows,
+  filterValidRowsForColumns,
   isMeaningfulCell,
+  pickRowCell,
 } from "./knowledge-network-content-row-quality";
+import { ROW_COLUMNS } from "./knowledge-network-row-columns";
 import type {
   BusinessOperationsPayload,
   CompsBenchmarkPayload,
@@ -148,16 +151,16 @@ function renderGapLabel(text: string): string {
 function renderTable(
   headers: string[],
   rows: TableRow[],
-  columnKeys: string[],
+  columns: readonly (readonly string[])[],
 ): string {
-  const valid = filterValidRows(rows);
+  const valid = filterValidRowsForColumns(rows, columns);
   if (!valid.length) return "";
   const head = `<thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join("")}</tr></thead>`;
   const body = valid
-    .map(
-      (row) =>
-        `<tr>${columnKeys.map((k) => `<td>${esc(String(row[k] ?? ""))}</td>`).join("")}</tr>`,
-    )
+    .map((row) => {
+      const r = row as Record<string, unknown>;
+      return `<tr>${columns.map((keys) => `<td>${esc(pickRowCell(r, [...keys]))}</td>`).join("")}</tr>`;
+    })
     .join("");
   return `<table>${head}<tbody>${body}</tbody></table>`;
 }
@@ -166,11 +169,13 @@ function renderTableOrGap(
   label: string,
   headers: string[],
   rows: TableRow[] | undefined,
-  columnKeys: string[],
+  columns: readonly (readonly string[])[],
 ): string {
-  const valid = filterValidRows(rows);
-  if (valid.length) return renderTable(headers, valid, columnKeys);
-  if (rows?.length) return renderGapLabel(`${label}：现有 row 无有效内容，待补资料或改写为 gap。`);
+  const valid = filterValidRowsForColumns(rows, columns);
+  if (valid.length) return renderTable(headers, valid, columns);
+  if (rows?.length) {
+    return renderGapLabel(`${label}：现有 row 字段无法映射或无有效内容，待补资料或改写为 gap。`);
+  }
   return renderGapLabel(`${label}：暂无有效数据。`);
 }
 
@@ -189,7 +194,13 @@ function renderRelationshipTable(edges?: RelationshipEdge[]): string {
   return renderTable(
     ["关系", "从", "到", "状态", "风险"],
     rows,
-    ["relation", "from", "to", "status", "risk"],
+    [
+      ["relation", "关系"],
+      ["from", "从"],
+      ["to", "到"],
+      ["status", "状态"],
+      ["risk", "风险"],
+    ],
   );
 }
 
@@ -290,18 +301,11 @@ function renderQuestionGroups(groups: QuestionGroup[]): string {
           : g.priority === "P2"
             ? "P2"
             : "P3";
-      const validQs = filterValidRows(g.questions);
-      const rows = validQs.map((q) => ({
-        question: q.question,
-        strength: q.requiredEvidence ? "待补证据" : "待核实",
-        owner: q.owner ?? "待定",
-        urgency: q.priority ?? g.priority,
-        action: q.requiredEvidence ?? q.whyItMatters ?? "",
-      }));
+      const validQs = filterValidRowsForColumns(g.questions, ROW_COLUMNS.diligenceQuestion);
       const table = renderTable(
         ["问题/主张", "证据强度", "Owner", "紧急程度/阻塞", "需要资料/动作"],
-        rows,
-        ["question", "strength", "owner", "urgency", "action"],
+        validQs,
+        ROW_COLUMNS.diligenceQuestion,
       );
       return (
         `<details class="topic" open>` +
@@ -314,18 +318,31 @@ function renderQuestionGroups(groups: QuestionGroup[]): string {
 }
 
 function renderRiskMatrix(rows: RiskRow[]): string {
-  const valid = filterValidRows(rows as TableRow[]) as RiskRow[];
+  const riskCols: (readonly string[])[] = [
+    ["level", "severity", "级别"],
+    ["risk", "title", "name", "风险"],
+    ["cause", "reason", "原因"],
+    ["trigger", "condition", "触发"],
+    ["impact", "effect", "影响"],
+    ["mitigation", "remedy", "缓释"],
+    ["owner", "status", "负责人"],
+  ];
+  const valid = filterValidRowsForColumns(rows as TableRow[], riskCols.slice(0, 5));
   if (!valid.length) return renderGapLabel("风险矩阵：暂无有效风险行。");
   const body = valid
-    .map((r) => {
-      const mitigation = [r.mitigation, r.owner, r.status].filter(Boolean).join(" · ");
+    .map((row) => {
+      const r = row as Record<string, unknown> & RiskRow;
+      const level = pickRowCell(r, ["level", "severity", "级别"]) || r.level || "";
+      const mitigation = [pickRowCell(r, ["mitigation", "remedy"]), r.owner, r.status]
+        .filter(Boolean)
+        .join(" · ");
       const evidence = renderEvidenceCell(r.evidenceSourceIds);
       return (
-        `<tr><td><span class="risk-level ${riskLevelClass(r.level)}">${esc(r.level)}</span></td>` +
-        `<td>${esc(r.risk)}</td>` +
-        `<td>${esc(r.cause ?? "")}</td>` +
-        `<td>${esc(r.trigger ?? "")}</td>` +
-        `<td>${esc(r.impact ?? "")}</td>` +
+        `<tr><td><span class="risk-level ${riskLevelClass(level)}">${esc(level)}</span></td>` +
+        `<td>${esc(pickRowCell(r, ["risk", "title", "name"]))}</td>` +
+        `<td>${esc(pickRowCell(r, ["cause", "reason"]))}</td>` +
+        `<td>${esc(pickRowCell(r, ["trigger", "condition"]))}</td>` +
+        `<td>${esc(pickRowCell(r, ["impact", "effect"]))}</td>` +
         `<td>${evidence}</td>` +
         `<td>${esc(mitigation)}</td></tr>`
       );
@@ -352,12 +369,8 @@ export function renderSlotPayloadByCanonicalSlot(
         ].filter(Boolean) as TableRow[];
       const table = renderTable(
         ["项目项", "内容", "证据/来源"],
-        facts.map((r) => ({
-          col1: r["项目项"] ?? r.label ?? r.key ?? "",
-          col2: r["内容"] ?? r.value ?? "",
-          col3: r["证据/来源"] ?? r.evidence ?? "",
-        })),
-        ["col1", "col2", "col3"],
+        facts,
+        ROW_COLUMNS.keyFacts,
       );
       return (
         renderOneLineJudgment(p.oneLineJudgment) +
@@ -375,19 +388,19 @@ export function renderSlotPayloadByCanonicalSlot(
           "资产构成",
           ["资产/权利/能力", "定义与范围", "可投资性", "关键证据/缺口"],
           p.assetSummary,
-          ["资产/权利/能力", "定义与范围", "可投资性", "关键证据/缺口"],
+          ROW_COLUMNS.assetSummary,
         ) +
         renderTableOrGap(
           "交易要素",
           ["交易要素", "内容", "证据/缺口"],
           p.transactionSummary,
-          ["交易要素", "内容", "证据/缺口"],
+          ROW_COLUMNS.transactionSummary,
         ) +
         renderTableOrGap(
           "关键主张",
           ["关键主张", "依据", "缺口"],
           p.keyClaims,
-          ["关键主张", "依据", "缺口"],
+          ROW_COLUMNS.keyClaims,
         ) +
         renderGapCallouts(p.gaps)
       );
@@ -399,19 +412,19 @@ export function renderSlotPayloadByCanonicalSlot(
           "市场驱动",
           ["主题", "事实/数据", "投资含义", "来源"],
           p.marketDrivers ?? p.marketSize,
-          ["主题", "事实/数据", "投资含义", "来源"],
+          ROW_COLUMNS.marketDrivers,
         ) +
         renderTableOrGap(
           "价值链",
           ["价值链环节", "描述", "壁垒/机会"],
           p.valueChain,
-          ["价值链环节", "描述", "壁垒/机会"],
+          ROW_COLUMNS.valueChain,
         ) +
         renderTableOrGap(
           "政策/监管",
           ["政策/监管", "要点", "影响"],
           p.policyContext,
-          ["政策/监管", "要点", "影响"],
+          ROW_COLUMNS.policyContext,
         ) +
         renderGapCallouts(p.gaps)
       );
@@ -423,7 +436,7 @@ export function renderSlotPayloadByCanonicalSlot(
         "收入树",
         ["应用/产品场景", "价值主张", "证据/缺口"],
         p.revenueTree,
-        ["应用/产品场景", "价值主张", "证据/缺口"],
+        ROW_COLUMNS.revenueTree,
       );
       const flywheel = renderNarratives(p.flywheel);
       return (
@@ -434,19 +447,19 @@ export function renderSlotPayloadByCanonicalSlot(
           "客户/付费方",
           ["客户/受众/付费方", "需求", "获客/渠道", "验证状态"],
           p.customerBuyer,
-          ["客户/受众/付费方", "需求", "获客/渠道", "验证状态"],
+          ROW_COLUMNS.customerBuyer,
         ) +
         renderTableOrGap(
           "定价与单位经济",
           ["收入来源", "定价/费率", "成本/履约", "单位经济/KPI"],
           p.pricing,
-          ["收入来源", "定价/费率", "成本/履约", "单位经济/KPI"],
+          ROW_COLUMNS.pricing,
         ) +
         renderTableOrGap(
           "运营瓶颈/供应链",
           ["瓶颈", "影响", "缓释"],
           p.operatingBottlenecks ?? p.supplyChain,
-          ["瓶颈", "影响", "缓释"],
+          ROW_COLUMNS.operatingBottlenecks,
         ) +
         renderGapCallouts(p.gaps)
       );
@@ -454,15 +467,17 @@ export function renderSlotPayloadByCanonicalSlot(
     case "legal-ownership": {
       const p = payload as LegalOwnershipPayload;
       return (
-        renderTable(
+        renderTableOrGap(
+          "法律主体",
           ["主体/权利", "角色/归属", "限制/负担", "证据/缺口"],
-          p.entities ?? p.ownershipClaims ?? [],
-          ["主体/权利", "角色/归属", "限制/负担", "证据/缺口"],
+          p.entities ?? p.ownershipClaims,
+          ROW_COLUMNS.entities,
         ) +
-        renderTable(
+        renderTableOrGap(
+          "合同权利",
           ["合同权利", "范围", "限制", "证据"],
-          p.contractRights ?? [],
-          ["合同权利", "范围", "限制", "证据"],
+          p.contractRights,
+          ROW_COLUMNS.contractRights,
         ) +
         renderRelationshipTable(p.relationshipEdges) +
         renderGapCallouts(p.unresolvedLegalIssues)
@@ -471,20 +486,23 @@ export function renderSlotPayloadByCanonicalSlot(
     case "regulatory-compliance": {
       const p = payload as RegulatoryCompliancePayload;
       return (
-        renderTable(
+        renderTableOrGap(
+          "监管合规",
           ["监管/规则", "适用原因", "状态/许可", "红线/下一步"],
-          p.jurisdictionRows ?? p.complianceRisks ?? [],
-          ["监管/规则", "适用原因", "状态/许可", "红线/下一步"],
+          p.jurisdictionRows ?? p.complianceRisks,
+          ROW_COLUMNS.jurisdictionRows,
         ) +
-        renderTable(
+        renderTableOrGap(
+          "许可要求",
           ["许可要求", "状态", "负责人"],
-          p.licenseRequirements ?? [],
-          ["许可要求", "状态", "负责人"],
+          p.licenseRequirements,
+          ROW_COLUMNS.licenseRequirements,
         ) +
-        renderTable(
+        renderTableOrGap(
+          "审批路径",
           ["审批路径", "步骤", "时间"],
-          p.approvalPath ?? [],
-          ["审批路径", "步骤", "时间"],
+          p.approvalPath,
+          ROW_COLUMNS.approvalPath,
         ) +
         renderGapCallouts(p.gaps)
       );
@@ -492,15 +510,17 @@ export function renderSlotPayloadByCanonicalSlot(
     case "resource-network": {
       const p = payload as ResourceNetworkPayload;
       return (
-        renderTable(
+        renderTableOrGap(
+          "资源网络",
           ["主体/资源", "关系与作用", "强度/可验证性", "依赖与风险"],
-          p.parties ?? p.resources ?? [],
-          ["主体/资源", "关系与作用", "强度/可验证性", "依赖与风险"],
+          p.parties ?? p.resources,
+          ROW_COLUMNS.parties,
         ) +
-        renderTable(
+        renderTableOrGap(
+          "能力",
           ["能力", "来源", "缺口"],
-          p.capabilities ?? [],
-          ["能力", "来源", "缺口"],
+          p.capabilities,
+          ROW_COLUMNS.capabilities,
         ) +
         renderRelationshipTable(p.relationshipEdges) +
         renderGapCallouts(p.missingResources)
@@ -509,15 +529,17 @@ export function renderSlotPayloadByCanonicalSlot(
     case "comps-benchmark": {
       const p = payload as CompsBenchmarkPayload;
       return (
-        renderTable(
+        renderTableOrGap(
+          "可比案例",
           ["可比对象", "可比逻辑", "指标/倍数", "可借鉴/差异"],
-          p.compsRows ?? [],
-          ["可比对象", "可比逻辑", "指标/倍数", "可借鉴/差异"],
+          p.compsRows,
+          ROW_COLUMNS.compsRows,
         ) +
-        renderTable(
+        renderTableOrGap(
+          "交易案例",
           ["交易案例", "条款", "启示"],
-          p.transactionCases ?? [],
-          ["交易案例", "条款", "启示"],
+          p.transactionCases,
+          ROW_COLUMNS.transactionCases,
         ) +
         renderGapCallouts(p.relevanceNotes)
       );
@@ -534,13 +556,13 @@ export function renderSlotPayloadByCanonicalSlot(
         "投资现金流",
         ["资金用途", "金额/比例", "说明"],
         p.investmentCashflow,
-        ["资金用途", "金额/比例", "说明"],
+        ROW_COLUMNS.investmentCashflow,
       );
       const sensitivity = renderTableOrGap(
         "敏感性分析",
         ["敏感变量", "影响方向", "阈值/区间", "观察方式"],
         p.sensitivityItems,
-        ["敏感变量", "影响方向", "阈值/区间", "观察方式"],
+        ROW_COLUMNS.sensitivityItems,
       );
       return (
         renderMetricCards(metrics) +
@@ -558,10 +580,11 @@ export function renderSlotPayloadByCanonicalSlot(
       const p = payload as RisksMitigationPayload;
       return (
         renderRiskMatrix(p.riskRows) +
-        renderTable(
+        renderTableOrGap(
+          "停推条件",
           ["停推条件", "触发动作", "Owner"],
-          p.stopConditions ?? [],
-          ["停推条件", "触发动作", "Owner"],
+          p.stopConditions,
+          ROW_COLUMNS.stopConditions,
         )
       );
     }
@@ -600,25 +623,25 @@ export function renderSlotPayloadByCanonicalSlot(
           "Go/No-Go 条件",
           ["投资论点", "证据", "前置条件", "反证/风险"],
           p.goNoGoConditions,
-          ["投资论点", "证据", "前置条件", "反证/风险"],
+          ROW_COLUMNS.goNoGoConditions,
         ) +
         renderTableOrGap(
           "决策选项",
           ["选项", "好处", "代价/风险", "适用条件"],
           p.decisionTable,
-          ["选项", "好处", "代价/风险", "适用条件"],
+          ROW_COLUMNS.decisionTable,
         ) +
         renderTableOrGap(
           "下一步行动",
           ["下一步", "Owner", "时间", "交付物"],
           p.nextActions,
-          ["下一步", "Owner", "时间", "交付物"],
+          ROW_COLUMNS.nextActions,
         ) +
         renderTableOrGap(
           "触发器",
           ["触发器", "条件", "动作"],
           p.triggers,
-          ["触发器", "条件", "动作"],
+          ROW_COLUMNS.triggers,
         ) +
         renderGapCallouts(p.openConditions)
       );

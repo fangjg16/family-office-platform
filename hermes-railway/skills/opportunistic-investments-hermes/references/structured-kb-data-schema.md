@@ -71,7 +71,7 @@
 
 **publishCoverage=100** 仅当：13 slot 均 ≥85 分 **且** 无 emptyRowIssues。
 
-**Factor A（成熟度）**：单一 BP 来源上限约 **70%**；有空 row 时上限 **75%**；Combined 单一来源上限 **45%**。
+**Factor A（成熟度）**：单一 BP 来源上限约 **50%**；Combined 单一来源上限 **45%**。
 
 ### 一、snapshot（项目快照）
 

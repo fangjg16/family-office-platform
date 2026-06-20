@@ -29,6 +29,7 @@ import {
 } from "../src/knowledge-network-structured-kb-data.ts";
 import type { StructuredKbData } from "../src/knowledge-network-structured-kb-data-types.ts";
 import { countEmptyHtmlRows } from "../src/knowledge-network-content-row-quality.ts";
+import { renderSlotPayloadByCanonicalSlot } from "../src/knowledge-network-slot-render.ts";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const fixturePath = join(here, "fixtures/full-structured-kb-data-pet-rich.json");
@@ -87,6 +88,17 @@ report("KB-CONFIG quality-coverage", /quality-coverage:\s*\d+/i.test(html));
 report("render has scenario-cards", html.includes('class="scenario-cards"'));
 report("diligence uses details.topic", /id="diligence-gaps"[\s\S]*<details class="topic"/i.test(html));
 report("no empty tbody rows in rendered HTML", countEmptyHtmlRows(html) === 0, `emptyRows=${countEmptyHtmlRows(html)}`);
+
+const englishKeySection = renderSlotPayloadByCanonicalSlot("target-overview", {
+  keyClaims: [
+    { claim: "酶法 rPET 技术路线", evidence: "BP 描述", gap: "第三方验证" },
+    { claim: "5000 吨产线规划", evidence: "项目方口径", gap: "CapEx 明细" },
+  ],
+});
+report(
+  "English keyClaims render with content",
+  englishKeySection.includes("酶法 rPET") && !/<tbody><tr><td><\/td><td><\/td>/i.test(englishKeySection),
+);
 report("nav aria-label", /class=["']kb-nav["']/i.test(html));
 report("overview panel", /\bid=["']overview["']/i.test(html));
 report("revealAnchor JS", /function revealAnchor\(anchorId\)/.test(html));
