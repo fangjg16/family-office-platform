@@ -22,6 +22,7 @@ export type MaterialHintEntry = {
 export type MaterialHintsPayload = {
   mode: KnowledgeNetworkUpdateMode;
   touchedSlots: CanonicalKbSlot[];
+  slotBatchScoped?: boolean;
   /** initial / full / incremental+touched：按 slot 分组 */
   slots?: Partial<Record<CanonicalKbSlot, MaterialHintEntry[]>>;
   /** incremental 未点名 slot：全局 top-N 文件，不按 13 slot 展开 */
@@ -51,6 +52,8 @@ export type BuildMaterialHintsParams = {
   documents: MaterialHintDocument[];
   chunks: ChunkRow[];
   maxFilesPerSlot?: number;
+  /** slot-batched：full/initial 仍仅生成本批 touchedSlots 的 hints */
+  slotBatchScoped?: boolean;
 };
 
 type SlotRule = {
@@ -223,8 +226,10 @@ function chunkHitForDocument(
 function slotsForMode(
   mode: KnowledgeNetworkUpdateMode,
   touchedSlots: CanonicalKbSlot[],
+  slotBatchScoped?: boolean,
 ): CanonicalKbSlot[] {
   if (mode === "reorder") return [];
+  if (slotBatchScoped && touchedSlots.length > 0) return [...touchedSlots];
   if (mode === "incremental") {
     return touchedSlots.length > 0 ? [...touchedSlots] : [];
   }
@@ -479,7 +484,7 @@ export function buildMaterialHintsForTargetSlots(
 export function buildMaterialHintsFromDocuments(
   params: BuildMaterialHintsParams,
 ): MaterialHintsPayload | null {
-  const { mode, touchedSlots } = params;
+  const { mode, touchedSlots, slotBatchScoped } = params;
 
   if (mode === "reorder") return null;
 
@@ -488,13 +493,23 @@ export function buildMaterialHintsFromDocuments(
   if (isIncrementalWithoutTouchedSlots(mode, touchedSlots)) {
     payload = buildGlobalCompactHints(params);
   } else {
-    const targetSlots = slotsForMode(mode, touchedSlots);
+    const targetSlots = slotsForMode(mode, touchedSlots, slotBatchScoped);
     if (targetSlots.length === 0) return null;
     payload = buildSlotGroupedHints(params, targetSlots);
   }
 
   if (!payload) return null;
+  if (slotBatchScoped) payload = { ...payload, slotBatchScoped: true };
   return truncateMaterialHintsPayload(payload);
+}
+
+export function countMaterialHintFiles(payload: MaterialHintsPayload | null): number {
+  if (!payload) return 0;
+  let n = payload.globalFiles?.length ?? 0;
+  for (const entries of Object.values(payload.slots ?? {})) {
+    n += entries?.length ?? 0;
+  }
+  return n;
 }
 
 export function formatMaterialHintsBlock(
@@ -613,6 +628,7 @@ export async function buildKnowledgeNetworkMaterialHints(
     mode: KnowledgeNetworkUpdateMode;
     touchedSlots: CanonicalKbSlot[];
     maxFilesPerSlot?: number;
+    slotBatchScoped?: boolean;
   },
 ): Promise<string> {
   if (!shouldInjectMaterialHints(params.mode)) return "";
@@ -653,6 +669,7 @@ export async function buildKnowledgeNetworkMaterialHints(
     documents,
     chunks,
     maxFilesPerSlot,
+    slotBatchScoped: params.slotBatchScoped,
   });
 
   return formatMaterialHintsBlock(payload);

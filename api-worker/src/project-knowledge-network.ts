@@ -151,6 +151,8 @@ export async function readProjectKnowledgeNetworkHtml(
   if (options?.mergeVersionLedger !== false) {
     html = await mergeVersionLedgerFromDb(env, projectId, html);
   }
+  const displayVer = formatKnVersionDisplay(meta.version, meta.versionLabel);
+  html = applyKbVersionDisplay(html, displayVer);
   return html;
 }
 
@@ -307,10 +309,14 @@ export async function upsertProjectKnowledgeNetwork(
     await archiveCurrentVersion(env, prev);
   }
   const fromUpload = Boolean(params.uploadFileName?.trim());
-  const { version, versionLabel } = resolveKnVersionOnUpload(
+  const { version, versionLabel: resolvedLabel } = resolveKnVersionOnUpload(
     prev,
     fromUpload ? params.uploadFileName : null,
   );
+  const versionLabel =
+    !fromUpload && resolvedLabel && !resolvedLabel.includes(".")
+      ? String(version)
+      : resolvedLabel;
   const displayVer = formatKnVersionDisplay(version, versionLabel);
   const summary = params.answerSummary?.trim() ?? "";
   const changelog =

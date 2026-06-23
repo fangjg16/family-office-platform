@@ -1,6 +1,7 @@
 import { CANONICAL_KB_SLOTS, KB_APPENDIX_SLOTS } from "./knowledge-network-html-validation";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import { loadWorkerKbTemplate } from "./knowledge-network-kb-template";
+import { adaptStructuredKbDataFromCodexKeys } from "./knowledge-network-codex-payload-adapter";
 import {
   normalizeSourceId,
 } from "./knowledge-network-slot-payload-validation";
@@ -55,15 +56,19 @@ export function resolveStructuredKbDisplayOrder(data: StructuredKbData): Canonic
   return order;
 }
 
-function buildKbConfigBlock(data: StructuredKbData, displayOrder: CanonicalKbSlot[], qualityCoverage?: number): string {
+function buildKbConfigBlock(
+  data: StructuredKbData,
+  displayOrder: CanonicalKbSlot[],
+  structureCoverageDebug?: number,
+): string {
   const projectType = data.config.projectType?.trim() || "general";
   const renderingMode = data.config.renderingMode ?? "chinese-only";
   const multiAsset = data.config.multiAsset === true ? "true" : "false";
   const configVersion = data.config.configVersion ?? 1;
   const intakeDate = data.meta.date?.trim() || new Date().toISOString().slice(0, 10);
-  const qualityLine =
-    typeof qualityCoverage === "number"
-      ? `quality-coverage: ${Math.round(qualityCoverage)}`
+  const debugLine =
+    typeof structureCoverageDebug === "number"
+      ? `structure-coverage-debug: ${Math.round(structureCoverageDebug)}`
       : "";
   return [
     "<!-- KB-CONFIG",
@@ -73,7 +78,7 @@ function buildKbConfigBlock(data: StructuredKbData, displayOrder: CanonicalKbSlo
     `rendering-mode: ${renderingMode}`,
     `multi-asset: ${multiAsset}`,
     `config-version: ${configVersion}`,
-    ...(qualityLine ? [qualityLine] : []),
+    ...(debugLine ? [debugLine] : []),
     "display-order-history:",
     `  ${intakeDate} | structured-full | Worker deterministic render`,
     "-->",
@@ -197,10 +202,19 @@ function buildMainSections(data: StructuredKbData, displayOrder: CanonicalKbSlot
 function replaceTemplateBlock(
   template: string,
   data: StructuredKbData,
-  qualityCoverage?: number,
+  options?: { structureCoverageDebug?: number; versionDisplay?: string; schemaVersion?: string },
 ): string {
   const displayOrder = resolveStructuredKbDisplayOrder(data);
-  const version = data.meta.version?.trim() || "v1.0";
+  const schemaVersion = options?.schemaVersion?.trim() || data.schemaVersion || "2.91";
+  const version =
+    options?.versionDisplay?.trim() ||
+    (data.meta.version?.trim() && !/^v?\d+\.\d+/i.test(data.meta.version.trim())
+      ? data.meta.version.trim().startsWith("v")
+        ? data.meta.version.trim()
+        : `v${data.meta.version.trim()}`
+      : "v1");
+  const versionLabel = version.startsWith("v") ? version : `v${version}`;
+  const aiBadge = `${versionLabel} · schema ${schemaVersion}`;
   const date = data.meta.date?.trim() || new Date().toISOString().slice(0, 10);
   const status = data.meta.status?.trim() || "内部讨论";
   const stage = data.meta.stage?.trim() || "早期线索";
@@ -210,7 +224,7 @@ function replaceTemplateBlock(
 
   let html = template.replace(
     /<!--\s*KB-CONFIG[\s\S]*?-->/i,
-    buildKbConfigBlock(data, displayOrder, qualityCoverage),
+    buildKbConfigBlock(data, displayOrder, options?.structureCoverageDebug),
   );
 
   const replacements: Record<string, string> = {
@@ -222,7 +236,7 @@ function replaceTemplateBlock(
     "{{NAV_TITLE}}": navTitle,
     "{{NAV_ITEMS}}": buildNavItems(displayOrder),
     "{{LANG_TOGGLE}}": buildLangToggle(data.config.renderingMode),
-    "{{VERSION}}": version,
+    "{{VERSION}}": versionLabel,
     "{{H1_TITLE}}": data.meta.title,
     "{{H1_SUB}}": data.meta.subtitle ?? "",
     "{{MASTHEAD_SUBTITLE}}": data.meta.mastheadSubtitle ?? "",
@@ -250,6 +264,7 @@ function replaceTemplateBlock(
     html = html.split(key).join(escTemplateValue(key, value));
   }
 
+  html = html.replace(/(AI-Generated · )[^<]+(<\/span>)/i, `$1${aiBadge}$2`);
   return html;
 }
 
@@ -265,8 +280,9 @@ function escTemplateValue(key: string, value: string): string {
 /** structured-kb-data → 完整 v2.91 HTML（不含 D1 version-ledger 合并） */
 export function renderFullStructuredKnowledgeNetwork(
   data: StructuredKbData,
-  options?: { qualityCoverage?: number },
+  options?: { structureCoverageDebug?: number; versionDisplay?: string; schemaVersion?: string },
 ): string {
+  const normalized = adaptStructuredKbDataFromCodexKeys(data);
   const template = loadWorkerKbTemplate();
-  return replaceTemplateBlock(template, data, options?.qualityCoverage);
+  return replaceTemplateBlock(template, normalized, options);
 }

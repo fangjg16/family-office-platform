@@ -65,8 +65,15 @@ export function buildAgentJobProgressLabel(params: {
   hermesStatus: string | null;
   knPutReceived?: boolean;
   elapsedSec: number;
+  slotBatchProgress?: {
+    batchIndex: number;
+    totalBatches: number;
+    phase: string;
+    completedSlots: string[];
+    batchTimings?: { batchIndex: number; durationMs?: number; slots: string[] }[];
+  } | null;
 }): { progressLabel: string; jobStage: AgentJobStage } {
-  const { row, hermesStatus, elapsedSec } = params;
+  const { row, hermesStatus, elapsedSec, slotBatchProgress } = params;
   const knPutReceived = params.knPutReceived ?? false;
   const waited = formatJobElapsedLabel(elapsedSec);
 
@@ -102,6 +109,26 @@ export function buildAgentJobProgressLabel(params: {
   }
 
   if (row.skill_intent === "knowledge_network") {
+    if (slotBatchProgress) {
+      const batchNo = slotBatchProgress.batchIndex + 1;
+      const total = slotBatchProgress.totalBatches;
+      const slotsDone = slotBatchProgress.completedSlots.length;
+      const phase = slotBatchProgress.phase;
+      let stage: AgentJobStage = "generating_kb";
+      if (phase === "assembling" || phase === "publishing") stage = "validating_html";
+      if (phase === "between_batches") stage = "reading_materials";
+      let label = `slot-batched 批次 ${batchNo}/${total}（已完成 ${slotsDone}/13 slot）（已等待 ${waited}）`;
+      if (phase === "waiting_hermes" || phase === "processing") {
+        label = `slot-batched 生成批次 ${batchNo}/${total}（已等待 ${waited}）`;
+      }
+      if (phase === "assembling" || phase === "publishing") {
+        const pubStep = (slotBatchProgress as { currentPublishStep?: string }).currentPublishStep;
+        label = pubStep
+          ? `slot-batched 入库 · ${pubStep}（已等待 ${waited}）`
+          : `slot-batched 组装与入库（已等待 ${waited}）`;
+      }
+      return { progressLabel: label, jobStage: stage };
+    }
     const stage = inferKnowledgeNetworkJobStage(row, hermesStatus, knPutReceived);
     let label = `${agentJobStageLabel(stage)}（已等待 ${waited}）`;
     if (stage === "generating_kb" && elapsedSec >= 900) {

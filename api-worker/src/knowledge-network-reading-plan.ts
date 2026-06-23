@@ -140,8 +140,10 @@ function isSingleSlotIncremental(
 function targetSlotsForPlan(
   mode: KnowledgeNetworkUpdateMode,
   touchedSlots: CanonicalKbSlot[],
+  slotBatchScoped?: boolean,
 ): CanonicalKbSlot[] {
   if (mode === "reorder") return [];
+  if (slotBatchScoped && touchedSlots.length > 0) return [...touchedSlots];
   if (isIncrementalWithoutTouched(mode, touchedSlots)) return [];
   if (isSingleSlotIncremental(mode, touchedSlots)) {
     const primary = touchedSlots[0]!;
@@ -368,7 +370,7 @@ export function buildReadingPlanFromHints(
   if (mode === "reorder") return null;
 
   const primaryTouched = [...touchedSlots];
-  let targetSlots = targetSlotsForPlan(mode, touchedSlots);
+  let targetSlots = targetSlotsForPlan(mode, touchedSlots, hints.slotBatchScoped);
   if (options?.forceSlots?.length) {
     targetSlots = options.forceSlots;
   }
@@ -383,10 +385,12 @@ export function buildReadingPlanFromHints(
   }
 
   const slots = buildSlotPlans(hints, targetSlots, primaryTouched);
-  const globalReadOrder = buildGlobalReadOrder(
-    hints,
-    mode === "initial" || mode === "full" ? 8 : READING_PLAN_GLOBAL_MAX,
-  );
+  const globalReadOrder = hints.slotBatchScoped
+    ? []
+    : buildGlobalReadOrder(
+        hints,
+        mode === "initial" || mode === "full" ? 8 : READING_PLAN_GLOBAL_MAX,
+      );
 
   const payload: ReadingPlanPayload = {
     mode,
@@ -400,6 +404,21 @@ export function buildReadingPlanFromHints(
   }
 
   return truncateReadingPlanPayload(payload, hints);
+}
+
+export function countReadingPlanFiles(payload: ReadingPlanPayload | null): {
+  mustRead: number;
+  shouldRead: number;
+  total: number;
+} {
+  if (!payload) return { mustRead: 0, shouldRead: 0, total: 0 };
+  let mustRead = payload.globalReadOrder?.length ?? 0;
+  let shouldRead = 0;
+  for (const plan of Object.values(payload.slots ?? {})) {
+    mustRead += plan?.mustRead?.length ?? 0;
+    shouldRead += plan?.shouldRead?.length ?? 0;
+  }
+  return { mustRead, shouldRead, total: mustRead + shouldRead };
 }
 
 export function formatReadingPlanBlock(
@@ -479,6 +498,7 @@ export async function buildKnowledgeNetworkReadingPlan(
     mode: KnowledgeNetworkUpdateMode;
     touchedSlots: CanonicalKbSlot[];
     maxFilesPerSlot?: number;
+    slotBatchScoped?: boolean;
   },
 ): Promise<string> {
   if (!shouldInjectReadingPlan(params.mode)) return "";
@@ -515,6 +535,7 @@ export async function buildKnowledgeNetworkReadingPlan(
     documents,
     chunks,
     maxFilesPerSlot: params.maxFilesPerSlot,
+    slotBatchScoped: params.slotBatchScoped,
   });
 
   if (!plan) {

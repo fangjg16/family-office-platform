@@ -21,6 +21,10 @@ import { buildKnowledgeNetworkDeepRefResolutionLines } from "./knowledge-network
 import { buildJfoMaterialsInstructions } from "./hermes-materials-instructions";
 import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
+  buildSlotBatchRequiredReadsOverride,
+  buildCompactBatchRequiredReads,
+} from "./knowledge-network-slot-batch-instructions";
+import {
   listHermesRunApprovalUrls,
   listHermesRunPollUrls,
   listHermesRunStopUrls,
@@ -209,6 +213,11 @@ export function buildHermesAgentInstructions(
     jobId?: string;
     userMessage?: string;
     hasExistingKb?: boolean;
+    /** full/initial 走 Worker slot-batched 编排，勿交付整包 structured-kb-data */
+    slotBatched?: boolean;
+    slotBatchCompact?: boolean;
+    slotBatchIndex?: number;
+    slotBatchSlots?: import("./knowledge-network-slot-aliases").CanonicalKbSlot[];
   },
 ): string {
   const jfoBase = (env.JFO_API_PUBLIC_BASE || "https://jfo-api.jfo-api.workers.dev").trim();
@@ -286,19 +295,33 @@ export function buildHermesAgentInstructions(
       ? touchedSlots[0]
       : null;
     const slotPatchMode = Boolean(slotPatchSlot);
-    lines.push(
-      buildHermesKnowledgeNetworkRequiredReads({
-        mode,
-        touchesTimeline: messageTouchesTimeline(userMessage),
-        touchedSlots,
-        slotPatchMode,
-        touchesMaturityScorecard: messageTouchesMaturityScorecard(userMessage),
-        includeStyleGuide: visualDebug,
-        includeComponents: visualDebug,
-      }),
-      buildKnowledgeNetworkSlotResolutionLines(userMessage),
-      buildKnowledgeNetworkDeepRefResolutionLines(mode, touchedSlots),
-    );
+    const batchSlots = ctx?.slotBatchSlots ?? [];
+    if (ctx?.slotBatched && batchSlots.length > 0) {
+      lines.push(
+        ctx.slotBatchCompact
+          ? buildCompactBatchRequiredReads(batchSlots)
+          : buildSlotBatchRequiredReadsOverride(
+              mode,
+              ctx.slotBatchIndex ?? 0,
+              batchSlots,
+            ),
+        buildKnowledgeNetworkSlotResolutionLines(userMessage),
+      );
+    } else {
+      lines.push(
+        buildHermesKnowledgeNetworkRequiredReads({
+          mode,
+          touchesTimeline: messageTouchesTimeline(userMessage),
+          touchedSlots,
+          slotPatchMode,
+          touchesMaturityScorecard: messageTouchesMaturityScorecard(userMessage),
+          includeStyleGuide: visualDebug,
+          includeComponents: visualDebug,
+        }),
+        buildKnowledgeNetworkSlotResolutionLines(userMessage),
+        buildKnowledgeNetworkDeepRefResolutionLines(mode, touchedSlots),
+      );
+    }
     if (slotPatchSlot) {
       lines.push(
         buildHermesKnowledgeNetworkStructuredPatchWorkflow(
@@ -310,24 +333,31 @@ export function buildHermesAgentInstructions(
         "预注入摘录只供事实依据；structured slot patch 模式下 Worker 渲染 JSON 并合并入库，勿整页 PUT。",
       );
     } else if (mode === "initial" || mode === "full") {
-      lines.push(
-        buildHermesKnowledgeNetworkStructuredKbDataWorkflow(
-          jfoBase,
-          projectId,
-          projectTitleHint,
-          mode,
-        ),
-        buildHermesKnowledgeNetworkFileProtocol(
-          jfoBase,
-          projectId,
-          userId || "system",
-          jobId,
-          projectTitleHint,
-          mode,
-          { asFallback: true },
-        ),
-        "预注入摘录只供事实依据；首次/全量默认交付 structured-kb-data JSON，Worker 确定性渲染入库。PUT/整页 HTML 仅为 fallback。",
-      );
+      if (!ctx?.slotBatched) {
+        lines.push(
+          buildHermesKnowledgeNetworkStructuredKbDataWorkflow(
+            jfoBase,
+            projectId,
+            projectTitleHint,
+            mode,
+          ),
+          buildHermesKnowledgeNetworkFileProtocol(
+            jfoBase,
+            projectId,
+            userId || "system",
+            jobId,
+            projectTitleHint,
+            mode,
+            { asFallback: true },
+          ),
+          "预注入摘录只供事实依据；首次/全量默认交付 structured-kb-data JSON，Worker 确定性渲染入库。PUT/整页 HTML 仅为 fallback。",
+        );
+      } else {
+        lines.push(
+          "【模式】全量/首次 — Worker **slot-batched** 编排：按批交付 structured-slot-batch JSON（见下方批次说明），**禁止**整包 13-slot structured-kb-data。",
+          "预注入摘录只供事实依据；每批 Worker 单独 quality check 后累积，最后确定性渲染 HTML。",
+        );
+      }
     } else {
       lines.push(
         buildHermesKnowledgeNetworkFileProtocol(
@@ -478,13 +508,25 @@ function isWaitingForHermesApproval(status: string): boolean {
 async function fetchHermesRunSnapshot(
   env: HermesAgentEnv,
   runId: string,
+  options?: { timeoutMs?: number },
 ): Promise<HermesRunPoll> {
   const base = (env.HERMES_BASE_URL || "").trim();
   const urls = listHermesRunPollUrls(base, runId);
   let lastError = "Hermes 状态查询失败";
+  const timeoutMs = options?.timeoutMs ?? 0;
 
   for (const url of urls) {
-    const res = await fetch(url, { headers: hermesAuthHeaders(env) });
+    const controller = timeoutMs > 0 ? new AbortController() : null;
+    const timer =
+      controller &&
+      setTimeout(() => {
+        controller.abort();
+      }, timeoutMs);
+    try {
+      const res = await fetch(url, {
+        headers: hermesAuthHeaders(env),
+        signal: controller?.signal,
+      });
     const rawText = await res.text();
     let raw: Record<string, unknown> = {};
     try {
@@ -512,13 +554,31 @@ async function fetchHermesRunSnapshot(
     const output = String(raw.output || raw.result || "").trim();
     const error = raw.error ? String((raw.error as { message?: string }).message || raw.error) : null;
     return { runId, status, output, error, raw };
+    } catch (e) {
+      if (controller?.signal.aborted) {
+        return {
+          runId,
+          status: "running",
+          output: "",
+          error: null,
+          raw: { pollTimeout: true, timeoutMs },
+        };
+      }
+      lastError = e instanceof Error ? e.message : String(e);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   return { runId, status: "failed", output: "", error: lastError, raw: null };
 }
 
-export async function pollHermesRun(env: HermesAgentEnv, runId: string): Promise<HermesRunPoll> {
-  const snap = await fetchHermesRunSnapshot(env, runId);
+export async function pollHermesRun(
+  env: HermesAgentEnv,
+  runId: string,
+  options?: { timeoutMs?: number },
+): Promise<HermesRunPoll> {
+  const snap = await fetchHermesRunSnapshot(env, runId, options);
   if (!isWaitingForHermesApproval(snap.status)) return snap;
 
   const approval = await submitHermesRunApproval(env, runId, "once");

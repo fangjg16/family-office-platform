@@ -1,10 +1,10 @@
+import { adaptStructuredKbDataFromCodexKeys } from "./knowledge-network-codex-payload-adapter";
 import { applyDeterministicMaturity } from "./knowledge-network-deterministic-maturity";
 import {
   buildStructuredKbRepairMessage,
   validateFullStructuredKbQuality,
   type FullKbQualityResult,
 } from "./knowledge-network-full-quality-contract";
-import { isStructuredQualityRegressed } from "./knowledge-network-html-coverage";
 import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
 import { renderFullStructuredKnowledgeNetwork } from "./knowledge-network-full-renderer";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
@@ -93,6 +93,62 @@ function extractFencedJsonBlocks(text: string): string[] {
     if (body) blocks.push(body);
   }
   return blocks;
+}
+
+const STRUCTURED_PAYLOAD_TYPES_FOR_DISPLAY = new Set([
+  "structured-kb-data",
+  "structured-slot-batch",
+  "structured-slot-patch",
+  "slot-html-patch",
+]);
+
+function detectStructuredPayloadTypeInFence(body: string): string | null {
+  const trimmed = body.trim();
+  if (!trimmed) return null;
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (isRecord(parsed) && typeof parsed.type === "string") {
+      const t = parsed.type.trim();
+      if (STRUCTURED_PAYLOAD_TYPES_FOR_DISPLAY.has(t)) return t;
+    }
+  } catch {
+    for (const t of STRUCTURED_PAYLOAD_TYPES_FOR_DISPLAY) {
+      if (new RegExp(`["']type["']\\s*:\\s*["']${t}["']`).test(trimmed)) return t;
+    }
+  }
+  return null;
+}
+
+function summaryFromStructuredPayloadBody(body: string): string | null {
+  try {
+    const parsed = JSON.parse(body.trim()) as unknown;
+    if (!isRecord(parsed)) return null;
+    if (typeof parsed.summary === "string" && parsed.summary.trim()) {
+      return parsed.summary.trim();
+    }
+    const meta = parsed.meta;
+    if (isRecord(meta) && typeof meta.autoSummary === "string" && meta.autoSummary.trim()) {
+      return meta.autoSummary.trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+/** 聊天/UI 展示用：去掉 Hermes 交付的结构化 JSON 代码块，保留自然语言摘要。 */
+export function stripStructuredKbPayloadFromDisplayAnswer(answer: string): string {
+  const fallbackSummaries: string[] = [];
+  let result = answer.replace(/```(?:json)?\s*([\s\S]*?)```/gi, (fullMatch, body: string) => {
+    if (!detectStructuredPayloadTypeInFence(String(body))) return fullMatch;
+    const summary = summaryFromStructuredPayloadBody(String(body));
+    if (summary) fallbackSummaries.push(summary);
+    return "";
+  });
+  result = result.replace(/\n{3,}/g, "\n\n").trim();
+  if (result) return result;
+  if (fallbackSummaries.length > 0) return fallbackSummaries[0]!;
+  return "（结构化知识网络数据已处理，详见项目知识网络页面。）";
 }
 
 export type StructuredKbDataExtractResult =
@@ -353,6 +409,7 @@ export function extractStructuredKbDataFromJson(jsonText: string): StructuredKbD
 /** validate + deterministic maturity + render（不阻断 quality gate，供诊断/预览） */
 export function renderStructuredKbDataToHtml(
   data: StructuredKbData,
+  options?: { versionDisplay?: string },
 ): { ok: true; html: string; quality: FullKbQualityResult } | { ok: false; reason: string } {
   const validated = validateStructuredKbData(data);
   if (!validated.ok) return { ok: false, reason: validated.reason };
@@ -361,7 +418,9 @@ export function renderStructuredKbDataToHtml(
   return {
     ok: true,
     html: renderFullStructuredKnowledgeNetwork(prepared, {
-      qualityCoverage: quality.publishCoverage,
+      structureCoverageDebug: quality.structureCoverage,
+      versionDisplay: options?.versionDisplay,
+      schemaVersion: validated.data.schemaVersion,
     }),
     quality,
   };
@@ -384,40 +443,25 @@ export function evaluateStructuredKbPublishGate(
   data: StructuredKbData,
   previousHtml?: string | null,
 ): StructuredKbPublishGateResult {
-  const validated = validateStructuredKbData(data);
+  const normalized = adaptStructuredKbDataFromCodexKeys(data);
+  const validated = validateStructuredKbData(normalized);
   if (!validated.ok) {
     return {
       ok: false,
       repairNeeded: true,
-      quality: validateFullStructuredKbQuality(data),
+      quality: validateFullStructuredKbQuality(normalized),
       message: validated.reason,
     };
   }
 
   const quality = validateFullStructuredKbQuality(validated.data);
-  if (!quality.ok) {
+  if (!quality.hardGateOk) {
     return {
       ok: false,
       repairNeeded: true,
       quality,
       message: buildStructuredKbRepairMessage(quality),
     };
-  }
-
-  if (previousHtml?.trim()) {
-    const regression = isStructuredQualityRegressed(previousHtml, quality.coverageScore);
-    if (regression.regressed) {
-      return {
-        ok: false,
-        qualityBlocked: true,
-        quality,
-        message:
-          `结构化数据不足，未覆盖旧版本（quality coverage ${regression.nextScore} < ${regression.previousScore}×0.85）。` +
-          `请补全 structured-kb-data 后重试，勿写 HTML。`,
-        previousScore: regression.previousScore ?? 0,
-        nextScore: regression.nextScore,
-      };
-    }
   }
 
   return { ok: true, quality };

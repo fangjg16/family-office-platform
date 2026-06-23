@@ -13,6 +13,16 @@ import {
   readProjectKnowledgeNetworkHtml,
   upsertProjectKnowledgeNetwork,
 } from "./project-knowledge-network";
+import {
+  buildBatch2EnvelopeSpec,
+  buildBatch2RepairEnvelopePrompt,
+  buildBatch2StructuredExampleBlock,
+} from "./knowledge-network-slot-batch-batch2-protocol";
+import {
+  buildBatch3EnvelopeSpec,
+  buildBatch3StructuredExampleBlock,
+} from "./knowledge-network-slot-batch-batch3-protocol";
+import { buildMinimalSlotBatchRepairPrompt } from "./knowledge-network-slot-batch-minimal-repair";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -343,17 +353,21 @@ export function buildHermesKnowledgeNetworkRequiredReads(
     "- 资料仅经 jfo-r2-materials：manifest/digest → 按需 textUrl，禁止机械全文拉取。",
     "- 正文 citation（如 #source-U-1）须对应 Appendix A id；Worker 渲染时自动生成 nav / KB-CONFIG / revealAnchor。",
     "- **timeline-milestones** 仅写项目推进节点；行业/市场背景写 industry-market/comps-benchmark/risks-mitigation。",
-    "- **成熟度三张卡** `.stat-value` 必须为 0–100%；slot 计数、字母等级只能写 stat-note / stage。",
+    "- **成熟度三张卡** `.stat-value` 由 Worker 在入库后重算；Hermes **禁止**为抬高 Factor A / maturity / qualityCoverage 编造事实或凑数。",
+    "- **Factor A = Evidence Maturity**（v2.93 maturity-scoring.md）：13 个 core slot 硬证据成熟度均值，分母固定 13；每 slot 用 conservative cap（如无投资额/量化回报则 valuation≤5%、无可比则 comps=0% 等）。gap rows / 结构覆盖度不抬高 Factor A。",
     "- **禁止** legacy v2.8 anchors（assets、business-model、timeline 等）、skills_reference.md、根目录 kb-template.html。",
     "- **deep refs**：initial/full 读齐 7 个 references/deep/*.md；incremental 仅读点名 slot 映射；reorder 不读。",
     isStructuredKbDataMode
       ? "- **initial/full 主路径**：交付 `structured-kb-data` JSON（见 references/structured-kb-data-schema.md 与 examples-kb-data.json）；**禁止**默认 jfo_kb_put.sh / 整页 ```html / 手写 nav / KB-CONFIG / Appendix D。"
       : "- **禁止** read_file examples-kb-data.json、scripts/、components.html、visual-style-guide（非视觉调试）。",
     isStructuredKbDataMode
-      ? "- **Quality Contract**：目标不是 13 slot 存在，而是每 slot slot-specific coverage（见 structured-kb-data-schema.md）；Worker 未达标返回 repair_needed。"
+      ? "- **KB 目标**：事实可追溯、缺口清楚、结构稳定；交付事实、证据、缺口、判断与下一步验证动作（structured JSON）。"
       : "",
     isStructuredKbDataMode
-      ? "- **maturity**：factorA/B/combined 由 Worker 重算；勿虚高自填，单一 BP 时 B≤25%。"
+      ? "- **coverage target**：≥N 条 = fact rows + valid gap rows（非 hard factual minimum）；gap 须显式标注，不得伪装成事实。"
+      : "",
+    isStructuredKbDataMode
+      ? "- **maturity 占位即可**：factorA/B/combined 由 Worker 入库后轻量重算；**勿**在 prompt 中追求高分或自填虚高百分比。"
       : "",
     isStructuredKbDataMode
       ? "- PUT / 整页 HTML / kb-template.html 仅为 structured-kb-data 无法交付时的 **fallback**，不是默认路径。"
@@ -365,11 +379,10 @@ export function buildHermesKnowledgeNetworkRequiredReads(
   if (mode === "full" || mode === "initial") {
     lines.push(
       "- 模式：首次/全量 — **主路径**交付 structured-kb-data JSON（13 slots + sources）；Worker 确定性渲染 HTML 并入库。",
-      "- **Quality Contract**：须满足 references/structured-kb-data-schema.md 每 slot 最低 coverage；勿用薄表格凑数。",
-      "- **maturity 自填无效**：Worker 按 slot coverage + 来源多样性重算 Factor A/B/Combined。",
+      "- **Hermes 职责**：事实、证据引用（evidenceSourceIds / 证据列）、缺口（gap rows）、判断与 nextAction；**不为分数服务**。",
+      "- **coverage target**：每 slot 见 structured-kb-data-schema.md；资料不足写 gap rows，禁止薄 table / 空 row / 编造。",
       "- **禁止**默认 bash jfo_kb_put.sh / 整页 ```html / 手写 nav / KB-CONFIG / Appendix D / revealAnchor。",
-      "- PUT / 整页 HTML 仅为 fallback（structured JSON 缺失或 Worker 明确要求时）。",
-      "- Worker repair：未达标时同一 job 内可触发一次 JSON 补全（勿写 HTML）。",
+      "- Worker repair 仅修：envelope、缺字段、空表、引用、gap 不完整、幻觉；**不因 Evidence Maturity 低反复 repair**。",
     );
   } else if (mode === "incremental" && slotPatchMode) {
     lines.push(
@@ -481,8 +494,8 @@ const STRUCTURED_SLOT_PAYLOAD_HINTS: Record<CanonicalKbSlot, string> = {
   "target-overview": `{ "businessSummary": [{ "paragraphs": ["…"] }], "assetSummary": [{ "资产/权利/能力": "…", "定义与范围": "…" }], "gaps": [] }`,
   "industry-market": `{ "marketDrivers": [{ "主题": "…", "事实/数据": "…", "投资含义": "…" }], "gaps": [] }`,
   "business-operations": `{ "journeyMap": { "stages": ["…"], "lanes": [{ "label": "…", "nodes": ["…"] }] }, "customerBuyer": [], "gaps": [] }`,
-  "legal-ownership": `{ "entities": [{ "主体/权利": "…", "角色/归属": "…" }], "relationshipEdges": [{ "relation": "…", "from": "…", "to": "…" }] }`,
-  "regulatory-compliance": `{ "jurisdictionRows": [{ "监管/规则": "…", "适用原因": "…" }], "gaps": [] }`,
+  "legal-ownership": `{ "entities": [{ "主体/权利": "目标主体（待确认）", "角色/归属": "…", "限制/负担": "—", "证据/缺口": "资料未提供" }], "unresolvedLegalIssues": [{ "issue": "…", "whyItMatters": "…", "requiredEvidence": "…", "owner": "…", "decisionImpact": "…", "riskLevel": "中" }] }`,
+  "regulatory-compliance": `{ "regulatoryGaps": [{ "jurisdiction": "…", "requirement": "…", "currentEvidence": "未提供", "gap": "待确认/需法律意见", "nextAction": "…", "riskLevel": "高" }] }`,
   "resource-network": `{ "parties": [{ "主体/资源": "…", "关系与作用": "…" }], "missingResources": [] }`,
   "comps-benchmark": `{ "compsRows": [{ "可比对象": "…", "可比逻辑": "…" }], "relevanceNotes": [] }`,
   "valuation-returns": `{ "scenarios": [{ "label": "Base", "value": "…", "detail": "…" }], "sensitivityItems": [], "gaps": [] }`,
@@ -501,11 +514,12 @@ export function buildHermesKnowledgeNetworkStructuredKbDataProtocol(
 【知识网络 · Structured KB Data 全量交付（${mode} · schema v2.91 · 主路径）】
 本任务**必须**交付 **structured-kb-data** JSON；Worker 确定性渲染 nav / KB-CONFIG / 13 slots / Appendix A–C。
 
-**发布门槛（Worker Quality Contract）**
-- 目标**不是**「13 个 slot key 存在」，而是每 slot 达到 **slot-specific coverage**（见 structured-kb-data-schema.md）。
-- 每 slot 须满足：必填字段 + 最低 item 数 + gap callout（缺资料时）。
-- **禁止**用 2–4 行薄 table 糊弄完整 slot；参考 examples-kb-data.json（rich 示例）。
-- \`maturity.factorA/B/combined\` **不是最终分**；Worker 会按 coverage + 来源重算（单一 BP → B≤25%）。
+**发布门槛（Worker）**
+- KB 目标：**事实可追溯、缺口清楚、结构稳定** — 非把分数做高。
+- **coverage target** = fact rows + valid gap rows（≥N 非 hard factual minimum）；gap 须显式标注。
+- **Hard gate**（须 repair）：空 row、无法映射、明显幻觉、断引用等。
+- **Soft warning**（不阻止发布）：Evidence Maturity 低、gap-first、无法量化估值、缺可比等。
+- \`maturity\` 填占位即可；Factor A = **Evidence Maturity**（13 slot 硬证据 cap 均值）；gap rows 不抬高 Factor A。
 
 **对用户可见回复**
 1. 先写 3–8 行简体中文摘要（覆盖哪些 slot、主要证据与缺口）。
@@ -533,21 +547,19 @@ export function buildHermesKnowledgeNetworkStructuredKbDataProtocol(
 
 /** Worker repair_needed 时注入 Hermes 的补全指令（同一 job，最多一次） */
 export function buildHermesStructuredKbRepairPrompt(repairMessage: string): string {
-  return `【structured-kb-data · Quality Contract 2.0 repair（同一 job · 仅一次）】
+  return `【structured-kb-data · hard/结构 repair（同一 job · 仅一次）】
 
-上一轮 JSON **未通过 Worker Content Completeness 2.0**。请**只**补全 structured-kb-data JSON，**禁止**写 HTML / PUT / sectionHtml。
+上一轮 JSON **未通过 Worker hard publish gate**。请**只**修 structured-kb-data JSON，**禁止**写 HTML / PUT。
 
-**缺项清单（须全部补齐或转 gap）**
+**禁止以提高 Factor A / maturity / qualityCoverage 为目标**；资料不足补 gap rows，不补假事实。
+
+**缺项清单**
 ${repairMessage}
 
 **要求**
-1. 重新输出 **一个** \\\`\\\`\\\`json 代码块，type 必须为 structured-kb-data，含完整 13 slots + sources。
-2. **禁止空 row / 空字符串占位**；不知道就写 gaps，不要填空对象。
-3. 每个 table row 须有业务含义（≥65% 核心字段非空）；marketDrivers 须含投资含义/分析。
-4. 参考 examples-kb-data.json 的 rich 密度（journeyMap、scenarios×3、riskRows≥5、questionGroups P1/P2、details.topic 对应 questionGroups 等）。
-5. repair 清单中列出的 empty table 位置须补有效内容或改为 gap callout。
-6. maturity 可填占位；Worker 会重算 Factor A/B/Combined（单一 BP Factor A ≤70%）。
-7. 先写 2–4 行摘要说明补了哪些 slot/字段，再附 JSON。`;
+1. 输出 **一个** \\\`\\\`\\\`json 代码块，type 必须为 structured-kb-data，含完整 13 slots + sources。
+2. 修 envelope / 缺字段 / 空表 / 引用 / gap rows 不完整 / 幻觉；gap 须含 requiredEvidence、decisionImpact 或 nextAction。
+3. maturity 填占位；Worker 入库后轻量重算 13-slot Evidence Maturity + Source Diversity。`;
 }
 
 /** initial / full 专用工作流（structured-kb-data 主路径） */
@@ -747,4 +759,93 @@ bash ${KB_PUT_SCRIPT} \\
   --mode "${mode}"
 \`\`\`
 脚本会先校验 \`schema-version: 2.91\` 行，再 curl PUT；成功时 stdout 含 \`PUT OK\`。`;
+}
+
+export function buildHermesSlotBatchWorkflow(params: {
+  mode: "initial" | "full";
+  projectTitle: string;
+  batchIndex: number;
+  totalBatches: number;
+  slots: string[];
+  repairHints?: string;
+  priorSlots?: string[];
+}): string {
+  const slotList = params.slots.join(", ");
+  const prior =
+    params.priorSlots?.length ?
+      `\n已完成 slot：${params.priorSlots.join(", ")}。本批勿重复输出。`
+    : "";
+  const repair = params.repairHints?.trim()
+    ? `\n\n【Repair】上一轮本批 hard/结构问题（与 Factor A / maturity 无关）：\n${params.repairHints}\n请只补本批 slot，仍用 structured-slot-batch JSON；资料不足补 gap rows，勿编造事实。`
+    : "";
+  const gapFirstSlots = params.slots.filter(
+    (s) => s === "legal-ownership" || s === "regulatory-compliance",
+  );
+  const gapFirstBlock =
+    gapFirstSlots.length > 0
+      ? `
+
+**legal-ownership / regulatory-compliance · gap-first（资料不足时）**
+- 若缺合同/许可/审批文件：**禁止编造事实**；用 unresolvedLegalIssues / regulatoryGaps 结构化缺口行（coverage target ≥4 = fact + gap）。
+- legal 每条：issue、whyItMatters、requiredEvidence、owner/party、decisionImpact（+ riskLevel）。
+- regulatory 每条：jurisdiction、requirement、currentEvidence（可写「未提供」）、gap、nextAction、riskLevel；许可状态仅可写「待确认/需法律意见」。
+- gap rows 可帮助 slot 结构通过；**不**为提高 Evidence Maturity 编造事实。`
+      : "";
+  const isBatch2 = params.batchIndex === 1;
+  const isBatch3 = params.batchIndex === 2;
+  const batch2Protocol = isBatch2
+    ? buildBatch2EnvelopeSpec(params.mode) + buildBatch2StructuredExampleBlock()
+    : "";
+  const batch3Protocol = isBatch3
+    ? buildBatch3EnvelopeSpec(params.mode) + buildBatch3StructuredExampleBlock()
+    : "";
+  const strictJsonOnly = isBatch2 || isBatch3;
+  const deliveryFormat = strictJsonOnly
+    ? `**交付格式（Batch ${params.batchIndex + 1} · 仅 JSON）**
+回复 **只能** 含 **一个** \\\`\\\`\\\`json 代码块（见上方 envelope + 组件片段示例）；禁止 JSON 外任何文字。allowed 组件是菜单，不是必填套餐。`
+    : `**交付格式（必须）**
+1. 2–4 行简体中文摘要（本批覆盖内容与证据/缺口）。
+2. **一个** \\\`\\\`\\\`json 代码块，type 必须为 \`structured-slot-batch\`：
+\\\`\\\`\\\`json
+{
+  "type": "structured-slot-batch",
+  "schemaVersion": "2.91",
+  "batchIndex": ${params.batchIndex},
+  "summary": "…",
+  ${params.batchIndex === 0 ? '"config": { "displayOrder": ["snapshot", "…"], "projectType": "general" },\n  "meta": { "title": "' + params.projectTitle + '", "autoSummary": "…" },\n  "sources": [{ "id": "U-1", "type": "用户上传", "title": "…" }],' : ""}
+  "slots": [
+    { "slot": "${params.slots[0]}", "payload": { … }, "status": "ready" }
+  ]
+}
+\\\`\\\`\\\``;
+  return `
+
+【知识网络 · Slot-Batched Structured Generation（${params.mode} · 批次 ${params.batchIndex + 1}/${params.totalBatches}）】
+Worker 已启用 **分批 structured 生成**；**禁止**一次性输出完整 13-slot structured-kb-data。
+
+**本批须交付 slot**：${slotList}${prior}${gapFirstBlock}${batch2Protocol}${batch3Protocol}${repair}
+
+${deliveryFormat}
+
+**Quality Contract（本批 · coverage target，非分数目标）**
+- 每 slot coverage target = fact rows + valid gap rows（见 schema）；禁止空 row / 无法映射列名。
+- 缺资料写 **gap rows**（requiredEvidence / decisionImpact / nextAction），勿填空对象或假事实。
+- table row 使用 canonical 中文列名（或 schema alias）。
+- batch 0 须含 config + meta + sources；后续批次只补本批 slots。
+- **禁止**整页 HTML / 13-slot 大包 / PUT / versionLedger。
+- maturity / Factor A / qualityCoverage **由 Worker 入库后计算**；Hermes 勿追求高分。`;
+}
+
+export function buildHermesSlotBatchRepairPrompt(
+  repairMessage: string,
+  failedSlots: string[],
+  options?: { batchIndex?: number; mode?: "initial" | "full" },
+): string {
+  const batchIndex = options?.batchIndex ?? 0;
+  return buildMinimalSlotBatchRepairPrompt({
+    repairMessage,
+    failedSlots: failedSlots as import("./knowledge-network-slot-aliases").CanonicalKbSlot[],
+    batchIndex,
+    mode: options?.mode ?? "full",
+  });
 }

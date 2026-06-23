@@ -93,12 +93,19 @@ export type IndustryMarketPayload = {
 
 export type BusinessOperationsPayload = {
   journeyMap?: { stages: string[]; lanes?: Array<{ label: string; nodes: string[] }> };
+  /** Codex alias: journey */
+  journey?: BusinessOperationsPayload["journeyMap"];
+  processFlow?: TableRow[];
+  canvas?: Record<string, string[] | string>;
   revenueTree?: TableRow[];
-  flywheel?: NarrativeBlock[];
+  valueChain?: TableRow[];
+  flywheel?: NarrativeBlock[] | TableRow[];
   operatingBottlenecks?: TableRow[];
   customerBuyer?: TableRow[];
   pricing?: TableRow[];
   supplyChain?: TableRow[];
+  operationalGaps?: TableRow[];
+  ecosystemMap?: TableRow[];
   gaps?: GapCallout[];
 };
 
@@ -108,7 +115,8 @@ export type LegalOwnershipPayload = {
   contractRights?: TableRow[];
   licenseRights?: TableRow[];
   relationshipEdges?: RelationshipEdge[];
-  unresolvedLegalIssues?: GapCallout[];
+  unresolvedLegalIssues?: GapCallout[] | TableRow[];
+  legalGapRows?: TableRow[];
 };
 
 export type RegulatoryCompliancePayload = {
@@ -117,7 +125,8 @@ export type RegulatoryCompliancePayload = {
   complianceRisks?: TableRow[];
   approvalPath?: TableRow[];
   privacyOrDataRules?: TableRow[];
-  gaps?: GapCallout[];
+  regulatoryGaps?: TableRow[];
+  gaps?: GapCallout[] | TableRow[];
 };
 
 export type ResourceNetworkPayload = {
@@ -126,24 +135,35 @@ export type ResourceNetworkPayload = {
   capabilities?: TableRow[];
   dependencies?: TableRow[];
   relationshipEdges?: RelationshipEdge[];
-  missingResources?: GapCallout[];
+  resourceGaps?: TableRow[];
+  capabilityGaps?: TableRow[];
+  relationshipGaps?: TableRow[];
+  missingParties?: TableRow[];
+  missingResources?: GapCallout[] | TableRow[];
 };
 
 export type CompsBenchmarkPayload = {
   compsRows?: TableRow[];
+  comparableGaps?: TableRow[];
   transactionCases?: TableRow[];
+  transactionCasesNote?: string;
+  comparableSearchStrategy?: string;
   benchmarkMetrics?: TableRow[];
   valuationReference?: TableRow[];
-  relevanceNotes?: GapCallout[];
+  relevanceNotes?: GapCallout[] | TableRow[];
 };
 
 export type ValuationReturnsPayload = {
   investmentCashflow?: TableRow[];
+  cashflowGaps?: TableRow[];
   scenarios?: ScenarioRow[];
   sensitivityItems?: TableRow[];
   returnDrivers?: TableRow[];
+  assumptions?: TableRow[];
   downsideCases?: TableRow[];
   benchmarkMetrics?: TableRow[];
+  valuationBox?: MetricCard | MetricCard[];
+  valuationBoxes?: MetricCard[];
   gaps?: GapCallout[];
 };
 

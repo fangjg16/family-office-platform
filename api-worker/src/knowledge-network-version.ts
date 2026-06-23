@@ -47,16 +47,31 @@ export function resolveKnVersionOnUpload(
 
 export function formatKnVersionDisplay(version: number, versionLabel: string | null): string {
   const label = versionLabel?.trim();
-  return label && label.length > 0 ? label : String(version);
+  if (label && label.length > 0) {
+    // 整数展示版落后于内部 version 时（Worker 自动递增），以 version 为准
+    if (!label.includes(".")) {
+      const labelInt = parseInt(label, 10);
+      if (!Number.isNaN(labelInt) && version > labelInt) {
+        return String(version);
+      }
+    }
+    return label;
+  }
+  return String(version);
 }
 
 /** 将 HTML masthead 中的 Version / AI badge 替换为 D1 展示版本（非 schema meta.version） */
-export function applyKbVersionDisplay(html: string, versionDisplay: string): string {
+export function applyKbVersionDisplay(
+  html: string,
+  versionDisplay: string,
+  schemaVersion = "2.91",
+): string {
   const label = versionDisplay.startsWith("v") ? versionDisplay : `v${versionDisplay}`;
+  const badge = `${label} · schema ${schemaVersion}`;
   let out = html.replace(
     /(<dt>\s*Version\s*<\/dt>\s*<dd>)[^<]+(<\/dd>)/i,
     `$1${label}$2`,
   );
-  out = out.replace(/(AI-Generated · )[^<]+(<\/span>)/i, `$1${label}$2`);
+  out = out.replace(/(AI-Generated · )[^<]+(<\/span>)/i, `$1${badge}$2`);
   return out;
 }

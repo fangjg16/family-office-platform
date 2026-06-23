@@ -36,17 +36,27 @@ import {
 import {
   evaluateStructuredKbPublishGate,
   extractStructuredKbDataFromAnswer,
+  stripStructuredKbPayloadFromDisplayAnswer,
   renderStructuredKbDataToHtml,
   shouldUseStructuredKbDataMode,
 } from "./knowledge-network-structured-kb-data";
-import { formatKnVersionDisplay } from "./knowledge-network-version";
+import { formatKnVersionDisplay, resolveKnVersionOnUpload } from "./knowledge-network-version";
 import { resolveKnowledgeNetworkSlotsFromMessage } from "./knowledge-network-slot-aliases";
 import {
   getProjectKnowledgeNetworkMeta,
   readProjectKnowledgeNetworkHtml,
   upsertProjectKnowledgeNetwork,
 } from "./project-knowledge-network";
-import { resolveKnUserMessage } from "./kn-job-user-message";
+import {
+  advanceKnSlotBatchJob,
+  buildSlotBatchHermesInstructions,
+  initKnSlotBatchSession,
+  processKnSlotBatchHermesBackground,
+  readKnSlotBatchSession,
+  shouldUseSlotBatchGeneration,
+  startKnSlotBatchHermesRun,
+  getKnSlotBatchProgress,
+} from "./knowledge-network-slot-batch-orchestrator";
 
 export type AgentJobEnv = HermesAgentEnv & {
   DB: D1Database;
@@ -253,7 +263,11 @@ export async function tryWriteKnowledgeNetworkFromStructuredKbData(
     };
   }
 
-  const rendered = renderStructuredKbDataToHtml(extracted.data);
+  const prevKn = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+  const nextKnVersion = resolveKnVersionOnUpload(prevKn, null);
+  const rendered = renderStructuredKbDataToHtml(extracted.data, {
+    versionDisplay: formatKnVersionDisplay(nextKnVersion.version, nextKnVersion.versionLabel),
+  });
   if (!rendered.ok) {
     return {
       ok: false,
@@ -635,9 +649,12 @@ export async function finalizeKnowledgeNetworkJobResult(
           answer:
             `${result.answer.trim() || "Hermes 已结束，但 structured-kb-data 未达发布门槛。"}\n\n` +
             `**结构化 KB ${label}**：${structuredWritten.error}\n` +
+            "已保留现有知识网络，未覆盖旧版本。" +
             (structuredWritten.qualityBlocked
-              ? "已保留现有知识网络，未覆盖旧版本。"
-              : "请补全 structured-kb-data JSON 后重试（勿写 HTML）。") +
+              ? "（quality_blocked：相对旧版 coverage 回退）"
+              : structuredWritten.repairNeeded
+                ? "（repair_needed：须补 JSON 或 repair pass 成功后再入库）"
+                : "") +
             repairHint,
         };
       }
@@ -955,10 +972,12 @@ export async function completeAgentJob(
     return;
   }
 
+  const displayAnswer = stripStructuredKbPayloadFromDisplayAnswer(finalized.answer);
+
   await env.DB.prepare(
     `UPDATE agent_jobs SET status = 'completed', answer = ?, knowledge_network_html = ?, error = NULL, updated_at = ? WHERE id = ?`,
   )
-    .bind(finalized.answer, finalized.knowledgeNetworkHtml, nowIso(), jobId)
+    .bind(displayAnswer, finalized.knowledgeNetworkHtml, nowIso(), jobId)
     .run();
 
   const row = await env.DB.prepare(
@@ -970,7 +989,7 @@ export async function completeAgentJob(
     .first<AgentJobRow>();
   if (row) {
     await syncAgentJobTerminalToChat(env, row, {
-      answer: finalized.answer,
+      answer: displayAnswer,
       knowledgeNetworkHtml: finalized.knowledgeNetworkHtml,
     });
   }
@@ -987,7 +1006,8 @@ export async function failAgentJob(
     return;
   }
 
-  const answer = (answerForChat ?? "").trim() || `深度分析失败：${error}`;
+  const rawAnswer = (answerForChat ?? "").trim() || `深度分析失败：${error}`;
+  const answer = stripStructuredKbPayloadFromDisplayAnswer(rawAnswer);
 
   await env.DB.prepare(
     `UPDATE agent_jobs SET status = 'failed', error = ?, answer = ?, knowledge_network_html = NULL, updated_at = ? WHERE id = ?`,
@@ -1134,15 +1154,47 @@ async function reloadAgentJob(env: AgentJobEnv, jobId: string): Promise<AgentJob
   return getAgentJobById(env, jobId);
 }
 
-/**
- * 轮询 / 列表 active jobs 时同步 Hermes 终态、KN PUT 收尾，并清理超时/僵尸任务。
- */
+/** 轮询 / 列表 active jobs 时同步 Hermes 终态、KN PUT 收尾，并清理超时/僵尸任务。 */
+export type ReconcileAgentJobOptions = {
+  /** Poll API 用：Hermes 状态查询最长等待（毫秒），0 = 不限制 */
+  hermesPollTimeoutMs?: number;
+};
+
 export async function reconcileAgentJob(
   env: AgentJobEnv,
   row: AgentJobRow,
-): Promise<{ row: AgentJobRow; hermesStatus: string | null }> {
+  options?: ReconcileAgentJobOptions,
+): Promise<{ row: AgentJobRow; hermesStatus: string | null; slotBatchProgress?: Awaited<ReturnType<typeof getKnSlotBatchProgress>> }> {
   if (!isAgentJobActive(row.status)) {
     return { row, hermesStatus: null };
+  }
+
+  const slotSession = await readKnSlotBatchSession(env, row.project_id, row.id);
+  if (slotSession) {
+    const adv = await advanceKnSlotBatchJob(env, row, {
+      pollTimeoutMs: options?.hermesPollTimeoutMs ?? 8_000,
+    });
+    const updated = await reloadAgentJob(env, row.id);
+    const progress = await getKnSlotBatchProgress(
+      env,
+      row.project_id,
+      row.id,
+      adv.action === "continue" ? (adv.hermesStatus ?? "running") : adv.action,
+    );
+    if (adv.action === "completed") {
+      return { row: updated ?? row, hermesStatus: "completed", slotBatchProgress: progress };
+    }
+    if (adv.action === "failed") {
+      return { row: updated ?? row, hermesStatus: "failed", slotBatchProgress: progress };
+    }
+    if (adv.action === "continue") {
+      return {
+        row: updated ?? row,
+        hermesStatus: adv.hermesStatus ?? "running",
+        slotBatchProgress: progress,
+      };
+    }
+    return { row: updated ?? row, hermesStatus: null, slotBatchProgress: progress };
   }
 
   if (row.skill_intent === "knowledge_network") {
@@ -1155,6 +1207,23 @@ export async function reconcileAgentJob(
 
   const runId = (row.hermes_run_id ?? "").trim();
   const ageMs = jobAgeMs(row);
+
+  /** 旧 monolithic full JSON 任务：超过 35 分钟仍 running → 僵尸失败（无 R2 slot-batch session） */
+  const KN_MONOLITHIC_STALE_MS = 35 * 60_000;
+  if (
+    row.skill_intent === "knowledge_network" &&
+    !slotSession &&
+    ageMs > KN_MONOLITHIC_STALE_MS &&
+    !runId.includes("jfo-kn-batch-")
+  ) {
+    await failAgentJob(
+      env,
+      row.id,
+      "全量 monolithic 任务超时（已切换 slot-batched 生成；请重新发起全量重做）",
+    );
+    const updated = await reloadAgentJob(env, row.id);
+    return { row: updated ?? row, hermesStatus: "failed" };
+  }
 
   if (runId.startsWith("chat-fallback-")) {
     if (ageMs > CHAT_FALLBACK_STALE_MS) {
@@ -1171,7 +1240,8 @@ export async function reconcileAgentJob(
 
   if (runId && isHermesAgentConfigured(env)) {
     try {
-      const snap = await pollHermesRun(env, runId);
+      const pollTimeout = options?.hermesPollTimeoutMs ?? 0;
+      const snap = await pollHermesRun(env, runId, { timeoutMs: pollTimeout });
       const hermesStatus = snap.status;
       const terminal = new Set(["completed", "failed", "cancelled"]);
       const errText = (snap.error ?? "").trim();

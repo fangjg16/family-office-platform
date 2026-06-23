@@ -1,4 +1,5 @@
 import type { AgentJobRow } from "./agent-jobs";
+import { stripStructuredKbPayloadFromDisplayAnswer } from "./knowledge-network-structured-kb-data";
 import {
   jobIdFromScopedMessageId,
   shouldProtectMessageFromSyncDelete,
@@ -553,8 +554,9 @@ export async function syncAgentJobTerminalToChat(
   const userId = job.user_id;
   const now = nowIso();
   const messageId = assistantMessageIdForJob(job.id);
+  const displayAnswer = stripStructuredKbPayloadFromDisplayAnswer(result.answer);
   const preview =
-    result.answer.replace(/\s+/gu, " ").trim().slice(0, 120) || "深度分析已完成";
+    displayAnswer.replace(/\s+/gu, " ").trim().slice(0, 120) || "深度分析已完成";
 
   const userSortIndex = await ensureUserMessageForCompletedJob(env, job, now);
   await ensureConversationForAgentJob(env, job, preview, now);
@@ -580,7 +582,7 @@ export async function syncAgentJobTerminalToChat(
   const msg: SyncChatMessage = {
     id: messageId,
     role: "assistant",
-    content: result.answer,
+    content: displayAnswer,
     time: existingMsg?.time_label ?? now,
     sortIndex,
     knowledgeNetworkHtml: result.knowledgeNetworkHtml,
@@ -608,7 +610,7 @@ export async function syncAgentJobTerminalToChat(
     const staleMsg: SyncChatMessage = {
       id: row.id,
       role: "assistant",
-      content: result.answer,
+      content: displayAnswer,
       time: row.time_label,
       sortIndex: row.sort_index,
       pendingJobId: null,

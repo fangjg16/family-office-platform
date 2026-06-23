@@ -20,3 +20,10 @@ ALLOWED_ORIGIN = "https://fangjg16.github.io"
 HERMES_MODEL = "qwen-plus"
 # Hermes / 知识网络文件回路拼 URL（与 Railway JFO_API_PUBLIC_BASE 一致）
 JFO_API_PUBLIC_BASE = "https://jfo-api.jfo-api.workers.dev"
+# slot-batch v2 受控 rollout（0/false=回退 v1；1=默认 v2）
+KN_SLOT_BATCH_V2_ENABLED = "1"
+# 并行 Hermes 上限 1–4（Railway 不稳时可改为 "2"）
+KN_SLOT_BATCH_PARALLEL_LIMIT = "4"
+# KN_SLOT_BATCH_FORCE_V1 = "1"
+# 本地 smoke API（batch2/3-smoke）；生产默认关闭，不设即 404
+# KN_SLOT_BATCH_SMOKE_ENABLED = "1"

@@ -95,6 +95,19 @@ import {
   stripHtmlToPlainTextForSummary,
 } from "./knowledge-network-intent";
 import { checkKnowledgeNetworkPipelineReady } from "./knowledge-network-guards";
+import { KN_SLOT_BATCH_PLAN } from "./knowledge-network-slot-batch-types";
+import { resolveSlotBatchArchitecture } from "./knowledge-network-slot-batch-config";
+import {
+  initKnSlotBatchSession,
+  processKnSlotBatchHermesBackground,
+  shouldUseSlotBatchGeneration,
+  startBatchHermesRun,
+  startKnSlotBatchBatch2SmokeJob,
+  startKnSlotBatchBatch3SmokeJob,
+  getKnSlotBatchProgress,
+  resumeKnSlotBatchPublish,
+  type Batch1SharedContextFixture,
+} from "./knowledge-network-slot-batch-orchestrator";
 import { workspaceUserDisplayName } from "./workspace-display-names";
 import { decodePathProjectId } from "./projects-resolve";
 import {
@@ -120,6 +133,59 @@ export interface Env {
   JFO_INTERNAL_KEY?: string;
   JFO_API_PUBLIC_BASE?: string;
   ALLOWED_ORIGIN?: string;
+  /** slot-batch v2 开关：0/false 回退 v1；默认启用 v2 */
+  KN_SLOT_BATCH_V2_ENABLED?: string;
+  /** 强制全量走 v1 串行 */
+  KN_SLOT_BATCH_FORCE_V1?: string;
+  /** 并行 Hermes batch 上限 1–4，默认 4 */
+  KN_SLOT_BATCH_PARALLEL_LIMIT?: string;
+  /** 开发 smoke API（batch2/3-smoke）；未设或 0 时路由返回 404 */
+  KN_SLOT_BATCH_SMOKE_ENABLED?: string;
+}
+
+function isSlotBatchSmokeApiEnabled(env: Env): boolean {
+  const v = (env.KN_SLOT_BATCH_SMOKE_ENABLED ?? "").trim().toLowerCase();
+  return v === "1" || v === "true" || v === "yes";
+}
+
+function parseSmokeSharedContextFixture(
+  body: { fixture?: Partial<Batch1SharedContextFixture> },
+  projectId: string,
+): { ok: true; fixture: Batch1SharedContextFixture } | { ok: false; error: string } {
+  const f = body.fixture;
+  if (!f || typeof f !== "object") {
+    return {
+      ok: false,
+      error:
+        "缺少 body.fixture（smoke 须由客户端提供完整 shared context；示例见 scripts/fixtures/smoke/）",
+    };
+  }
+  if (!f.shell || typeof f.shell !== "object") {
+    return { ok: false, error: "body.fixture.shell 必填" };
+  }
+  if (!f.slots || typeof f.slots !== "object" || Object.keys(f.slots).length === 0) {
+    return { ok: false, error: "body.fixture.slots 必填（含前置 batch 的 slot payload）" };
+  }
+  if (f.mode !== "initial" && f.mode !== "full") {
+    return { ok: false, error: "body.fixture.mode 须为 initial 或 full" };
+  }
+  if (!f.userMessage?.trim()) {
+    return { ok: false, error: "body.fixture.userMessage 必填" };
+  }
+  return {
+    ok: true,
+    fixture: {
+      projectId,
+      projectTitle: f.projectTitle?.trim() || projectId,
+      mode: f.mode,
+      userMessage: f.userMessage.trim(),
+      shell: f.shell,
+      slots: f.slots,
+      batchSummaries: f.batchSummaries,
+      slotQuality: f.slotQuality,
+      unresolvedGaps: f.unresolvedGaps,
+    },
+  };
 }
 
 type ChatBody = {
@@ -765,6 +831,10 @@ async function handleChatViaHermes(
     }
   }
 
+  const useSlotBatch =
+    params.chatMode === "knowledge_network" &&
+    Boolean(knMode && shouldUseSlotBatchGeneration(knMode));
+
   let instructions = buildHermesAgentInstructions(
     env,
     params.chatMode,
@@ -776,6 +846,7 @@ async function handleChatViaHermes(
       jobId,
       userMessage: params.message,
       hasExistingKb,
+      slotBatched: useSlotBatch,
     },
   );
 
@@ -801,7 +872,7 @@ async function handleChatViaHermes(
     }
   }
 
-  if (params.chatMode === "knowledge_network" && knMode && knMode !== "reorder") {
+  if (params.chatMode === "knowledge_network" && knMode && knMode !== "reorder" && !useSlotBatch) {
     try {
       const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(params.message);
       const hints = await buildKnowledgeNetworkMaterialHints(env, {
@@ -831,6 +902,92 @@ async function handleChatViaHermes(
     } catch {
       /* reading plan 失败不阻断 Hermes */
     }
+  }
+
+  if (useSlotBatch && knMode && (knMode === "initial" || knMode === "full")) {
+    const conversationId = params.conversationId?.trim() || `${params.projectId}-main`;
+    const architecture = resolveSlotBatchArchitecture(env, {
+      userMessage: params.message,
+    });
+    const session = await initKnSlotBatchSession({
+      env,
+      jobId,
+      projectId: params.projectId,
+      userId: params.userId,
+      conversationId,
+      mode: knMode,
+      projectTitle: params.projectTitleHint,
+      userMessage: params.message,
+      architecture,
+    });
+
+    const isV2 = architecture === "v2";
+    const started = isV2
+      ? ({ ok: true as const, primaryRunId: `kn-v2-pending-${jobId}` })
+      : await startBatchHermesRun(env, session, 0).then((r) =>
+          r.ok ? { ok: true as const, primaryRunId: r.runId } : r,
+        );
+
+    if (!started.ok) {
+      await failAgentJob(env, jobId, started.error);
+      return json(
+        {
+          error: started.error,
+          answer: `深度分析启动失败：${started.error}`,
+          citationMap: params.citationMap,
+          projectId: params.projectId,
+          async: false,
+        },
+        500,
+      );
+    }
+    await markAgentJobRunning(env, jobId, started.primaryRunId);
+    await persistAgentJobPendingChatTurn(env, {
+      userId: params.userId,
+      projectId: params.projectId,
+      conversationId,
+      jobId,
+      userMessage: params.message,
+    });
+    ctx.waitUntil(processKnSlotBatchHermesBackground(env, jobId));
+
+    const initialProgress = {
+      batchIndex: 0,
+      totalBatches: KN_SLOT_BATCH_PLAN.length,
+      phase: isV2 ? "preprocessing" : "waiting_hermes",
+      completedSlots: [] as string[],
+      currentBatchIndex: 0,
+      currentBatchSlots: [...KN_SLOT_BATCH_PLAN[0]!],
+      currentBatchStatus: isV2 ? "preprocessing" : "waiting_hermes",
+      repairAttempt: 0,
+      readPlan: session.lastReadPlan,
+      architectureVersion: isV2 ? 2 : 1,
+      parallelMode: isV2,
+      parallelLimit: session.parallelLimit,
+    };
+    return json({
+      async: true,
+      jobId,
+      assistantMessageId: `assistant-job-${jobId}`,
+      status: "running",
+      knGenerationMode: isV2 ? "slot-batch-v2" : "slot-batch-v1",
+      answer: isV2
+        ? "已提交 slot-batched v2（Worker 预处理 + 并行 batch / 13 slot）。全部 hard gate 通过后一次性入库。"
+        : `已提交 slot-batched v1（${KN_SLOT_BATCH_PLAN.length} 批次串行 / 13 slot）。全部 hard gate 通过后一次性入库。`,
+      citationMap: params.citationMap,
+      projectId: params.projectId,
+      chatMode: params.chatMode,
+      skillIntent: params.chatMode,
+      hermesRunId: started.primaryRunId,
+      deepPath: "hermes-runs",
+      slotBatchProgress: initialProgress,
+      currentBatchIndex: 0,
+      totalBatches: KN_SLOT_BATCH_PLAN.length,
+      currentBatchSlots: initialProgress.currentBatchSlots,
+      currentBatchStatus: initialProgress.currentBatchStatus,
+      repairAttempt: 0,
+      slotBatchArchitecture: architecture,
+    });
   }
 
   const { runId, error } = await startHermesRun(env, {
@@ -901,12 +1058,182 @@ async function handleChatViaHermes(
   });
 }
 
-/** Worker waitUntil 可能先于 Hermes 结束；轮询时发现 Run 已终态则回写 D1 */
+/** Worker waitUntil 可能先于 Hermes 结束；轮询时发现 Run 已终态则回写 D1（Hermes poll 短超时，不阻塞前端） */
 async function syncAgentJobFromHermesRun(env: Env, row: AgentJobRow): Promise<{
   row: AgentJobRow;
   hermesStatus: string | null;
+  slotBatchProgress?: Awaited<
+    ReturnType<typeof import("./knowledge-network-slot-batch-orchestrator").getKnSlotBatchProgress>
+  >;
 }> {
-  return reconcileAgentJob(env, row);
+  return reconcileAgentJob(env, row, { hermesPollTimeoutMs: 8_000 });
+}
+
+async function handleSlotBatchBatch2Smoke(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  projectId: string,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+  if (!isSlotBatchSmokeApiEnabled(env)) {
+    return json({ error: "Not Found" }, 404);
+  }
+  const userId = normalizeUserId(new URL(request.url).searchParams.get("userId"));
+  if (!userId) {
+    return json({ error: "缺少 userId 查询参数" }, 400);
+  }
+  const gate = checkKnowledgeNetworkPipelineReady(env);
+  if (!gate.ok) {
+    return json({ error: gate.error }, 503);
+  }
+
+  let body: { conversationId?: string; fixture?: Partial<Batch1SharedContextFixture> } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    body = {};
+  }
+
+  const parsed = parseSmokeSharedContextFixture(body, projectId);
+  if (!parsed.ok) {
+    return json({ error: parsed.error }, 400);
+  }
+  const fixture = parsed.fixture;
+  const conversationId = body.conversationId?.trim() || `batch2-smoke-${Date.now()}`;
+
+  const started = await startKnSlotBatchBatch2SmokeJob(env, {
+    projectId,
+    userId,
+    conversationId,
+    fixture,
+  });
+  if (!started.ok) {
+    return json({ error: started.error }, 500);
+  }
+
+  ctx.waitUntil(processKnSlotBatchHermesBackground(env, started.jobId));
+  const progress = await getKnSlotBatchProgress(env, projectId, started.jobId);
+
+  return json({
+    async: true,
+    jobId: started.jobId,
+    knGenerationMode: "slot-batch-batch2-smoke",
+    smokeBatch2Only: true,
+    currentBatchIndex: 1,
+    currentBatchSlots: [...KN_SLOT_BATCH_PLAN[1]!],
+    slotBatchProgress: progress,
+    message: "Batch 2 smoke 已启动（body.fixture 注入；成功不入库）。",
+  });
+}
+
+async function handleSlotBatchBatch3Smoke(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  projectId: string,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+  if (!isSlotBatchSmokeApiEnabled(env)) {
+    return json({ error: "Not Found" }, 404);
+  }
+  const userId = normalizeUserId(new URL(request.url).searchParams.get("userId"));
+  if (!userId) {
+    return json({ error: "缺少 userId 查询参数" }, 400);
+  }
+  const gate = checkKnowledgeNetworkPipelineReady(env);
+  if (!gate.ok) {
+    return json({ error: gate.error }, 503);
+  }
+
+  let body: { conversationId?: string; fixture?: Partial<Batch1SharedContextFixture> } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    body = {};
+  }
+
+  const parsed = parseSmokeSharedContextFixture(body, projectId);
+  if (!parsed.ok) {
+    return json({ error: parsed.error }, 400);
+  }
+  const fixture = parsed.fixture;
+  const conversationId = body.conversationId?.trim() || `batch3-smoke-${Date.now()}`;
+
+  const started = await startKnSlotBatchBatch3SmokeJob(env, {
+    projectId,
+    userId,
+    conversationId,
+    fixture,
+  });
+  if (!started.ok) {
+    return json({ error: started.error }, 500);
+  }
+
+  ctx.waitUntil(processKnSlotBatchHermesBackground(env, started.jobId));
+  const progress = await getKnSlotBatchProgress(env, projectId, started.jobId);
+
+  return json({
+    async: true,
+    jobId: started.jobId,
+    knGenerationMode: "slot-batch-batch3-smoke",
+    smokeBatch3Only: true,
+    currentBatchIndex: 2,
+    currentBatchSlots: [...KN_SLOT_BATCH_PLAN[2]!],
+    slotBatchProgress: progress,
+    message: "Batch 3 smoke 已启动（body.fixture 注入；成功不入库）。",
+  });
+}
+
+async function handleSlotBatchResumePublish(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+  projectId: string,
+): Promise<Response> {
+  if (request.method !== "POST") {
+    return json({ error: "Method Not Allowed" }, 405);
+  }
+  const userId = normalizeUserId(new URL(request.url).searchParams.get("userId"));
+  if (!userId) {
+    return json({ error: "缺少 userId 查询参数" }, 400);
+  }
+  const gate = checkKnowledgeNetworkPipelineReady(env);
+  if (!gate.ok) {
+    return json({ error: gate.error }, 503);
+  }
+
+  let body: { jobId?: string } = {};
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    body = {};
+  }
+  const jobId = body.jobId?.trim();
+  if (!jobId) {
+    return json({ error: "缺少 body.jobId（须为已有 R2 slot-batch session 的 agent job）" }, 400);
+  }
+
+  ctx.waitUntil(
+    (async () => {
+      await resumeKnSlotBatchPublish(env, { projectId, jobId, userId });
+    })(),
+  );
+
+  const progress = await getKnSlotBatchProgress(env, projectId, jobId);
+
+  return json({
+    async: true,
+    jobId,
+    knGenerationMode: "slot-batch-resume-publish",
+    resumePublishOnly: true,
+    slotBatchProgress: progress,
+    message: "resume-publish 已启动（仅 Worker publishing；不调 Hermes）。",
+  });
 }
 
 async function handleAgentJobPoll(
@@ -947,6 +1274,7 @@ async function handleAgentJobPoll(
     hermesStatus,
     knPutReceived,
     elapsedSec,
+    slotBatchProgress: synced.slotBatchProgress ?? undefined,
   });
 
   let projectKnowledgeNetworkVersion: number | undefined;
@@ -962,6 +1290,8 @@ async function handleAgentJobPoll(
       /* 忽略 */
     }
   }
+
+  const sb = synced.slotBatchProgress;
 
   return json({
     jobId: row.id,
@@ -979,6 +1309,13 @@ async function handleAgentJobPoll(
     deepPath,
     progressLabel,
     jobStage,
+    knGenerationMode: sb ? "slot-batch" : undefined,
+    slotBatchProgress: sb ?? undefined,
+    currentBatchIndex: sb?.currentBatchIndex,
+    totalBatches: sb?.totalBatches,
+    currentBatchSlots: sb?.currentBatchSlots,
+    currentBatchStatus: sb?.currentBatchStatus,
+    repairAttempt: sb?.repairAttempt,
   });
 }
 
@@ -1319,6 +1656,24 @@ export default {
           version,
           url.searchParams.get("userId"),
         );
+      } else if (
+        /^\/api\/projects\/[^/]+\/knowledge-network\/slot-batch-resume-publish$/u.test(path) &&
+        request.method === "POST"
+      ) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        response = await handleSlotBatchResumePublish(request, env, ctx, projectId);
+      } else if (
+        /^\/api\/projects\/[^/]+\/knowledge-network\/slot-batch-batch3-smoke$/u.test(path) &&
+        request.method === "POST"
+      ) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        response = await handleSlotBatchBatch3Smoke(request, env, ctx, projectId);
+      } else if (
+        /^\/api\/projects\/[^/]+\/knowledge-network\/slot-batch-batch2-smoke$/u.test(path) &&
+        request.method === "POST"
+      ) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        response = await handleSlotBatchBatch2Smoke(request, env, ctx, projectId);
       } else if (/^\/api\/projects\/[^/]+\/knowledge-network$/u.test(path)) {
         const projectId = decodePathProjectId(path.split("/")[3] ?? "");
         if (request.method === "GET") {
