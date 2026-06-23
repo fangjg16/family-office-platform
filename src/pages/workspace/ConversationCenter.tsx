@@ -53,6 +53,8 @@ import { cancelAgentJobRemote, mergeAsyncAgentJobIntoConversation } from "@/lib/
 import {
   buildProductizedJobProgressLabel,
   formatAgentJobFailureDisplay,
+  productizeAssistantBubbleContent,
+  productizeJobProgressLabelForDisplay,
   productizeKnJobSubmitContent,
   productizeStreamStatusLabel,
   type SlotBatchProgressLike,
@@ -3550,10 +3552,13 @@ export default function ConversationCenter() {
                         )
                       : null;
                   const baseAssistantDisplay = knPrepared?.displayContent ?? rawAssistantText;
-                  const displayAssistantText =
-                    m.pendingJobId || /\bslot-batched\b|hard\s*gate|\bWorker\b/i.test(baseAssistantDisplay)
-                      ? productizeKnJobSubmitContent(baseAssistantDisplay)
-                      : baseAssistantDisplay;
+                  const displayAssistantText = productizeAssistantBubbleContent(
+                    baseAssistantDisplay,
+                    { pendingJobId: m.pendingJobId },
+                  );
+                  const displayJobProgressLabel = m.pendingJobId
+                    ? productizeJobProgressLabelForDisplay(m.jobProgressLabel)
+                    : m.jobProgressLabel;
                   const canDeleteMessage = !streaming;
                   const deleteThisMessage = canDeleteMessage
                     ? () => deleteLiveMessage(m.id)
@@ -3618,7 +3623,7 @@ export default function ConversationCenter() {
                       {m.pendingJobId ? (
                         <div className="mt-3 flex flex-col gap-1.5">
                           <ChatThinkingBadge>
-                            {m.jobProgressLabel?.trim() || "正在生成，请稍候…"}
+                            {displayJobProgressLabel?.trim() || "正在生成，请稍候…"}
                           </ChatThinkingBadge>
                           <p className="text-[11px] text-muted-foreground/90">
                             可保持本页打开；刷新后会自动继续等待结果。

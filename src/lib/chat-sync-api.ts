@@ -1,5 +1,6 @@
 import {
   productizeKnJobSubmitContent,
+  productizeLiveChatMessageForDisplay,
 } from "@/lib/agent-job-display";
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import type { PersistedConversation } from "@/workspace/chat-persistence";
@@ -169,7 +170,8 @@ export async function attachActiveAgentJobsToMessages(
       if (!activeJobIds.has(m.pendingJobId)) {
         return { ...m, pendingJobId: undefined, jobProgressLabel: undefined };
       }
-      return { ...m };
+      const display = productizeLiveChatMessageForDisplay(m);
+      return { ...m, content: display.content, jobProgressLabel: display.jobProgressLabel };
     });
   }
 

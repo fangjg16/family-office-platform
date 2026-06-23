@@ -42,6 +42,60 @@ function withWaited(base: string, elapsedSec?: number): string {
   return waited ? `${base}（已等待 ${waited}）` : base;
 }
 
+const TECHNICAL_PROGRESS_RE =
+  /\bslot-batched\b|批次\s*\d+\s*\/\s*\d+|已完成\s*\d+\s*\/\s*\d+\s*slot|入库\s*·|组装与入库/i;
+
+export function isTechnicalAgentJobCopy(text: string): boolean {
+  return TECHNICAL_SUBMIT_RE.test(text) || TECHNICAL_PROGRESS_RE.test(text);
+}
+
+/** 展示层：助手气泡正文（含 D1 存量、刷新恢复） */
+export function productizeAssistantBubbleContent(
+  content: string,
+  opts?: { pendingJobId?: string | null },
+): string {
+  const t = content.trim();
+  if (!t) {
+    return opts?.pendingJobId
+      ? "已开始生成项目知识网络，完成后将自动更新本对话。"
+      : "";
+  }
+  if (opts?.pendingJobId || isTechnicalAgentJobCopy(t)) {
+    return productizeKnJobSubmitContent(t);
+  }
+  return t;
+}
+
+/** 展示层：进度条文案（兜底旧 bundle / 未轮询前的内存态） */
+export function productizeJobProgressLabelForDisplay(
+  label: string | undefined,
+  fallback = "正在生成，请稍候…",
+): string {
+  const t = (label ?? "").trim();
+  if (!t) return fallback;
+  if (t === "知识网络生成未完成") return t;
+  if (isTechnicalAgentJobCopy(t) || TECHNICAL_PROGRESS_RE.test(t)) {
+    return productizeRawProgressLabel(t);
+  }
+  return t;
+}
+
+export function productizeLiveChatMessageForDisplay(m: {
+  role: string;
+  content: string;
+  pendingJobId?: string | null;
+  jobProgressLabel?: string;
+}): { content: string; jobProgressLabel?: string } {
+  if (m.role !== "assistant") return { content: m.content, jobProgressLabel: m.jobProgressLabel };
+  const content = productizeAssistantBubbleContent(m.content, {
+    pendingJobId: m.pendingJobId,
+  });
+  const jobProgressLabel = m.pendingJobId
+    ? productizeJobProgressLabelForDisplay(m.jobProgressLabel)
+    : m.jobProgressLabel;
+  return { content, jobProgressLabel };
+}
+
 /** 任务提交后助手气泡首段（API answer / D1 存量） */
 export function productizeKnJobSubmitContent(content: string): string {
   const t = content.trim();
@@ -66,7 +120,7 @@ export function productizeRawProgressLabel(
   if (t === "知识网络生成未完成" || /生成未完成|publishError/i.test(t)) {
     return "知识网络生成未完成";
   }
-  if (/slot-batched.*批次\s*(\d+)\s*\/\s*(\d+)/i.test(t)) {
+  if (/slot-batched|批次\s*(\d+)\s*\/\s*(\d+)/i.test(t)) {
     const m = t.match(/批次\s*(\d+)\s*\/\s*(\d+)/i);
     const batchNo = m?.[1] ?? "?";
     const total = m?.[2] ?? "?";

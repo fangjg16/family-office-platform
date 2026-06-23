@@ -7,6 +7,7 @@ import {
   type DeletedMessageRef,
   type RemoteChatState,
 } from "@/lib/chat-sync-api";
+import { productizeLiveChatMessageForDisplay } from "@/lib/agent-job-display";
 import { ENABLE_LIVE_CHAT, AI_CHAT_ENDPOINT } from "@/lib/project-api";
 import { sortMessagesByConversation } from "@/workspace/chat-message-order";
 
@@ -27,6 +28,24 @@ export type ChatPersistOptions = {
   skipMerge?: boolean;
 };
 
+function productizeMessagesForDisplay(
+  messagesByConversation: Record<string, LiveChatMessage[]>,
+): Record<string, LiveChatMessage[]> {
+  const out: Record<string, LiveChatMessage[]> = {};
+  for (const [convId, msgs] of Object.entries(messagesByConversation)) {
+    out[convId] = (msgs ?? []).map((m) => {
+      if (m.role !== "assistant") return m;
+      const display = productizeLiveChatMessageForDisplay(m);
+      return {
+        ...m,
+        content: display.content,
+        jobProgressLabel: display.jobProgressLabel ?? m.jobProgressLabel,
+      };
+    });
+  }
+  return out;
+}
+
 /** 仅从云端 D1 加载；失败或不可用时返回 null */
 export async function loadChatStateForUser(
   userId: string,
@@ -46,14 +65,16 @@ export async function loadChatStateForUser(
       );
       return {
         conversations: remote.conversations,
-        messagesByConversation: sortMessagesByConversation(withJobs),
+        messagesByConversation: sortMessagesByConversation(
+          productizeMessagesForDisplay(withJobs),
+        ),
         syncedAt: remote.syncedAt,
       };
     } catch {
       return {
         conversations: remote.conversations,
         messagesByConversation: sortMessagesByConversation(
-          remote.messagesByConversation,
+          productizeMessagesForDisplay(remote.messagesByConversation),
         ),
         syncedAt: remote.syncedAt,
       };
