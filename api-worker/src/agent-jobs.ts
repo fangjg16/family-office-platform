@@ -41,6 +41,7 @@ import {
   shouldUseStructuredKbDataMode,
 } from "./knowledge-network-structured-kb-data";
 import { formatKnVersionDisplay, resolveKnVersionOnUpload } from "./knowledge-network-version";
+import { resolveKnUserMessage } from "./kn-job-user-message";
 import { resolveKnowledgeNetworkSlotsFromMessage } from "./knowledge-network-slot-aliases";
 import {
   getProjectKnowledgeNetworkMeta,
@@ -49,7 +50,6 @@ import {
 } from "./project-knowledge-network";
 import {
   advanceKnSlotBatchJob,
-  buildSlotBatchHermesInstructions,
   initKnSlotBatchSession,
   processKnSlotBatchHermesBackground,
   readKnSlotBatchSession,
@@ -780,9 +780,10 @@ export async function finalizeKnowledgeNetworkJobResult(
       knowledgeNetworkHtml: existingHtml,
     };
   }
-  const structuredFallbackError = structuredWritten.skipped
-    ? null
-    : structuredWritten.error;
+  const structuredFallbackError =
+    !structuredWritten.ok && "error" in structuredWritten
+      ? structuredWritten.error
+      : null;
 
   const patchWritten = await tryWriteKnowledgeNetworkFromSlotPatch(
     env,

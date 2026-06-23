@@ -2,7 +2,8 @@
 export function parseKnVersionFromFilename(filename: string): string | null {
   const base = filename.replace(/\.html?$/i, "").trim();
   if (!base) return null;
-  const re = /\bv(\d+(?:\.\d{1,2})?)\b/gi;
+  // \b 匹配空格/连字符前；_v 覆盖 draft_v1_final_v2.1 类文件名
+  const re = /(?:\b|_)v(\d+(?:\.\d{1,2})?)\b/gi;
   let last: string | null = null;
   for (const m of base.matchAll(re)) {
     if (m[1]) last = m[1];
