@@ -376,6 +376,11 @@ export function buildHermesAgentInstructions(
   return lines.join("\n");
 }
 
+/** Hermes Railway 并发上限（max 10 runs）— 应 backoff 重试，勿直接 fail job */
+export function isHermesCapacityError(message: string | null | undefined): boolean {
+  return /too many concurrent runs/i.test(message ?? "");
+}
+
 export async function startHermesRun(
   env: HermesAgentEnv,
   params: {

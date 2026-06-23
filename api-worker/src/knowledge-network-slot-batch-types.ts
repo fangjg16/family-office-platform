@@ -17,6 +17,7 @@ export const KN_SLOT_BATCH_PLAN: readonly (readonly CanonicalKbSlot[])[] = [
 export type KnSlotBatchPhase =
   | "preprocessing"
   | "waiting_batches"
+  | "waiting_capacity"
   | "waiting_hermes"
   | "processing"
   | "between_batches"

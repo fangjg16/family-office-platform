@@ -8,6 +8,7 @@ import {
   pollHermesRun,
   startHermesRun,
   waitForHermesRunComplete,
+  isHermesCapacityError,
   type HermesAgentEnv,
 } from "./hermes-agent";
 import { buildHermesStructuredKbRepairPrompt } from "./hermes-knowledge-network";
@@ -328,7 +329,11 @@ async function runLiveStructuredKbRepairPass(
     history: [{ role: "assistant", content: originalAnswer.slice(0, 12000) }],
   });
   if (!runId) {
-    return { ok: false, error: startErr ?? "Hermes repair run 启动失败" };
+    const err = startErr ?? "Hermes repair run 启动失败";
+    if (isHermesCapacityError(err)) {
+      return { ok: false, error: `capacity_wait: ${err}` };
+    }
+    return { ok: false, error: err };
   }
   const snap = await waitForHermesRunComplete(env, runId);
   if (snap.status !== "completed" || !snap.output.trim()) {

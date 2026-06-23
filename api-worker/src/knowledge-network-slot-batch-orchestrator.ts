@@ -1,7 +1,7 @@
 import type { AgentJobRow } from "./agent-jobs";
 import { createAgentJob, getAgentJob, getAgentJobById, markAgentJobRunning } from "./agent-jobs";
 import type { HermesAgentEnv } from "./hermes-agent";
-import { isHermesAgentConfigured, pollHermesRun, startHermesRun, waitForHermesRun, cancelHermesRun } from "./hermes-agent";
+import { isHermesAgentConfigured, pollHermesRun, startHermesRun, waitForHermesRun, cancelHermesRun, isHermesCapacityError } from "./hermes-agent";
 import {
   resolveMaxParallelStartsPerInvocation,
   resolveParallelBatchLimit,
@@ -957,7 +957,7 @@ function mergeBatchIntoSession(
 export async function startParallelBatchHermesRuns(
   env: SlotBatchOrchestratorEnv,
   session: KnSlotBatchSession,
-): Promise<{ ok: true; primaryRunId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; primaryRunId: string; capacityWait?: boolean } | { ok: false; error: string }> {
   if (!session.prep) {
     await runKnSlotBatchPreprocess(env, session);
   }
@@ -979,9 +979,20 @@ export async function startParallelBatchHermesRuns(
   for (let batchIndex = 0; batchIndex < initial; batchIndex++) {
     const started = await startBatchHermesRun(env, session, batchIndex);
     if (!started.ok) {
+      if (isHermesCapacityError(started.error)) {
+        runs[batchIndex] = { batchIndex, status: "queued", error: started.error };
+        markSessionWaitingCapacity(session);
+        session.batchRuns = runs;
+        await writeKnSlotBatchSession(env, session);
+        if (primaryRunId) {
+          return { ok: true, primaryRunId };
+        }
+        return { ok: true, primaryRunId: "", capacityWait: true };
+      }
       await cancelOtherParallelRuns(env, session);
       return { ok: false, error: `批次 ${batchIndex + 1} 启动失败：${started.error}` };
     }
+    clearSessionWaitingCapacity(session);
     runs[batchIndex] = {
       batchIndex,
       runId: started.runId,
@@ -1000,8 +1011,16 @@ export async function startParallelBatchHermesRuns(
   return { ok: true, primaryRunId };
 }
 
-function isHermesCapacityError(msg: string | undefined): boolean {
-  return /too many concurrent runs/i.test(msg ?? "");
+function markSessionWaitingCapacity(session: KnSlotBatchSession): void {
+  session.phase = "waiting_capacity";
+  session.updatedAt = nowIso();
+}
+
+function clearSessionWaitingCapacity(session: KnSlotBatchSession): void {
+  if (session.phase === "waiting_capacity") {
+    session.phase = session.parallelMode ? "waiting_batches" : "waiting_hermes";
+    session.updatedAt = nowIso();
+  }
 }
 
 /** repair 进行中时暂停拉起新 batch，避免 Hermes 并发顶满 */
@@ -1039,11 +1058,18 @@ async function tryStartQueuedParallelBatches(
     if (run.status !== "queued") continue;
     const started = await startBatchHermesRun(env, session, run.batchIndex);
     if (!started.ok) {
-      if (isHermesCapacityError(started.error)) continue;
+      if (isHermesCapacityError(started.error)) {
+        run.status = "queued";
+        run.error = started.error;
+        run.runId = undefined;
+        markSessionWaitingCapacity(session);
+        continue;
+      }
       run.status = "failed";
       run.error = started.error;
       continue;
     }
+    clearSessionWaitingCapacity(session);
     run.runId = started.runId;
     run.status = "running";
     run.startedAt = nowIso();
@@ -1125,9 +1151,18 @@ async function advanceParallelSlotBatches(
           userMessageOverride: repairMsg,
         });
         if (!started.ok) {
+          if (isHermesCapacityError(started.error)) {
+            run.status = "queued";
+            run.error = started.error;
+            run.runId = undefined;
+            markSessionWaitingCapacity(session);
+            await writeKnSlotBatchSession(env, session);
+            continue;
+          }
           await failParallelSlotBatchJob(env, session, row.id, started.error);
           return { action: "failed", error: started.error };
         }
+        clearSessionWaitingCapacity(session);
         run.runId = started.runId;
         run.status = "running";
         run.startedAt = nowIso();
@@ -1170,9 +1205,18 @@ async function advanceParallelSlotBatches(
           userMessageOverride: repairMsg,
         });
         if (!started.ok) {
+          if (isHermesCapacityError(started.error)) {
+            run.status = "queued";
+            run.error = started.error;
+            run.runId = undefined;
+            markSessionWaitingCapacity(session);
+            await writeKnSlotBatchSession(env, session);
+            continue;
+          }
           await failParallelSlotBatchJob(env, session, row.id, started.error);
           return { action: "failed", error: started.error };
         }
+        clearSessionWaitingCapacity(session);
         run.runId = started.runId;
         run.status = "running";
         anyRunning = true;
@@ -1196,6 +1240,9 @@ async function advanceParallelSlotBatches(
   const allDone = runs.length === KN_SLOT_BATCH_PLAN.length && runs.every((r) => r.merged);
   if (!allDone) {
     const stillRunning = runs.some((r) => r.status === "running");
+    if (session.phase === "waiting_capacity") {
+      return { action: "continue", hermesStatus: "queued" };
+    }
     return { action: "continue", hermesStatus: stillRunning || anyRunning ? "running" : "processing" };
   }
 
@@ -1272,10 +1319,16 @@ export async function advanceKnSlotBatchJob(
       await failSlotBatchJob(env, row.id, started.error);
       return { action: "failed", error: started.error };
     }
-    return { action: "continue", hermesStatus: "running" };
+    return {
+      action: "continue",
+      hermesStatus: started.capacityWait ? "queued" : "running",
+    };
   }
 
-  if (session.parallelMode && session.phase === "waiting_batches") {
+  if (
+    session.parallelMode &&
+    (session.phase === "waiting_batches" || session.phase === "waiting_capacity")
+  ) {
     return advanceParallelSlotBatches(env, row, session, options);
   }
 
@@ -1287,6 +1340,7 @@ export async function advanceKnSlotBatchJob(
     session.phase === "assembling" ||
     session.phase === "publishing" ||
     session.phase === "waiting_batches" ||
+    session.phase === "waiting_capacity" ||
     session.phase === "preprocessing" ||
     session.currentBatchIndex >= KN_SLOT_BATCH_PLAN.length;
 
@@ -1373,9 +1427,15 @@ export async function advanceKnSlotBatchJob(
           userMessageOverride: repairMsg,
         });
         if (!started.ok) {
+          if (isHermesCapacityError(started.error)) {
+            markSessionWaitingCapacity(session);
+            await writeKnSlotBatchSession(env, session);
+            return { action: "continue", hermesStatus: "queued" };
+          }
           await failSlotBatchJob(env, row.id, started.error);
           return { action: "failed", error: started.error };
         }
+        clearSessionWaitingCapacity(session);
         return { action: "continue", hermesStatus: "running" };
       }
       session.phase = "failed";
@@ -1479,9 +1539,15 @@ export async function advanceKnSlotBatchJob(
       }
       const started = await startBatchHermesRun(env, session, session.currentBatchIndex);
       if (!started.ok) {
+        if (isHermesCapacityError(started.error)) {
+          markSessionWaitingCapacity(session);
+          await writeKnSlotBatchSession(env, session);
+          return { action: "continue", hermesStatus: "queued" };
+        }
         await failSlotBatchJob(env, row.id, started.error);
         return { action: "failed", error: started.error };
       }
+      clearSessionWaitingCapacity(session);
       return { action: "continue", hermesStatus: "running" };
     }
 
@@ -1530,6 +1596,7 @@ export async function processKnSlotBatchHermesBackground(
     if (
       session.phase === "preprocessing" ||
       session.phase === "waiting_batches" ||
+      session.phase === "waiting_capacity" ||
       session.phase === "between_batches" ||
       session.phase === "assembling" ||
       session.phase === "publishing"
@@ -1548,6 +1615,7 @@ function deriveCurrentBatchStatus(
   hermesStatus: string | null,
 ): string {
   if (phase === "preprocessing") return "preprocessing";
+  if (phase === "waiting_capacity") return "waiting_capacity";
   if (phase === "waiting_batches") return "parallel_batches";
   if (phase === "waiting_hermes") {
     const hs = (hermesStatus ?? "").toLowerCase();
