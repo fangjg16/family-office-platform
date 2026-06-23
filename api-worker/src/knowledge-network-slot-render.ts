@@ -7,7 +7,7 @@ import {
   rowHasContentButNoMapping,
 } from "./knowledge-network-content-row-quality";
 import { isGapMarkedRow, splitFactAndGapRows } from "./knowledge-network-coverage-target";
-import { normalizeSlotPayload } from "./knowledge-network-slot-normalizer";
+import { normalizeGapCallouts, normalizeSlotPayload } from "./knowledge-network-slot-normalizer";
 import { ROW_SPECS } from "./knowledge-network-row-columns";
 import type {
   BusinessOperationsPayload,
@@ -123,9 +123,10 @@ function renderMissingCallout(points: string | string[]): string {
   );
 }
 
-function renderGapCallouts(gaps?: GapCallout[]): string {
-  if (!gaps?.length) return "";
-  return gaps
+function renderGapCallouts(gaps?: GapCallout[] | unknown): string {
+  const normalized = normalizeGapCallouts(gaps);
+  if (!normalized.length) return "";
+  return normalized
     .map((g) => {
       if (g.confidence === "gap") return renderMissingCallout(g.text);
       const title =

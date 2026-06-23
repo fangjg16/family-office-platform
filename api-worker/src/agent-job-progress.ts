@@ -110,10 +110,14 @@ export function buildAgentJobProgressLabel(params: {
 
   if (row.skill_intent === "knowledge_network") {
     if (slotBatchProgress) {
+      const phase = slotBatchProgress.phase;
+      const publishError = slotBatchProgress.publishError;
+      if (phase === "failed" || (publishError && publishError.trim())) {
+        return { progressLabel: "知识网络生成未完成", jobStage: "failed" };
+      }
       const batchNo = slotBatchProgress.batchIndex + 1;
       const total = slotBatchProgress.totalBatches;
       const slotsDone = slotBatchProgress.completedSlots.length;
-      const phase = slotBatchProgress.phase;
       let stage: AgentJobStage = "generating_kb";
       if (phase === "assembling" || phase === "publishing") stage = "validating_html";
       if (phase === "between_batches") stage = "reading_materials";

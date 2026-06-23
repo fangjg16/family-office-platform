@@ -5,6 +5,7 @@ import {
   isMeaningfulCell,
   pickRowCell,
 } from "./knowledge-network-content-row-quality";
+import { normalizeGapCallouts } from "./knowledge-network-gap-callouts";
 import type { SlotQualityIssue } from "./knowledge-network-full-quality-contract";
 import { ROW_SPECS, type RowSpecKey } from "./knowledge-network-row-columns";
 
@@ -52,12 +53,8 @@ export function splitFactAndGapRows(
 
 export function countGapCallouts(payload: Record<string, unknown>, ...keys: string[]): number {
   for (const key of keys) {
-    const gaps = payload[key];
-    if (!Array.isArray(gaps)) continue;
-    const n = gaps.filter(
-      (g) => isRecord(g) && isMeaningfulCell(g.text ?? g.message ?? g.note ?? g.缺口),
-    ).length;
-    if (n > 0) return n;
+    const gaps = normalizeGapCallouts(payload[key]);
+    if (gaps.length > 0) return gaps.length;
   }
   return 0;
 }

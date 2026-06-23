@@ -17,7 +17,10 @@ import {
   type ComponentDef,
   type ComponentKind,
 } from "./knowledge-network-slot-module-schema";
+import { normalizeGapCallouts } from "./knowledge-network-gap-callouts";
 import type { GapCallout, SlotPayloadBySlot } from "./knowledge-network-structured-patch-types";
+
+export { normalizeGapCallouts } from "./knowledge-network-gap-callouts";
 
 /** 唯一 normalize 入口。语义说明见 `knowledge-network-slot-schema-dev.md`。 */
 
@@ -341,7 +344,7 @@ function ensureGapCallout(
   warnings: NormalizeWarning[],
 ): void {
   if (!hadInput || keptCount > 0 || !comp.gapCalloutLabel) return;
-  const gaps = Array.isArray(p.gaps) ? [...(p.gaps as GapCallout[])] : [];
+  const gaps = normalizeGapCallouts(p.gaps);
   const text = `${comp.gapCalloutLabel}：资料不足，待补结构化 gap row 或 callout。`;
   if (!gaps.some((g) => isRecord(g) && String(g.text ?? "").includes(comp.gapCalloutLabel!))) {
     gaps.push({ text, confidence: "gap" });
@@ -421,6 +424,10 @@ export function normalizeSlotPayload<S extends CanonicalKbSlot>(
 
     if (value === undefined) delete p[comp.field];
     else p[comp.field] = value;
+  }
+
+  if (p.gaps !== undefined) {
+    p.gaps = normalizeGapCallouts(p.gaps);
   }
 
   return {

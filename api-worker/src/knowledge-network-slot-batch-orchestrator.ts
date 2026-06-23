@@ -1,5 +1,5 @@
 import type { AgentJobRow } from "./agent-jobs";
-import { createAgentJob, getAgentJob, getAgentJobById, markAgentJobRunning } from "./agent-jobs";
+import { createAgentJob, getAgentJob, getAgentJobById, isAgentJobActive, markAgentJobRunning } from "./agent-jobs";
 import type { HermesAgentEnv } from "./hermes-agent";
 import { isHermesAgentConfigured, pollHermesRun, startHermesRun, waitForHermesRun, cancelHermesRun, isHermesCapacityError } from "./hermes-agent";
 import {
@@ -55,6 +55,12 @@ import {
 import type { StructuredKbData, StructuredKbSlots } from "./knowledge-network-structured-kb-data-types";
 import type { SlotPayloadBySlot } from "./knowledge-network-structured-patch-types";
 import { formatKnVersionDisplay, resolveKnVersionOnUpload } from "./knowledge-network-version";
+import {
+  isKnRenderGapTypeError,
+  knPublishFailedAnswer,
+  knPublishFailedStoredError,
+  KN_RENDER_GAP_TYPE_ERROR_CODE,
+} from "./knowledge-network-gap-callouts";
 import {
   getProjectKnowledgeNetworkMeta,
   readProjectKnowledgeNetworkHtml,
@@ -259,12 +265,21 @@ async function runKnSlotBatchPublishing(
   return { action: "completed", answer, html: htmlToStore };
 }
 
-async function failSlotBatchJob(env: SlotBatchOrchestratorEnv, jobId: string, error: string): Promise<void> {
-  const answer = `深度分析失败：${error}`;
+async function failSlotBatchJob(
+  env: SlotBatchOrchestratorEnv,
+  jobId: string,
+  error: string,
+  options?: { answer?: string; errorCode?: string },
+): Promise<void> {
+  const errorCode =
+    options?.errorCode ??
+    (isKnRenderGapTypeError(error) ? KN_RENDER_GAP_TYPE_ERROR_CODE : undefined);
+  const storedError = errorCode ? knPublishFailedStoredError(error, errorCode) : error;
+  const answer = options?.answer ?? knPublishFailedAnswer(storedError);
   await env.DB.prepare(
     `UPDATE agent_jobs SET status = 'failed', error = ?, answer = ?, knowledge_network_html = NULL, updated_at = ? WHERE id = ?`,
   )
-    .bind(error, answer, nowIso(), jobId)
+    .bind(storedError, answer, nowIso(), jobId)
     .run();
   const row = await env.DB.prepare(
     `SELECT id, project_id, user_id, conversation_id, skill_intent, status,
@@ -1309,7 +1324,16 @@ export async function advanceKnSlotBatchJob(
   const session = await readKnSlotBatchSession(env, row.project_id, row.id);
   if (!session) return { action: "idle" };
 
-  if (session.phase === "done" || session.phase === "failed") {
+  if (session.phase === "done") {
+    return { action: "idle" };
+  }
+
+  if (session.phase === "failed") {
+    if (isAgentJobActive(row.status)) {
+      const errDetail = session.publishError ?? session.lastError ?? "知识网络生成失败";
+      await failSlotBatchJob(env, row.id, errDetail);
+      return { action: "failed", error: errDetail };
+    }
     return { action: "idle" };
   }
 
