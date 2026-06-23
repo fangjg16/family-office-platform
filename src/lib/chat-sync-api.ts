@@ -1,6 +1,12 @@
+import {
+  productizeKnJobSubmitContent,
+} from "@/lib/agent-job-display";
 import type { LiveChatMessage } from "@/workspace/chat-types";
 import type { PersistedConversation } from "@/workspace/chat-persistence";
 import { AI_CHAT_ENDPOINT, apiBaseFromChatEndpoint } from "@/lib/project-api";
+
+const JOB_SUBMITTED_LABEL = "任务已提交，正在准备…";
+const JOB_RESUMED_LABEL = "生成进行中，刷新后将继续等待…";
 
 export type DeletedMessageRef = {
   conversationId: string;
@@ -62,9 +68,9 @@ export function mergeAsyncAgentJobIntoConversation(
         ...m,
         id: assistantJobId,
         role: "assistant" as const,
-        content: opts.assistantContent,
+        content: productizeKnJobSubmitContent(opts.assistantContent),
         pendingJobId: opts.jobId,
-        jobProgressLabel: m.jobProgressLabel ?? "任务已提交，正在连接引擎…",
+        jobProgressLabel: m.jobProgressLabel ?? JOB_SUBMITTED_LABEL,
         isStreaming: false,
         streamStatusLabel: undefined,
       };
@@ -78,10 +84,10 @@ export function mergeAsyncAgentJobIntoConversation(
       {
         id: assistantJobId,
         role: "assistant" as const,
-        content: opts.assistantContent,
+        content: productizeKnJobSubmitContent(opts.assistantContent),
         time,
         pendingJobId: opts.jobId,
-        jobProgressLabel: "任务已提交，正在连接引擎…",
+        jobProgressLabel: JOB_SUBMITTED_LABEL,
       },
     ];
   }
@@ -186,11 +192,11 @@ export async function attachActiveAgentJobsToMessages(
       list.push({
         id: job.assistantMessageId,
         role: "assistant",
-        content: "正在深度分析…",
+        content: "正在生成，请稍候…",
         time: new Date().toLocaleString("zh-CN"),
         sortIndex: maxSort + 1,
         pendingJobId: job.jobId,
-        jobProgressLabel: "深度分析进行中，刷新后已恢复等待…",
+        jobProgressLabel: JOB_RESUMED_LABEL,
       });
       out[convId] = list;
       continue;
@@ -201,10 +207,10 @@ export async function attachActiveAgentJobsToMessages(
       id: job.assistantMessageId,
       pendingJobId: job.jobId,
       jobProgressLabel:
-        list[idx].jobProgressLabel?.trim() || "深度分析进行中，刷新后已恢复等待…",
+        list[idx].jobProgressLabel?.trim() || JOB_RESUMED_LABEL,
       content: list[idx].content?.trim()
-        ? list[idx].content
-        : "正在深度分析…",
+        ? productizeKnJobSubmitContent(list[idx].content!)
+        : "正在生成，请稍候…",
     };
     out[convId] = list;
   }

@@ -51,6 +51,13 @@ import { CHAT_QUICK_PROMPTS } from "@/lib/chat-quick-prompts";
 import { consumeChatSse } from "@/lib/chat-stream-client";
 import { cancelAgentJobRemote, mergeAsyncAgentJobIntoConversation } from "@/lib/chat-sync-api";
 import {
+  buildProductizedJobProgressLabel,
+  formatAgentJobFailureDisplay,
+  productizeKnJobSubmitContent,
+  productizeStreamStatusLabel,
+  type SlotBatchProgressLike,
+} from "@/lib/agent-job-display";
+import {
   deriveConversationTopicHeuristic,
   isSidebarTopicPreview,
   topicFromFirstUserMessage,
@@ -645,6 +652,8 @@ type AgentJobPollPayload = {
   hermesStatus?: string | null;
   elapsedSec?: number;
   deepPath?: string | null;
+  skillIntent?: string;
+  slotBatchProgress?: SlotBatchProgressLike | null;
 };
 
 async function pollAgentJobUntilDone(params: {
@@ -686,10 +695,14 @@ async function pollAgentJobUntilDone(params: {
       const data = (await res.json().catch(() => ({}))) as AgentJobPollPayload;
       if (!res.ok) continue;
       if (data.status === "running" || data.status === "pending") {
-        const label =
-          typeof data.progressLabel === "string" && data.progressLabel.trim()
-            ? data.progressLabel.trim()
-            : "深度分析进行中…";
+        const label = buildProductizedJobProgressLabel({
+          status: data.status,
+          progressLabel: data.progressLabel,
+          jobStage: data.jobStage,
+          skillIntent: data.skillIntent,
+          slotBatchProgress: data.slotBatchProgress,
+          elapsedSec: data.elapsedSec,
+        });
         onUpdate(conversationKey, assistantMsgId, { jobProgressLabel: label });
       }
       if (data.status === "cancelled") {
@@ -726,7 +739,7 @@ async function pollAgentJobUntilDone(params: {
       if (data.status === "failed") {
         const errText = String(data.error ?? "未知错误");
         onUpdate(conversationKey, assistantMsgId, {
-          content: `深度分析未完成：${errText}`,
+          content: formatAgentJobFailureDisplay(errText, data.answer),
           pendingJobId: undefined,
           jobProgressLabel: undefined,
         });
@@ -2847,7 +2860,7 @@ export default function ConversationCenter() {
           content: "",
           time: getCurrentDateTimeLabel(),
           isStreaming: true,
-          streamStatusLabel: "正在提交深度分析任务…",
+          streamStatusLabel: "正在提交任务…",
         });
       }
 
@@ -2893,7 +2906,7 @@ export default function ConversationCenter() {
           },
           onStatus: (label) => {
             updateLiveMessage(effectiveConversationId, assistantId, {
-              streamStatusLabel: label,
+              streamStatusLabel: productizeStreamStatusLabel(label),
             });
           },
           onDelta: (text) => {
@@ -2929,7 +2942,9 @@ export default function ConversationCenter() {
               ? payload.assistantMessageId
               : `assistant-job-${jobId}`;
           const placeholderAnswer = formatCitationMarkers(
-            String(payload.answer ?? "正在深度分析…"),
+            productizeKnJobSubmitContent(
+              String(payload.answer ?? "正在生成，请稍候…"),
+            ),
             mergedCitationMap,
           );
           setLiveMessagesByConversation((prev) => ({
@@ -3040,7 +3055,9 @@ export default function ConversationCenter() {
             ? (payload as { assistantMessageId: string }).assistantMessageId
             : `assistant-job-${jobId}`;
         const placeholderAnswer = formatCitationMarkers(
-          String((payload as { answer?: string }).answer ?? "正在深度分析…"),
+          productizeKnJobSubmitContent(
+            String((payload as { answer?: string }).answer ?? "正在生成，请稍候…"),
+          ),
           mergedCitationMap,
         );
         setLiveError(null);
@@ -3532,6 +3549,11 @@ export default function ConversationCenter() {
                           streaming ? null : m.knowledgeNetworkHtml,
                         )
                       : null;
+                  const baseAssistantDisplay = knPrepared?.displayContent ?? rawAssistantText;
+                  const displayAssistantText =
+                    m.pendingJobId || /\bslot-batched\b|hard\s*gate|\bWorker\b/i.test(baseAssistantDisplay)
+                      ? productizeKnJobSubmitContent(baseAssistantDisplay)
+                      : baseAssistantDisplay;
                   const canDeleteMessage = !streaming;
                   const deleteThisMessage = canDeleteMessage
                     ? () => deleteLiveMessage(m.id)
@@ -3542,7 +3564,7 @@ export default function ConversationCenter() {
                       : (m.files?.length ?? 0) > 0
                         ? m.files!.map((f) => f.name).join("\n")
                         : "";
-                  const assistantCopyText = (knPrepared?.displayContent ?? rawAssistantText).trim();
+                  const assistantCopyText = displayAssistantText.trim();
                   return m.role === "user" ? (
                     <div key={m.id} className="flex flex-col items-end gap-3">
                       {m.files && m.files.length > 0 ? (
@@ -3584,20 +3606,19 @@ export default function ConversationCenter() {
                           )}
                         >
                           <ChatMarkdown
-                            text={knPrepared?.displayContent ?? rawAssistantText}
+                            text={displayAssistantText}
                             variant="assistant"
                           />
                         </div>
                       ) : m.isStreaming ? (
                         <p className="text-xs text-muted-foreground/80">
-                          {m.streamStatusLabel?.trim() ||
-                            "正在连接引擎并检索资料，请稍候…"}
+                          {productizeStreamStatusLabel(m.streamStatusLabel)}
                         </p>
                       ) : null}
                       {m.pendingJobId ? (
                         <div className="mt-3 flex flex-col gap-1.5">
                           <ChatThinkingBadge>
-                            {m.jobProgressLabel?.trim() || "深度分析中，请稍候…"}
+                            {m.jobProgressLabel?.trim() || "正在生成，请稍候…"}
                           </ChatThinkingBadge>
                           <p className="text-[11px] text-muted-foreground/90">
                             可保持本页打开；刷新后会自动继续等待结果。
@@ -3623,7 +3644,7 @@ export default function ConversationCenter() {
                       ) : null}
                       <ChatAgentStatusLine>
                         ● Master Agent · AI {m.isStreaming ? "处理中" : "返回"}
-                        {m.pendingJobId ? " · 后台分析" : ""}
+                        {m.pendingJobId ? " · 生成中" : ""}
                         {knPrepared?.html ? " · 含知识网络 HTML" : ""}
                       </ChatAgentStatusLine>
                     </AiShell>
