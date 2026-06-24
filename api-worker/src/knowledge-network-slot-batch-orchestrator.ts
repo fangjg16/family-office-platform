@@ -45,6 +45,10 @@ import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import { evaluateSlotQuality } from "./knowledge-network-full-quality-contract";
 import { extractStructuredSlotBatchFromAnswer } from "./knowledge-network-slot-batch-extract";
 import {
+  buildKnSlotBatchProgressView,
+  type KnSlotBatchProgressView,
+} from "./knowledge-network-slot-batch-progress";
+import {
   deleteKnSlotBatchSession,
   readKnSlotBatchSession,
   writeKnSlotBatchSession,
@@ -1925,16 +1929,7 @@ export async function resumeKnSlotBatchPublish(
 }
 
 /** 导出 session 供进度展示 */
-export async function getKnSlotBatchProgress(
-  env: SlotBatchOrchestratorEnv,
-  projectId: string,
-  jobId: string,
-  hermesStatus?: string | null,
-): Promise<{
-  batchIndex: number;
-  totalBatches: number;
-  phase: string;
-  completedSlots: string[];
+export type KnSlotBatchProgressPayload = KnSlotBatchProgressView & {
   batchTimings: KnSlotBatchSession["batchTimings"];
   currentBatchIndex: number;
   currentBatchSlots: CanonicalKbSlot[];
@@ -1944,26 +1939,33 @@ export async function getKnSlotBatchProgress(
   sourceRegistryCount: number;
   unresolvedGaps: string[];
   slotQuality: KnSlotBatchSession["slotQuality"];
-  currentPublishStep?: KnSlotBatchSession["currentPublishStep"];
   publishStartedAt?: string;
   publishStepStartedAt?: string;
-  publishError?: string;
   assembledHtmlBytes?: number;
   workerStubSlots?: KnSlotBatchSession["workerStubSlots"];
   workerStubAppendix?: KnSlotBatchSession["workerStubAppendix"];
   fragmentDelivery?: KnSlotBatchSession["fragmentDelivery"];
-} | null> {
+  architectureVersion?: KnSlotBatchSession["architectureVersion"];
+  parallelMode?: boolean;
+  parallelBatchesCompleted?: number;
+  batchRuns?: KnSlotBatchSession["batchRuns"];
+  prepCompleted?: boolean;
+};
+
+export async function getKnSlotBatchProgress(
+  env: SlotBatchOrchestratorEnv,
+  projectId: string,
+  jobId: string,
+  hermesStatus?: string | null,
+): Promise<KnSlotBatchProgressPayload | null> {
   const session = await readKnSlotBatchSession(env, projectId, jobId);
   if (!session) return null;
   const currentBatchSlots = [...KN_SLOT_BATCH_PLAN[session.currentBatchIndex]!];
   const parallelDone = session.batchRuns?.filter((r) => r.merged).length ?? 0;
+  const view = buildKnSlotBatchProgressView(session);
   return {
+    ...view,
     batchIndex: session.currentBatchIndex,
-    totalBatches: KN_SLOT_BATCH_PLAN.length,
-    phase: session.phase,
-    completedSlots: isFragmentGenerationSession(session)
-      ? Object.keys(session.fragments ?? {})
-      : Object.keys(session.slots),
     batchTimings: session.batchTimings,
     currentBatchIndex: session.currentBatchIndex,
     currentBatchSlots,
@@ -1973,10 +1975,8 @@ export async function getKnSlotBatchProgress(
     sourceRegistryCount: (session.sourceRegistry ?? session.shell.sources ?? []).length,
     unresolvedGaps: session.unresolvedGaps,
     slotQuality: session.slotQuality,
-    currentPublishStep: session.currentPublishStep,
     publishStartedAt: session.publishStartedAt,
     publishStepStartedAt: session.publishStepStartedAt,
-    publishError: session.publishError,
     assembledHtmlBytes: session.assembledHtmlBytes,
     workerStubSlots: session.workerStubSlots,
     workerStubAppendix: session.workerStubAppendix,

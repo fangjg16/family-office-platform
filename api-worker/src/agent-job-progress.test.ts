@@ -36,9 +36,31 @@ describe("buildAgentJobProgressLabel slot-batch failed", () => {
         totalBatches: 6,
         phase: "publishing",
         completedSlots: Array.from({ length: 13 }, (_, i) => `slot-${i}`),
+        completedFragments: Array.from({ length: 13 }, (_, i) => `slot-${i}`),
+        currentBatchLabel: "时间线与决策及附录",
+        repairInProgress: false,
         publishError: "rendering_html: timeout",
       },
     });
     expect(progressLabel).toBe("知识网络生成未完成");
+  });
+
+  it("uses D4 user-facing label when completedFragments present", () => {
+    const { progressLabel } = buildAgentJobProgressLabel({
+      row: baseRow,
+      hermesStatus: "running",
+      elapsedSec: 45,
+      slotBatchProgress: {
+        batchIndex: 1,
+        totalBatches: 6,
+        phase: "waiting_hermes",
+        completedSlots: ["snapshot", "target-overview", "industry-market"],
+        completedFragments: ["snapshot", "target-overview", "industry-market"],
+        currentBatchLabel: "运营与合规",
+        repairInProgress: false,
+      },
+    });
+    expect(progressLabel).toContain("正在撰写第 2 部分");
+    expect(progressLabel).toContain("已完成 3/13 个板块");
   });
 });

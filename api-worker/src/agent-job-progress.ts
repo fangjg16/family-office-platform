@@ -1,4 +1,8 @@
 import type { AgentJobRow } from "./agent-jobs";
+import {
+  buildKnSlotBatchUserProgressLabel,
+  type KnSlotBatchProgressView,
+} from "./knowledge-network-slot-batch-progress";
 
 export type AgentJobStage =
   | "pending"
@@ -65,13 +69,9 @@ export function buildAgentJobProgressLabel(params: {
   hermesStatus: string | null;
   knPutReceived?: boolean;
   elapsedSec: number;
-  slotBatchProgress?: {
-    batchIndex: number;
-    totalBatches: number;
-    phase: string;
-    completedSlots: string[];
+  slotBatchProgress?: (KnSlotBatchProgressView & {
     batchTimings?: { batchIndex: number; durationMs?: number; slots: string[] }[];
-  } | null;
+  }) | null;
 }): { progressLabel: string; jobStage: AgentJobStage } {
   const { row, hermesStatus, elapsedSec, slotBatchProgress } = params;
   const knPutReceived = params.knPutReceived ?? false;
@@ -109,6 +109,21 @@ export function buildAgentJobProgressLabel(params: {
   }
 
   if (row.skill_intent === "knowledge_network") {
+    if (slotBatchProgress?.completedFragments) {
+      const phase = slotBatchProgress.phase;
+      const publishError = slotBatchProgress.publishError;
+      if (phase === "failed" || (publishError && publishError.trim())) {
+        return { progressLabel: "知识网络生成未完成", jobStage: "failed" };
+      }
+      let stage: AgentJobStage = "generating_kb";
+      if (phase === "preprocessing") stage = "preparing_materials";
+      if (phase === "assembling" || phase === "publishing") stage = "validating_html";
+      if (phase === "between_batches") stage = "reading_materials";
+      return {
+        progressLabel: buildKnSlotBatchUserProgressLabel(slotBatchProgress, elapsedSec),
+        jobStage: stage,
+      };
+    }
     if (slotBatchProgress) {
       const phase = slotBatchProgress.phase;
       const publishError = slotBatchProgress.publishError;

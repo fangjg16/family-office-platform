@@ -7,6 +7,10 @@ export type SlotBatchProgressLike = {
   totalBatches?: number;
   phase?: string;
   completedSlots?: string[];
+  completedFragments?: string[];
+  currentBatchLabel?: string | null;
+  repairInProgress?: boolean;
+  generationMode?: string;
   publishError?: string | null;
   currentPublishStep?: string | null;
 };
@@ -31,15 +35,15 @@ export function extractKnErrorCode(error: string | null | undefined): string | n
 
 function formatWaited(elapsedSec?: number): string {
   if (elapsedSec == null || elapsedSec < 0) return "";
-  if (elapsedSec < 60) return `${elapsedSec} 秒`;
+  if (elapsedSec < 60) return `（已等待 ${elapsedSec} 秒）`;
   const m = Math.floor(elapsedSec / 60);
   const s = elapsedSec % 60;
-  return s > 0 ? `${m} 分 ${s} 秒` : `${m} 分钟`;
+  return s > 0 ? `（已等待 ${m} 分 ${s} 秒）` : `（已等待 ${m} 分钟）`;
 }
 
 function withWaited(base: string, elapsedSec?: number): string {
   const waited = formatWaited(elapsedSec);
-  return waited ? `${base}（已等待 ${waited}）` : base;
+  return waited ? `${base}${waited}` : base;
 }
 
 const TECHNICAL_PROGRESS_RE =
@@ -47,6 +51,73 @@ const TECHNICAL_PROGRESS_RE =
 
 export function isTechnicalAgentJobCopy(text: string): boolean {
   return TECHNICAL_SUBMIT_RE.test(text) || TECHNICAL_PROGRESS_RE.test(text);
+}
+
+/** D0 §8：结构化 slotBatchProgress → 用户文案 */
+export function buildKnSlotBatchUserProgressLabel(
+  sb: SlotBatchProgressLike,
+  elapsedSec?: number,
+): string {
+  const batchNo = (sb.batchIndex ?? 0) + 1;
+  const total = sb.totalBatches ?? 6;
+  const done = sb.completedFragments?.length ?? sb.completedSlots?.length ?? 0;
+  const phase = (sb.phase ?? "").trim();
+
+  if (phase === "failed" || (sb.publishError && String(sb.publishError).trim())) {
+    return "知识网络生成未完成";
+  }
+  if (sb.repairInProgress) {
+    return withWaited(`正在修正第 ${batchNo} 部分…`, elapsedSec);
+  }
+  if (phase === "preprocessing") {
+    return withWaited("正在整理项目资料…", elapsedSec);
+  }
+  if (phase === "between_batches") {
+    return withWaited("正在准备下一部分…", elapsedSec);
+  }
+  if (phase === "assembling") {
+    return withWaited("正在合并各板块…", elapsedSec);
+  }
+  if (phase === "publishing") {
+    switch (sb.currentPublishStep) {
+      case "quality_gate":
+        return withWaited("正在核对引用与板块结构…", elapsedSec);
+      case "validating_html":
+        return withWaited("正在终审知识网络…", elapsedSec);
+      case "writing_r2":
+      case "updating_d1":
+        return withWaited("正在保存知识网络…", elapsedSec);
+      case "syncing_chat":
+        return withWaited("正在更新对话…", elapsedSec);
+      case "assembling":
+        return withWaited("正在合并各板块…", elapsedSec);
+      case "rendering_html":
+        return withWaited("正在生成页面…", elapsedSec);
+      default:
+        return withWaited("正在保存知识网络…", elapsedSec);
+    }
+  }
+
+  const waitingPhases = new Set([
+    "waiting_hermes",
+    "processing",
+    "waiting_batches",
+    "waiting_capacity",
+  ]);
+  if (waitingPhases.has(phase)) {
+    if ((sb.batchIndex ?? 0) === total - 1) {
+      return withWaited("正在整理附录…", elapsedSec);
+    }
+    return withWaited(
+      `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/${KN_TOTAL_SECTIONS} 个板块）…`,
+      elapsedSec,
+    );
+  }
+
+  return withWaited(
+    `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/${KN_TOTAL_SECTIONS} 个板块）…`,
+    elapsedSec,
+  );
 }
 
 /** 展示层：助手气泡正文（含 D1 存量、刷新恢复） */
@@ -127,17 +198,17 @@ export function productizeRawProgressLabel(
     const slots = t.match(/已完成\s*(\d+)\s*\/\s*(\d+)\s*slot/i);
     if (slots) {
       return withWaited(
-        `正在生成第 ${batchNo} 部分，共 ${total} 部分（已完成 ${slots[1]}/${slots[2]} 个板块）`,
+        `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${slots[1]}/${slots[2]} 个板块）…`,
         elapsedSec,
       );
     }
-    return withWaited(`正在生成第 ${batchNo} 部分，共 ${total} 部分`, elapsedSec);
+    return withWaited(`正在撰写第 ${batchNo} 部分，共 ${total} 部分…`, elapsedSec);
   }
   if (/入库|组装|validating|publishing|assembling/i.test(t)) {
-    return withWaited("正在汇总并写入知识网络", elapsedSec);
+    return withWaited("正在保存知识网络…", elapsedSec);
   }
   if (/整理|preparing|reading_manifest|reading_materials/i.test(t)) {
-    return withWaited("正在整理资料", elapsedSec);
+    return withWaited("正在整理项目资料…", elapsedSec);
   }
   if (/引擎|Hermes|queued|running/i.test(t)) {
     return withWaited("正在生成，请稍候…", elapsedSec);
@@ -148,7 +219,7 @@ export function productizeRawProgressLabel(
   return withWaited(t, elapsedSec);
 }
 
-/** 轮询进行中：优先用结构化 slotBatchProgress */
+/** 轮询进行中：优先用结构化 slotBatchProgress（D4） */
 export function buildProductizedJobProgressLabel(data: {
   status?: string;
   progressLabel?: string;
@@ -162,33 +233,8 @@ export function buildProductizedJobProgressLabel(data: {
   }
 
   const sb = data.slotBatchProgress;
-  if (sb) {
-    const phase = (sb.phase ?? "").trim();
-    const batchNo = (sb.batchIndex ?? 0) + 1;
-    const total = sb.totalBatches ?? 6;
-    const slotsDone = sb.completedSlots?.length ?? 0;
-
-    if (phase === "failed" || (sb.publishError && String(sb.publishError).trim())) {
-      return "知识网络生成未完成";
-    }
-    if (phase === "preprocessing") {
-      return withWaited("正在整理资料", data.elapsedSec);
-    }
-    if (phase === "assembling" || phase === "publishing") {
-      return withWaited("正在汇总并写入知识网络", data.elapsedSec);
-    }
-    if (
-      phase === "waiting_hermes" ||
-      phase === "processing" ||
-      phase === "waiting_batches" ||
-      phase === "waiting_capacity"
-    ) {
-      return withWaited(`正在生成第 ${batchNo} 部分，共 ${total} 部分`, data.elapsedSec);
-    }
-    return withWaited(
-      `正在生成第 ${batchNo} 部分，共 ${total} 部分（已完成 ${slotsDone}/${KN_TOTAL_SECTIONS} 个板块）`,
-      data.elapsedSec,
-    );
+  if (sb && (sb.completedFragments != null || sb.phase)) {
+    return buildKnSlotBatchUserProgressLabel(sb, data.elapsedSec);
   }
 
   if (data.progressLabel?.trim()) {
@@ -196,13 +242,13 @@ export function buildProductizedJobProgressLabel(data: {
   }
 
   if (data.jobStage === "preparing_materials" || data.jobStage === "reading_manifest") {
-    return withWaited("正在整理资料", data.elapsedSec);
+    return withWaited("正在整理项目资料…", data.elapsedSec);
   }
   if (data.jobStage === "validating_html" || data.jobStage === "putting_html") {
-    return withWaited("正在汇总并写入知识网络", data.elapsedSec);
+    return withWaited("正在保存知识网络…", data.elapsedSec);
   }
   if (data.skillIntent === "knowledge_network") {
-    return withWaited("正在生成项目知识网络", data.elapsedSec);
+    return withWaited("正在生成项目知识网络…", data.elapsedSec);
   }
   return withWaited("正在处理，请稍候…", data.elapsedSec);
 }
