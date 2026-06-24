@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Railway 纯 curl 安装 Hermes v2.92 skill（opportunistic-investments-hermes）
+# Railway 纯 curl 安装 Hermes v2.93 skill（opportunistic-investments-hermes · fragment-batch）
 # export HERMES_HOME=/opt/data
 # export HERMES_SKILLS_DIR=/opt/data/skills
 # bash install-jfo-skills-v292-curl-only.sh
@@ -11,7 +11,7 @@ SKILLS_ROOT="${HERMES_SKILLS_DIR:-/opt/data/skills}"
 KB="$SKILLS_ROOT/opportunistic-investments-hermes"
 PKG="skills/opportunistic-investments-hermes"
 
-echo "=== JFO skills (curl-only, Railway, Hermes v2.92) ==="
+echo "=== JFO skills (curl-only, Railway, Hermes v2.93) ==="
 echo "RAW=$RAW"
 echo "SKILLS_ROOT=$SKILLS_ROOT"
 echo "KB=$KB"
@@ -25,11 +25,12 @@ curl_kb() {
   curl -fsSL "$RAW/$PKG/$rel" -o "$dest"
 }
 
-echo "--- opportunistic-investments-hermes (v2.92 full tree via curl) ---"
+echo "--- opportunistic-investments-hermes (v2.93 full tree via curl) ---"
 mkdir -p "$KB/assets" "$KB/references/deep" "$KB/scripts" "$KB/agents"
 
 curl_kb "SKILL.md" "$KB/SKILL.md"
 curl_kb "examples-kb-data.json" "$KB/examples-kb-data.json"
+curl_kb "examples-kb-fragment-batch.json" "$KB/examples-kb-fragment-batch.json"
 curl_kb "sample-output.html" "$KB/sample-output.html"
 curl_kb "sample-output-reordered.html" "$KB/sample-output-reordered.html"
 curl_kb "assets/kb-template.html" "$KB/assets/kb-template.html"
@@ -38,7 +39,7 @@ curl_kb "agents/openai.yaml" "$KB/agents/openai.yaml"
 
 for ref in kb-schema.md kb-config.md content-rules.md gotchas.md handoff-schema.md \
   maturity-scoring.md slot-rendering-rules.md slot-specific-rules.md timeline-rules.md \
-  structured-kb-data-schema.md; do
+  structured-kb-data-schema.md kb-fragment-batch-schema.md; do
   curl_kb "references/$ref" "$KB/references/$ref"
 done
 

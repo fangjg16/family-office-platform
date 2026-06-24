@@ -1,0 +1,23 @@
+{
+  "type": "kb-fragment-batch",
+  "schemaVersion": "2.91",
+  "mode": "full",
+  "batchIndex": 0,
+  "summary": "批次 0：项目快照与标的概览；事实来自上传 BP，缺 term sheet 细节以 gap 标注。",
+  "sourceProposals": [
+    {
+      "sourceKey": "prop-bp-2026",
+      "type": "用户上传",
+      "title": "商业计划书.pdf",
+      "usedIn": ["snapshot", "target-overview"]
+    }
+  ],
+  "fragments": {
+    "snapshot": "<section class=\"block kb-panel\" id=\"snapshot\"><h2 class=\"section-title\"><span class=\"section-num\">1</span>项目快照</h2><p>某冷链物流园区扩建项目，拟引入产业方与家办联合投资。<a href=\"#source-U-1\">U-1</a></p></section>",
+    "target-overview": "<section class=\"block kb-panel\" id=\"target-overview\"><h2 class=\"section-title\"><span class=\"section-num\">2</span>标的概览</h2><table class=\"data-table\"><thead><tr><th>资产/标的</th><th>状态</th><th>备注</th></tr></thead><tbody><tr><td>南宁东盟生鲜食品智慧港二期地块</td><td>待确认</td><td>权属文件待补充</td></tr></tbody></table></section>"
+  },
+  "appendixFragments": {
+    "glossary": null,
+    "data-dictionary": null
+  }
+}
