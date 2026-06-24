@@ -21,6 +21,10 @@ import { buildKnowledgeNetworkDeepRefResolutionLines } from "./knowledge-network
 import { buildJfoMaterialsInstructions } from "./hermes-materials-instructions";
 import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
+  buildCompactFragmentBatchRequiredReads,
+  buildFragmentBatchRequiredReadsOverride,
+} from "./knowledge-network-fragment-batch-instructions";
+import {
   buildSlotBatchRequiredReadsOverride,
   buildCompactBatchRequiredReads,
 } from "./knowledge-network-slot-batch-instructions";
@@ -213,8 +217,10 @@ export function buildHermesAgentInstructions(
     jobId?: string;
     userMessage?: string;
     hasExistingKb?: boolean;
-    /** full/initial 走 Worker slot-batched 编排，勿交付整包 structured-kb-data */
+    /** full/initial 走 Worker slot-batched 编排 */
     slotBatched?: boolean;
+    /** kb-fragment-batch 主路径 */
+    fragmentBatched?: boolean;
     slotBatchCompact?: boolean;
     slotBatchIndex?: number;
     slotBatchSlots?: import("./knowledge-network-slot-aliases").CanonicalKbSlot[];
@@ -297,16 +303,22 @@ export function buildHermesAgentInstructions(
     const slotPatchMode = Boolean(slotPatchSlot);
     const batchSlots = ctx?.slotBatchSlots ?? [];
     if (ctx?.slotBatched && batchSlots.length > 0) {
-      lines.push(
-        ctx.slotBatchCompact
+      const requiredReads = ctx.fragmentBatched
+        ? ctx.slotBatchCompact
+          ? buildCompactFragmentBatchRequiredReads(batchSlots)
+          : buildFragmentBatchRequiredReadsOverride(
+              mode,
+              ctx.slotBatchIndex ?? 0,
+              batchSlots,
+            )
+        : ctx.slotBatchCompact
           ? buildCompactBatchRequiredReads(batchSlots)
           : buildSlotBatchRequiredReadsOverride(
               mode,
               ctx.slotBatchIndex ?? 0,
               batchSlots,
-            ),
-        buildKnowledgeNetworkSlotResolutionLines(userMessage),
-      );
+            );
+      lines.push(requiredReads, buildKnowledgeNetworkSlotResolutionLines(userMessage));
     } else {
       lines.push(
         buildHermesKnowledgeNetworkRequiredReads({
@@ -351,6 +363,12 @@ export function buildHermesAgentInstructions(
             { asFallback: true },
           ),
           "预注入摘录只供事实依据；首次/全量默认交付 structured-kb-data JSON，Worker 确定性渲染入库。PUT/整页 HTML 仅为 fallback。",
+        );
+      } else if (ctx?.fragmentBatched) {
+        lines.push(
+          "【模式】全量/首次 — Worker **fragment-batch** 编排：按批交付 **kb-fragment-batch** JSON（每 slot 为完整 section HTML fragment），**禁止** structured-slot-batch / structured-kb-data / 整页 HTML / PUT。",
+          "必读：`references/kb-fragment-batch-schema.md` + `examples-kb-fragment-batch.json` + `references/slot-rendering-rules.md`。",
+          "资料足则写事实；资料不足则 gap-first section。每批必须交齐本批全部 slot key；末批须交 appendix B/C。",
         );
       } else {
         lines.push(

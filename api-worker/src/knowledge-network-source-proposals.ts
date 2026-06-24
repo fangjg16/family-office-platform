@@ -11,6 +11,8 @@ export type SourceProposalInput = {
   author?: string;
   excerpt?: string;
   usedIn?: CanonicalKbSlot[];
+  /** 绑定上传资料 documentId（Appendix A 稳定身份） */
+  documentId?: string;
 };
 
 function normalizeKey(title: string, type: string): string {

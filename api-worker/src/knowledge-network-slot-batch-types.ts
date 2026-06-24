@@ -1,6 +1,6 @@
-import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
-import type { StructuredKbData, StructuredKbSource } from "./knowledge-network-structured-kb-data-types";
-import type { SlotPayloadBySlot } from "./knowledge-network-structured-patch-types";
+import type { KnGenerationMode } from "./knowledge-network-generation-mode";
+import type { MaterialSnapshot } from "./knowledge-network-material-snapshot";
+import type { SlotFragmentDeliveryStatus } from "./knowledge-network-fragment-types";
 
 export const STRUCTURED_SLOT_BATCH_TYPE = "structured-slot-batch" as const;
 
@@ -127,6 +127,18 @@ export type KnSlotBatchSession = {
     Pick<StructuredKbData, "config" | "meta" | "sources" | "terms" | "dataDictionary" | "summary">
   >;
   slots: Partial<{ [K in CanonicalKbSlot]: SlotPayloadBySlot[K] }>;
+  /** fragment 模式：Hermes 交付的 section HTML */
+  fragments?: Partial<Record<CanonicalKbSlot, string>>;
+  appendixFragments?: Partial<Record<"glossary" | "data-dictionary", string>>;
+  generationMode?: KnGenerationMode;
+  materialSnapshot?: MaterialSnapshot;
+  fragmentDelivery?: Partial<
+    Record<CanonicalKbSlot | "glossary" | "data-dictionary", { delivery: SlotFragmentDeliveryStatus; batchIndex?: number }>
+  >;
+  /** D-α：assemble 时 Worker 注入 stub 的 canonical slot（非 Hermes 交付） */
+  workerStubSlots?: CanonicalKbSlot[];
+  /** D-α：assemble 时 Worker 注入 stub 的附录 B/C */
+  workerStubAppendix?: ("glossary" | "data-dictionary")[];
   slotQuality: Partial<Record<CanonicalKbSlot, KnSlotQualityRecord>>;
   batchTimings: KnSlotBatchTiming[];
   currentRunId?: string;

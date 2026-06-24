@@ -1,6 +1,7 @@
 import { citationMapFromSlots, getCitationSlots } from "./citations";
 import { handleGetChatAudit } from "./chat-audit-admin";
 import { handleBackfillProjectKnowledgeNetworks } from "./project-knowledge-network-admin";
+import { handleReembedDocuments } from "./documents-embed-admin";
 import {
   handleGetActiveAgentJobs,
   handleGetChatState,
@@ -124,6 +125,9 @@ export interface Env {
   /** 可选：Hermes 未配置时，同步快答降级为直连千问 */
   DASHSCOPE_API_KEY?: string;
   DASHSCOPE_BASE_URL?: string;
+  EMBED_MODEL?: string;
+  EMBED_DIMENSION?: string;
+  EMBED_INSTRUCT?: string;
   HERMES_BASE_URL?: string;
   HERMES_API_KEY?: string;
   HERMES_MODEL?: string;
@@ -1697,6 +1701,8 @@ export default {
         }
       } else if (path === "/api/admin/project-knowledge-network/backfill" && request.method === "POST") {
         response = await handleBackfillProjectKnowledgeNetworks(request, env, url);
+      } else if (path === "/api/admin/documents/reembed" && request.method === "POST") {
+        response = await handleReembedDocuments(request, env, url, ctx);
       } else if (
         /^\/api\/projects\/[^/]+\/citations$/u.test(path) &&
         request.method === "GET"

@@ -7,6 +7,15 @@ import {
   resolveParallelBatchLimit,
   type SlotBatchArchitecture,
 } from "./knowledge-network-slot-batch-config";
+import { assembleKbFromFragmentSession } from "./knowledge-network-fragment-assembler";
+import { formatWorkerStubAuditAnswerBlock } from "./knowledge-network-fragment-stub-audit";
+import { mergeFragmentBatchIntoSession } from "./knowledge-network-fragment-merge";
+import { buildMinimalFragmentBatchRepairPrompt } from "./knowledge-network-fragment-batch-instructions";
+import {
+  isFragmentGenerationSession,
+  resolveKnGenerationMode,
+} from "./knowledge-network-generation-mode";
+import { extractKbFragmentBatchFromAnswer } from "./knowledge-network-fragment-extract";
 import { syncAgentJobTerminalToChat } from "./chat-sync";
 import {
   buildSlotBatchHermesInstructionsPackage,
@@ -131,11 +140,126 @@ async function failPublishPipeline(
   return { action: "failed", error: session.publishError };
 }
 
+async function runKnFragmentBatchPublishing(
+  env: SlotBatchOrchestratorEnv,
+  row: AgentJobRow,
+  session: KnSlotBatchSession,
+): Promise<SlotBatchAdvanceResult> {
+  session.phase = "publishing";
+  await writeKnSlotBatchSession(env, session);
+
+  const prevKn = await getProjectKnowledgeNetworkMeta(env, row.project_id);
+  const nextVer = resolveKnVersionOnUpload(prevKn, null);
+  const versionDisplay = formatKnVersionDisplay(nextVer.version, nextVer.versionLabel);
+
+  let renderedHtml: string;
+  try {
+    renderedHtml = await withPublishStepTimeout(env, session, "assembling", async () => {
+      const assembled = assembleKbFromFragmentSession(session, { versionDisplay });
+      if (!assembled.ok) {
+        throw new Error(assembled.error);
+      }
+      session.assembledHtmlBytes = assembled.html.length;
+      await writeKnSlotBatchSession(env, session);
+      return assembled.html;
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return failPublishPipeline(env, session, row.id, "assembling", msg);
+  }
+
+  let previousHtml: string | null;
+  try {
+    previousHtml = await withPublishStepTimeout(env, session, "quality_gate", async () =>
+      readProjectKnowledgeNetworkHtml(env, row.project_id),
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return failPublishPipeline(env, session, row.id, "quality_gate", msg);
+  }
+
+  let htmlToStore: string;
+  try {
+    htmlToStore = await withPublishStepTimeout(env, session, "validating_html", async () => {
+      const validation = validateKnowledgeNetworkHtmlForWrite(renderedHtml, {
+        mode: session.mode,
+        previousHtml,
+        strict: true,
+        touchesTimeline: /id=["']timeline-milestones["']/i.test(renderedHtml),
+        browserUpload: false,
+      });
+      if (!validation.ok) {
+        throw new Error(validation.error ?? "HTML 校验失败");
+      }
+      return validation.html ?? renderedHtml;
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return failPublishPipeline(env, session, row.id, "validating_html", msg);
+  }
+
+  const summary =
+    session.shell.summary ??
+    session.batchSummaries.filter(Boolean).join(" ") ??
+    "fragment-batched 知识网络";
+
+  try {
+    await withPublishStepTimeout(env, session, "writing_r2", async () => {
+      await upsertProjectKnowledgeNetwork(env, {
+        projectId: row.project_id,
+        userId: row.user_id,
+        html: htmlToStore,
+        lastJobId: row.id,
+        answerSummary: summary,
+      });
+    });
+    await setPublishStep(env, session, "updating_d1");
+  } catch (e) {
+    const step: KnPublishStep =
+      session.currentPublishStep === "updating_d1" ? "updating_d1" : "writing_r2";
+    const msg = e instanceof Error ? e.message : String(e);
+    return failPublishPipeline(env, session, row.id, step, msg);
+  }
+
+  const timingSummary = session.batchTimings
+    .map(
+      (t) =>
+        `批次${t.batchIndex + 1}（${t.slots.join("+")}）${t.durationMs ? `${Math.round(t.durationMs / 1000)}s` : "—"}`,
+    )
+    .join("；");
+  const stubAudit = formatWorkerStubAuditAnswerBlock(session);
+  const answer =
+    `${summary}\n\n` +
+    `已通过 **kb-fragment-batch**（预处理 + ${KN_SLOT_BATCH_PLAN.length} 批并行 / 13 slot HTML fragment）写入项目知识网络 **v${versionDisplay}**。` +
+    `${stubAudit}\n` +
+    `批次耗时：${timingSummary}。\n` +
+    `Factor A/B/Combined 见页面 maturity 区（fragment 路径由 HTML 入库后展示）。`;
+
+  try {
+    await withPublishStepTimeout(env, session, "syncing_chat", async () => {
+      await completeSlotBatchJob(env, row.id, { answer, html: htmlToStore });
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return failPublishPipeline(env, session, row.id, "syncing_chat", msg);
+  }
+
+  session.phase = "done";
+  session.currentPublishStep = "completed";
+  session.updatedAt = nowIso();
+  await writeKnSlotBatchSession(env, session);
+
+  return { action: "completed", answer, html: htmlToStore };
+}
+
 async function runKnSlotBatchPublishing(
   env: SlotBatchOrchestratorEnv,
   row: AgentJobRow,
   session: KnSlotBatchSession,
 ): Promise<SlotBatchAdvanceResult> {
+  if (isFragmentGenerationSession(session)) {
+    return runKnFragmentBatchPublishing(env, row, session);
+  }
   session.phase = "publishing";
   await writeKnSlotBatchSession(env, session);
 
@@ -338,6 +462,9 @@ export async function initKnSlotBatchSession(params: {
   const arch = params.architecture ?? "v2";
   const isV2 = arch === "v2";
   const now = nowIso();
+  const generationMode = resolveKnGenerationMode(params.env, {
+    userMessage: params.userMessage,
+  });
   const session: KnSlotBatchSession = {
     version: isV2 ? 2 : 1,
     architectureVersion: isV2 ? 2 : undefined,
@@ -354,6 +481,12 @@ export async function initKnSlotBatchSession(params: {
     phase: isV2 ? "preprocessing" : "waiting_hermes",
     shell: {},
     slots: {},
+    fragments: {},
+    appendixFragments: {},
+    generationMode,
+    fragmentDelivery: {},
+    workerStubSlots: [],
+    workerStubAppendix: [],
     slotQuality: {},
     batchTimings: [],
     batchRepairAttempts: {},
@@ -664,6 +797,14 @@ function buildBatchRepairUserMessage(
   repairMessage: string,
   failedSlots: CanonicalKbSlot[],
 ): string {
+  if (isFragmentGenerationSession(session)) {
+    return buildMinimalFragmentBatchRepairPrompt({
+      repairMessage,
+      failedSlots,
+      batchIndex,
+      mode: session.mode,
+    });
+  }
   return buildMinimalSlotBatchRepairPrompt({
     repairMessage,
     failedSlots,
@@ -673,17 +814,43 @@ function buildBatchRepairUserMessage(
   });
 }
 
+type BatchMergeResult =
+  | { ok: true }
+  | { ok: false; error: string; failedSlots: CanonicalKbSlot[]; hardOnly: boolean };
+
+function hermesBatchOutputFormatLabel(session: KnSlotBatchSession): string {
+  return isFragmentGenerationSession(session) ? "kb-fragment-batch" : "structured-slot-batch JSON";
+}
+
 function tryMergeBatchOutput(
   session: KnSlotBatchSession,
   batchIndex: number,
   answer: string | undefined,
-):
-  | { ok: true }
-  | { ok: false; error: string; failedSlots: CanonicalKbSlot[]; hardOnly: boolean }
-  | null {
+): BatchMergeResult | null {
   if (!answer?.trim()) return null;
+  if (isFragmentGenerationSession(session)) {
+    const preview = extractKbFragmentBatchFromAnswer(answer);
+    if (!preview.ok) {
+      return {
+        ok: false,
+        error: preview.reason,
+        failedSlots: [...KN_SLOT_BATCH_PLAN[batchIndex]!],
+        hardOnly: true,
+      };
+    }
+    return mergeFragmentBatchIntoSession(session, batchIndex, answer);
+  }
   const preview = extractStructuredSlotBatchFromAnswer(answer);
-  if (!preview.ok) return null;
+  if (!preview.ok) {
+    return {
+      ok: false,
+      error: preview.blocked
+        ? `Hermes blocked：${preview.blockedReason ?? preview.reason}`
+        : preview.reason,
+      failedSlots: preview.blocked ? [...KN_SLOT_BATCH_PLAN[batchIndex]!] : [],
+      hardOnly: true,
+    };
+  }
   return mergeBatchIntoSession(session, batchIndex, answer);
 }
 
@@ -754,6 +921,10 @@ function finalizeSessionSources(
   session.sourceRegistry = registry;
   session.shell.sources = registry;
   session.proposalKeyToId = Object.fromEntries(proposalKeyToId);
+
+  if (isFragmentGenerationSession(session)) {
+    return { ok: true };
+  }
 
   const keyMap = new Map(proposalKeyToId);
   const slots = session.slots as StructuredKbSlots;
@@ -1155,7 +1326,8 @@ async function advanceParallelSlotBatches(
           run.batchIndex,
           partialMerge && !partialMerge.ok
             ? partialMerge.error
-            : snap.error || `Hermes ${snap.status}，且无有效 structured-slot-batch JSON`,
+            : snap.error ||
+              `Hermes ${snap.status}，且无有效 ${hermesBatchOutputFormatLabel(session)}`,
           failedSlots,
         );
         const started = await startBatchHermesRun(env, session, run.batchIndex, {
@@ -1193,30 +1365,38 @@ async function advanceParallelSlotBatches(
       return { action: "failed", error: run.error };
     }
 
-    const merged = mergeBatchIntoSession(session, run.batchIndex, snap.output);
+    const merged = tryMergeBatchOutput(session, run.batchIndex, snap.output);
     const timing = session.batchTimings.find((t) => t.batchIndex === run.batchIndex);
     if (timing) {
-      timing.jsonParsed = true;
+      timing.jsonParsed = merged?.ok === true;
       timing.completedAt = nowIso();
       timing.durationMs = Date.parse(timing.completedAt) - Date.parse(timing.startedAt);
     }
 
-    if (!merged.ok) {
+    if (!merged || !merged.ok) {
       const attempts = session.batchRepairAttempts[run.batchIndex] ?? 0;
-      if (merged.hardOnly && attempts < 1) {
+      if ((merged?.hardOnly ?? true) && attempts < 1) {
         session.batchRepairAttempts[run.batchIndex] = attempts + 1;
         if (timing) {
           timing.repairAttempted = true;
           timing.repairStartedAt = nowIso();
         }
+        const mergeError =
+          merged?.ok === false
+            ? merged.error
+            : snap.error || `Hermes 完成但无有效 ${hermesBatchOutputFormatLabel(session)}`;
+        const failedSlots =
+          merged?.ok === false && merged.failedSlots.length
+            ? merged.failedSlots
+            : ([...KN_SLOT_BATCH_PLAN[run.batchIndex]!] as CanonicalKbSlot[]);
         const repairMsg = buildBatchRepairUserMessage(
           session,
           run.batchIndex,
-          merged.error,
-          merged.failedSlots,
+          mergeError,
+          failedSlots,
         );
         const started = await startBatchHermesRun(env, session, run.batchIndex, {
-          repairHints: merged.error,
+          repairHints: mergeError,
           userMessageOverride: repairMsg,
         });
         if (!started.ok) {
@@ -1239,9 +1419,12 @@ async function advanceParallelSlotBatches(
         continue;
       }
       run.status = "failed";
-      run.error = merged.error;
-      await failParallelSlotBatchJob(env, session, row.id, merged.error);
-      return { action: "failed", error: merged.error };
+      run.error =
+        merged?.ok === false
+          ? merged.error
+          : snap.error || `Hermes 完成但无有效 ${hermesBatchOutputFormatLabel(session)}`;
+      await failParallelSlotBatchJob(env, session, row.id, run.error);
+      return { action: "failed", error: run.error };
     }
 
     run.status = "completed";
@@ -1305,8 +1488,15 @@ function assembleStructuredKbData(session: KnSlotBatchSession): StructuredKbData
   return applyDeterministicMaturity(data);
 }
 
+function missingCanonicalDeliverables(session: KnSlotBatchSession): CanonicalKbSlot[] {
+  if (isFragmentGenerationSession(session)) {
+    return CANONICAL_KB_SLOTS.filter((s) => !session.fragments?.[s]?.trim());
+  }
+  return CANONICAL_KB_SLOTS.filter((s) => !session.slots[s]);
+}
+
 function allKnSlotsReady(session: KnSlotBatchSession): boolean {
-  return CANONICAL_KB_SLOTS.every((s) => Boolean(session.slots[s]));
+  return missingCanonicalDeliverables(session).length === 0;
 }
 
 export type SlotBatchAdvanceResult =
@@ -1411,7 +1601,9 @@ export async function advanceKnSlotBatchJob(
 
     const timing = session.batchTimings.find((t) => t.batchIndex === session.currentBatchIndex);
     const repairRound = (session.batchRepairAttempts[session.currentBatchIndex] ?? 0) > 0;
-    const extractPreview = extractStructuredSlotBatchFromAnswer(output);
+    const extractPreview = isFragmentGenerationSession(session)
+      ? extractKbFragmentBatchFromAnswer(output)
+      : extractStructuredSlotBatchFromAnswer(output);
     if (timing) {
       if (repairRound && timing.repairStartedAt) {
         timing.repairJsonValid = extractPreview.ok;
@@ -1421,13 +1613,17 @@ export async function advanceKnSlotBatchJob(
       }
     }
 
-    const merged = mergeBatchIntoSession(session, session.currentBatchIndex, output);
-    if (!merged.ok) {
+    const merged = tryMergeBatchOutput(session, session.currentBatchIndex, output);
+    if (!merged || !merged.ok) {
       const attempts = session.batchRepairAttempts[session.currentBatchIndex] ?? 0;
+      const mergeError =
+        merged?.ok === false
+          ? merged.error
+          : `Hermes 完成但无有效 ${hermesBatchOutputFormatLabel(session)}`;
       const canRepair =
         attempts < 1 &&
-        merged.hardOnly &&
-        (merged.failedSlots.length > 0 || !extractPreview.ok);
+        (merged?.hardOnly ?? true) &&
+        ((merged?.ok === false && merged.failedSlots.length > 0) || !extractPreview.ok);
       if (canRepair) {
         session.batchRepairAttempts[session.currentBatchIndex] = attempts + 1;
         if (timing) {
@@ -1437,17 +1633,17 @@ export async function advanceKnSlotBatchJob(
         session.phase = "waiting_hermes";
         await writeKnSlotBatchSession(env, session);
         const repairFailedSlots =
-          merged.failedSlots.length > 0
+          merged?.ok === false && merged.failedSlots.length > 0
             ? merged.failedSlots
             : [...KN_SLOT_BATCH_PLAN[session.currentBatchIndex]!];
         const repairMsg = buildBatchRepairUserMessage(
           session,
           session.currentBatchIndex,
-          merged.error,
+          mergeError,
           repairFailedSlots,
         );
         const started = await startBatchHermesRun(env, session, session.currentBatchIndex, {
-          repairHints: merged.error,
+          repairHints: mergeError,
           userMessageOverride: repairMsg,
         });
         if (!started.ok) {
@@ -1463,10 +1659,10 @@ export async function advanceKnSlotBatchJob(
         return { action: "continue", hermesStatus: "running" };
       }
       session.phase = "failed";
-      session.lastError = merged.error;
+      session.lastError = mergeError;
       await writeKnSlotBatchSession(env, session);
-      await failSlotBatchJob(env, row.id, merged.error);
-      return { action: "failed", error: merged.error };
+      await failSlotBatchJob(env, row.id, mergeError);
+      return { action: "failed", error: mergeError };
     }
 
     const timingDone = session.batchTimings.find((t) => t.batchIndex === session.currentBatchIndex);
@@ -1479,6 +1675,15 @@ export async function advanceKnSlotBatchJob(
       timingDone.durationMs =
         Date.parse(timingDone.completedAt) - Date.parse(timingDone.startedAt);
       timingDone.slotResults = KN_SLOT_BATCH_PLAN[session.currentBatchIndex]!.map((slot) => {
+        if (isFragmentGenerationSession(session)) {
+          const delivered = Boolean(session.fragments?.[slot]?.trim());
+          return {
+            slot,
+            score: delivered ? 1 : 0,
+            ok: delivered,
+            issues: [],
+          };
+        }
         const q = session.slotQuality[slot];
         return {
           slot,
@@ -1669,11 +1874,15 @@ export async function resumeKnSlotBatchPublish(
     return { action: "failed", error: "R2 slot-batch session 不存在" };
   }
 
-  const missingSlots = CANONICAL_KB_SLOTS.filter((s) => !session.slots[s]);
+  const missingSlots = missingCanonicalDeliverables(session);
   if (missingSlots.length) {
+    const deliveredCount = isFragmentGenerationSession(session)
+      ? Object.keys(session.fragments ?? {}).length
+      : Object.keys(session.slots).length;
+    const label = isFragmentGenerationSession(session) ? "fragments" : "slots";
     return {
       action: "failed",
-      error: `slots 不齐（${Object.keys(session.slots).length}/13），缺：${missingSlots.join(", ")}`,
+      error: `${label} 不齐（${deliveredCount}/13），缺：${missingSlots.join(", ")}`,
     };
   }
 
@@ -1740,6 +1949,9 @@ export async function getKnSlotBatchProgress(
   publishStepStartedAt?: string;
   publishError?: string;
   assembledHtmlBytes?: number;
+  workerStubSlots?: KnSlotBatchSession["workerStubSlots"];
+  workerStubAppendix?: KnSlotBatchSession["workerStubAppendix"];
+  fragmentDelivery?: KnSlotBatchSession["fragmentDelivery"];
 } | null> {
   const session = await readKnSlotBatchSession(env, projectId, jobId);
   if (!session) return null;
@@ -1749,7 +1961,9 @@ export async function getKnSlotBatchProgress(
     batchIndex: session.currentBatchIndex,
     totalBatches: KN_SLOT_BATCH_PLAN.length,
     phase: session.phase,
-    completedSlots: Object.keys(session.slots),
+    completedSlots: isFragmentGenerationSession(session)
+      ? Object.keys(session.fragments ?? {})
+      : Object.keys(session.slots),
     batchTimings: session.batchTimings,
     currentBatchIndex: session.currentBatchIndex,
     currentBatchSlots,
@@ -1764,6 +1978,9 @@ export async function getKnSlotBatchProgress(
     publishStepStartedAt: session.publishStepStartedAt,
     publishError: session.publishError,
     assembledHtmlBytes: session.assembledHtmlBytes,
+    workerStubSlots: session.workerStubSlots,
+    workerStubAppendix: session.workerStubAppendix,
+    fragmentDelivery: session.fragmentDelivery,
     architectureVersion: session.architectureVersion,
     parallelMode: session.parallelMode,
     parallelBatchesCompleted: parallelDone,

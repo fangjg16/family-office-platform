@@ -18,12 +18,17 @@ database_id = "8dc29473-1d34-4c72-90ea-bf720d073daa"
 [vars]
 ALLOWED_ORIGIN = "https://fangjg16.github.io"
 HERMES_MODEL = "qwen-plus"
+# 文档 RAG 向量（DashScope 原生 API：text-embedding-v4 + query/document 非对称检索）
+EMBED_MODEL = "text-embedding-v4"
+EMBED_DIMENSION = "1024"
+EMBED_INSTRUCT = "Given a family office investment research query, retrieve relevant excerpts from uploaded project documents, business plans, and due diligence materials."
 # Hermes / 知识网络文件回路拼 URL（与 Railway JFO_API_PUBLIC_BASE 一致）
 JFO_API_PUBLIC_BASE = "https://jfo-api.jfo-api.workers.dev"
 # slot-batch v2 受控 rollout（0/false=回退 v1；1=默认 v2）
 KN_SLOT_BATCH_V2_ENABLED = "1"
 # 并行 Hermes 上限 1–4（Railway max 10 runs；生产先用 2 留 repair headroom）
 KN_SLOT_BATCH_PARALLEL_LIMIT = "2"
-# KN_SLOT_BATCH_FORCE_V1 = "1"
+# fragment（默认）| structured 回退 JSON slot-batch
+KN_GENERATION_MODE = "fragment"
 # 本地 smoke API（batch2/3-smoke）；生产默认关闭，不设即 404
 # KN_SLOT_BATCH_SMOKE_ENABLED = "1"

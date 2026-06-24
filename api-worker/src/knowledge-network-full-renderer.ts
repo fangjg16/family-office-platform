@@ -60,6 +60,7 @@ function buildKbConfigBlock(
   data: StructuredKbData,
   displayOrder: CanonicalKbSlot[],
   structureCoverageDebug?: number,
+  renderNote = "structured-full | Worker deterministic render",
 ): string {
   const projectType = data.config.projectType?.trim() || "general";
   const renderingMode = data.config.renderingMode ?? "chinese-only";
@@ -80,7 +81,7 @@ function buildKbConfigBlock(
     `config-version: ${configVersion}`,
     ...(debugLine ? [debugLine] : []),
     "display-order-history:",
-    `  ${intakeDate} | structured-full | Worker deterministic render`,
+    `  ${intakeDate} | ${renderNote}`,
     "-->",
   ].join("\n");
 }
@@ -199,11 +200,22 @@ function buildMainSections(data: StructuredKbData, displayOrder: CanonicalKbSlot
     .join("\n\n");
 }
 
-function replaceTemplateBlock(
-  template: string,
+export type KbTemplateSectionOverrides = {
+  mainSectionsHtml: string;
+  appendixAHtml?: string;
+  appendixBHtml?: string;
+  appendixCHtml?: string;
+  appendixDHtml?: string;
+  kbConfigNote?: string;
+};
+
+/** 将 shell 元数据 + 自定义 section HTML 注入 kb-template（fragment 组装与 structured 渲染共用） */
+export function renderKbTemplateWithSections(
   data: StructuredKbData,
+  sections: KbTemplateSectionOverrides,
   options?: { structureCoverageDebug?: number; versionDisplay?: string; schemaVersion?: string },
 ): string {
+  const template = loadWorkerKbTemplate();
   const displayOrder = resolveStructuredKbDisplayOrder(data);
   const schemaVersion = options?.schemaVersion?.trim() || data.schemaVersion || "2.91";
   const version =
@@ -224,7 +236,12 @@ function replaceTemplateBlock(
 
   let html = template.replace(
     /<!--\s*KB-CONFIG[\s\S]*?-->/i,
-    buildKbConfigBlock(data, displayOrder, options?.structureCoverageDebug),
+    buildKbConfigBlock(
+      data,
+      displayOrder,
+      options?.structureCoverageDebug,
+      sections.kbConfigNote?.trim() || "fragment-full | Worker assemble",
+    ),
   );
 
   const replacements: Record<string, string> = {
@@ -251,11 +268,14 @@ function replaceTemplateBlock(
     "{{COMBINED}}": data.maturity.combined,
     "{{MATURITY_TIER}}": data.maturity.tier ?? "",
     "{{AUTO_SUMMARY}}": data.meta.autoSummary,
-    "{{MAIN_SECTIONS}}": buildMainSections(data, displayOrder),
-    "{{APPENDIX_A}}": renderAppendixSourceIndex(data.sources),
-    "{{APPENDIX_B}}": renderAppendixGlossary(data.terms ?? []),
-    "{{APPENDIX_C}}": renderAppendixDataDictionary(data.dataDictionary ?? []),
-    "{{APPENDIX_D}}": renderAppendixVersionLedgerPlaceholder(),
+    "{{MAIN_SECTIONS}}": sections.mainSectionsHtml,
+    "{{APPENDIX_A}}":
+      sections.appendixAHtml ?? renderAppendixSourceIndex(data.sources),
+    "{{APPENDIX_B}}":
+      sections.appendixBHtml ?? renderAppendixGlossary(data.terms ?? []),
+    "{{APPENDIX_C}}":
+      sections.appendixCHtml ?? renderAppendixDataDictionary(data.dataDictionary ?? []),
+    "{{APPENDIX_D}}": sections.appendixDHtml ?? renderAppendixVersionLedgerPlaceholder(),
     "{{FOOTER_BRAND}}": footerBrand,
     "{{TIMESTAMP}}": timestamp,
   };
@@ -266,6 +286,22 @@ function replaceTemplateBlock(
 
   html = html.replace(/(AI-Generated · )[^<]+(<\/span>)/i, `$1${aiBadge}$2`);
   return html;
+}
+
+function replaceTemplateBlock(
+  _template: string,
+  data: StructuredKbData,
+  options?: { structureCoverageDebug?: number; versionDisplay?: string; schemaVersion?: string },
+): string {
+  const displayOrder = resolveStructuredKbDisplayOrder(data);
+  return renderKbTemplateWithSections(
+    data,
+    {
+      mainSectionsHtml: buildMainSections(data, displayOrder),
+      kbConfigNote: "structured-full | Worker deterministic render",
+    },
+    options,
+  );
 }
 
 function escTemplateValue(key: string, value: string): string {

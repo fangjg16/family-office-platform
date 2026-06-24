@@ -12,7 +12,10 @@ import type {
 import type { StructuredKbSource } from "./knowledge-network-structured-kb-data-types";
 import { normalizeStructuredKbSources } from "./knowledge-network-structured-kb-data";
 
-export type SlotBatchPrepEnv = { DB: D1Database };
+import type { EmbedEnv } from "./embeddings";
+import { buildMaterialSnapshotFromDocuments } from "./knowledge-network-material-snapshot";
+
+export type SlotBatchPrepEnv = { DB: D1Database } & EmbedEnv;
 
 const MAX_INVENTORY_ITEMS = 12;
 const EXCERPT_MAX = 280;
@@ -140,6 +143,7 @@ export async function runKnSlotBatchPreprocess(
     sources: registry,
   };
   session.sourceRegistry = registry;
+  session.materialSnapshot = buildMaterialSnapshotFromDocuments(documents, env);
   session.updatedAt = new Date().toISOString();
   return prep;
 }

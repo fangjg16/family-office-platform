@@ -2,6 +2,11 @@ import type { HermesAgentEnv } from "./hermes-agent";
 import { buildHermesAgentInstructions } from "./hermes-agent";
 import { buildHermesSlotBatchWorkflow } from "./hermes-knowledge-network";
 import { buildCompactSlotBatchWorkflow } from "./knowledge-network-slot-batch-compact-prompt";
+import {
+  buildCompactFragmentBatchWorkflow,
+  buildHermesFragmentBatchWorkflow,
+} from "./knowledge-network-fragment-batch-instructions";
+import { isFragmentGenerationSession } from "./knowledge-network-generation-mode";
 import { buildPrepSharedContextBlock, buildBatchEvidenceHintsBlock } from "./knowledge-network-slot-batch-prep";
 import { buildHermesMaterialsDigest } from "./hermes-materials-digest";
 import {
@@ -232,6 +237,7 @@ export async function buildSlotBatchHermesInstructionsPackage(
       userMessage: session.userMessage,
       hasExistingKb: params.hasExistingKb,
       slotBatched: true,
+      fragmentBatched: isFragmentGenerationSession(session),
       slotBatchCompact: compact,
       slotBatchIndex: batchIndex,
       slotBatchSlots: batchSlots,
@@ -340,37 +346,63 @@ export async function buildSlotBatchHermesInstructionsPackage(
   if (compact) {
     instructions += buildPrepSharedContextBlock(session);
     instructions += buildBatchEvidenceHintsBlock(session, batchSlots);
-    instructions += buildCompactSlotBatchWorkflow({
-      mode: session.mode,
-      batchIndex,
-      slots: batchSlots,
-      repairHints: params.repairHints,
-    });
+    if (isFragmentGenerationSession(session)) {
+      instructions += buildCompactFragmentBatchWorkflow({
+        mode: session.mode,
+        batchIndex,
+        slots: batchSlots,
+        repairHints: params.repairHints,
+      });
+    } else {
+      instructions += buildCompactSlotBatchWorkflow({
+        mode: session.mode,
+        batchIndex,
+        slots: batchSlots,
+        repairHints: params.repairHints,
+      });
+    }
   } else {
     if (batchIndex > 0) {
       instructions += buildSlotBatchSharedContextBlock(session);
     }
-    instructions += buildHermesSlotBatchWorkflow({
-      mode: session.mode,
-      projectTitle: session.projectTitle,
-      batchIndex,
-      totalBatches: KN_SLOT_BATCH_PLAN.length,
-      slots: batchSlots,
-      repairHints: params.repairHints,
-      priorSlots: Object.keys(session.slots) as CanonicalKbSlot[],
-    });
+    if (isFragmentGenerationSession(session)) {
+      instructions += buildHermesFragmentBatchWorkflow({
+        mode: session.mode,
+        projectTitle: session.projectTitle,
+        batchIndex,
+        totalBatches: KN_SLOT_BATCH_PLAN.length,
+        slots: batchSlots,
+        repairHints: params.repairHints,
+        priorSlots: Object.keys(session.fragments ?? {}) as CanonicalKbSlot[],
+      });
+    } else {
+      instructions += buildHermesSlotBatchWorkflow({
+        mode: session.mode,
+        projectTitle: session.projectTitle,
+        batchIndex,
+        totalBatches: KN_SLOT_BATCH_PLAN.length,
+        slots: batchSlots,
+        repairHints: params.repairHints,
+        priorSlots: Object.keys(session.slots) as CanonicalKbSlot[],
+      });
+    }
   }
 
   const batchSlotsLabel = batchSlots.join(", ");
+  const fragmentMode = isFragmentGenerationSession(session);
   const userMessage = compact
-    ? `${session.userMessage}\n\n【Worker 并行批次 ${batchIndex + 1}/${KN_SLOT_BATCH_PLAN.length} · Compact】` +
-      `生成本批 slot：${batchSlotsLabel}。只交付 structured-slot-batch JSON + sourceProposals（如需）。`
+    ? `${session.userMessage}\n\n【Worker 并行批次 ${batchIndex + 1}/${KN_SLOT_BATCH_PLAN.length} · Compact${fragmentMode ? " · Fragment" : ""}】` +
+      (fragmentMode
+        ? `生成本批 slot：${batchSlotsLabel}。只交付 kb-fragment-batch JSON（sectionHtml fragments）。`
+        : `生成本批 slot：${batchSlotsLabel}。只交付 structured-slot-batch JSON + sourceProposals（如需）。`)
     : batchIndex === 1
       ? `${session.userMessage}\n\n【Worker 批次 2/4 · Batch2 协议】只交付一个 structured-slot-batch JSON 代码块（slots 为 object；见指令内 envelope + 组件片段）。`
       : batchIndex === 2
         ? `${session.userMessage}\n\n【Worker 批次 3/4 · Batch3 协议】只交付一个 structured-slot-batch JSON 代码块（batchIndex=2，slots 为 object；见指令内 envelope + 组件片段）。`
         : `${session.userMessage}\n\n【Worker 批次 ${batchIndex + 1}/${KN_SLOT_BATCH_PLAN.length}】` +
-          `请生成本批 slot：${batchSlotsLabel}。交付 structured-slot-batch JSON，勿写整页 HTML。`;
+          (fragmentMode
+            ? `请生成本批 slot：${batchSlotsLabel}。交付 kb-fragment-batch JSON（section HTML fragments），勿写整页 HTML。`
+            : `请生成本批 slot：${batchSlotsLabel}。交付 structured-slot-batch JSON，勿写整页 HTML。`);
 
   return { instructions, userMessage, readPlan, injectionMeta };
 }
