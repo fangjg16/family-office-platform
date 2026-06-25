@@ -1,4 +1,9 @@
 import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
+import {
+  normalizeFragmentSectionHtml,
+  validateFragmentSectionTitle,
+  validateSlotComponentMarkers,
+} from "./knowledge-network-fragment-normalize";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import {
   extractSourceCitationIdsFromHtml,
@@ -99,7 +104,8 @@ export function validateCanonicalSlotFragment(
   sectionHtml: string,
   registry?: KbFragmentRegistryContext,
 ): KbFragmentValidationResult {
-  const html = sectionHtml.trim();
+  const normalized = normalizeFragmentSectionHtml(slot, sectionHtml.trim());
+  const html = normalized.trim();
   if (!html) {
     return { ok: false, slot, reason: "fragment 为空", level: "L1" };
   }
@@ -107,6 +113,16 @@ export function validateCanonicalSlotFragment(
   const envelopeErr = validateSectionEnvelope(slot, html);
   if (envelopeErr) {
     return { ok: false, slot, reason: envelopeErr, level: "L1" };
+  }
+
+  const titleErr = validateFragmentSectionTitle(slot, html);
+  if (titleErr) {
+    return { ok: false, slot, reason: titleErr, level: "L1" };
+  }
+
+  const componentErr = validateSlotComponentMarkers(slot, html);
+  if (componentErr) {
+    return { ok: false, slot, reason: componentErr, level: "L1" };
   }
 
   if (registry) {

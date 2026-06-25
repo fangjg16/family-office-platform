@@ -250,7 +250,7 @@ async function runKnFragmentBatchPublishing(
     `已通过 **kb-fragment-batch**（预处理 + ${KN_SLOT_BATCH_PLAN.length} 批并行 / 13 slot HTML fragment）写入项目知识网络 **v${versionDisplay}**。` +
     `${stubAudit}\n` +
     `批次耗时：${timingSummary}。\n` +
-    `Factor A/B/Combined 见页面 maturity 区（fragment 路径由 HTML 入库后展示）。`;
+    `Factor A/B/Combined 由 Hermes 在 batch 0 \`maturity\` 字段自评并写入页面 masthead。`;
 
   try {
     await withPublishStepTimeout(env, session, "syncing_chat", async () => {

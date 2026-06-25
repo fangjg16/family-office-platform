@@ -13,6 +13,10 @@ import type { StructuredKbSource } from "./knowledge-network-structured-kb-data-
 import { normalizeStructuredKbSources } from "./knowledge-network-structured-kb-data";
 
 import type { EmbedEnv } from "./embeddings";
+import {
+  buildProjectAutoSummary,
+  sanitizeDocumentExcerpt,
+} from "./knowledge-network-fragment-normalize";
 import { buildMaterialSnapshotFromDocuments } from "./knowledge-network-material-snapshot";
 
 export type SlotBatchPrepEnv = { DB: D1Database } & EmbedEnv;
@@ -53,7 +57,7 @@ function buildSourcesFromDocuments(docs: MaterialHintDocument[]): StructuredKbSo
   for (const doc of docs.slice(0, 24)) {
     const isPackage = doc.scope === "package";
     const id = isPackage ? `A-${++a}` : `U-${++u}`;
-    const excerpt = doc.sampleText ? trimExcerpt(doc.sampleText) : undefined;
+    const excerpt = doc.sampleText ? trimExcerpt(sanitizeDocumentExcerpt(doc.sampleText)) : undefined;
     sources.push({
       id,
       type: isPackage ? "公开/第三方" : "用户上传",
@@ -102,12 +106,13 @@ export async function runKnSlotBatchPreprocess(
       chunks.find((c) => c.document_id === doc.id)?.text ??
       doc.sampleText ??
       "";
+    const rawExcerpt = chunkText || doc.sampleText || "（未解析正文）";
     inventory.push({
       id: `inv-${inventory.length + 1}`,
       sourceId,
       title: doc.filename,
       type: source?.type ?? "用户上传",
-      excerpt: trimExcerpt(chunkText || doc.sampleText || "（未解析正文）"),
+      excerpt: trimExcerpt(sanitizeDocumentExcerpt(rawExcerpt, EXCERPT_MAX)),
       relevantSlots: inferRelevantSlots(doc.filename, session.userMessage),
     });
   }
@@ -115,6 +120,11 @@ export async function runKnSlotBatchPreprocess(
   const leadExcerpt =
     inventory[0]?.excerpt ??
     (session.userMessage.trim().slice(0, 200) || "待各 slot batch 基于资料补全。");
+
+  const autoSummary = buildProjectAutoSummary(
+    documents.length,
+    documents.map((d) => d.filename),
+  );
 
   const prep: KnSlotBatchPrep = {
     completedAt: new Date().toISOString(),
@@ -127,7 +137,7 @@ export async function runKnSlotBatchPreprocess(
       },
       meta: {
         title: session.projectTitle,
-        autoSummary: leadExcerpt,
+        autoSummary,
         lead: leadExcerpt,
       },
       summary: `基于 ${registry.length} 项已登记来源与 ${inventory.length} 条证据摘录，按 v2.91 十三 slot 并行生成知识网络。`,

@@ -65,6 +65,16 @@ export function mergeFragmentBatchIntoSession(
 
   if (!parallel && batchIndex === 0) {
     if (batch.summary) session.shell.summary = batch.summary;
+    if (batch.maturity) {
+      session.shell.maturity = {
+        factorA: batch.maturity.factorA ?? session.shell.maturity?.factorA ?? "—",
+        factorB: batch.maturity.factorB ?? session.shell.maturity?.factorB ?? "—",
+        combined: batch.maturity.combined ?? session.shell.maturity?.combined ?? "—",
+        tier: batch.maturity.tier ?? session.shell.maturity?.tier,
+        factorANote: batch.maturity.factorANote ?? session.shell.maturity?.factorANote,
+        factorBNote: batch.maturity.factorBNote ?? session.shell.maturity?.factorBNote,
+      };
+    }
   } else if (parallel) {
     const invented = rejectInventedFinalSourceIds(
       (batch.sourceProposals ?? []) as { id?: string; sourceKey?: string; title: string }[],
@@ -73,6 +83,17 @@ export function mergeFragmentBatchIntoSession(
     if (invented) {
       return { ok: false, error: invented, failedSlots: [], hardOnly: true };
     }
+  }
+
+  if (parallel && batch.maturity) {
+    session.shell.maturity = {
+      factorA: batch.maturity.factorA ?? session.shell.maturity?.factorA ?? "—",
+      factorB: batch.maturity.factorB ?? session.shell.maturity?.factorB ?? "—",
+      combined: batch.maturity.combined ?? session.shell.maturity?.combined ?? "—",
+      tier: batch.maturity.tier ?? session.shell.maturity?.tier,
+      factorANote: batch.maturity.factorANote ?? session.shell.maturity?.factorANote,
+      factorBNote: batch.maturity.factorBNote ?? session.shell.maturity?.factorBNote,
+    };
   }
 
   const proposals = proposalsFromFragmentBatch(batch);

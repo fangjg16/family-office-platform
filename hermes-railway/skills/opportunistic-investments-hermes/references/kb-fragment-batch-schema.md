@@ -27,6 +27,7 @@ Worker **fragment-batch** jobs expect one JSON object per Hermes reply (inside a
 | `batchIndex` | yes | `0` … `5` (6 batches) |
 | `mode` | optional | `initial` \| `full` |
 | `summary` | optional | Short batch summary |
+| `maturity` | batch 0 | `{ factorA, factorB, combined, tier?, factorANote?, factorBNote? }` — Hermes 自评写入 masthead；**禁止**在 slot HTML 写 `C · 22%` |
 | `sourceProposals` | optional | New sources; use `sourceKey`, Worker assigns `U-N` / `A-N` |
 | `fragments` | yes | Map `canonicalSlot` → **full** `<section id="…">…</section>` HTML |
 | `appendixFragments` | batch 5 | `glossary` + `data-dictionary` full sections; other batches may use `null` |

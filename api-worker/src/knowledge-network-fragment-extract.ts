@@ -60,6 +60,28 @@ function parseAppendixFragmentsInput(raw: unknown): KbFragmentBatchAppendixFragm
   return out;
 }
 
+function parseMaturityInput(raw: unknown): KbFragmentBatchPayload["maturity"] | undefined {
+  if (!isRecord(raw)) return undefined;
+  const factorA = raw.factorA != null ? String(raw.factorA).trim() : "";
+  const factorB = raw.factorB != null ? String(raw.factorB).trim() : "";
+  const combined = raw.combined != null ? String(raw.combined).trim() : "";
+  if (!factorA && !factorB && !combined) return undefined;
+  return {
+    factorA: factorA || "—",
+    factorB: factorB || "—",
+    combined: combined || "—",
+    tier:
+      raw.tier === "Bare Lead" ||
+      raw.tier === "Early" ||
+      raw.tier === "Mid" ||
+      raw.tier === "Mature"
+        ? raw.tier
+        : undefined,
+    factorANote: raw.factorANote != null ? String(raw.factorANote) : undefined,
+    factorBNote: raw.factorBNote != null ? String(raw.factorBNote) : undefined,
+  };
+}
+
 function parseSourceProposals(raw: unknown): SourceProposalInput[] {
   if (!Array.isArray(raw)) return [];
   const out: SourceProposalInput[] = [];
@@ -119,6 +141,7 @@ function parseKbFragmentBatchObject(raw: unknown): KbFragmentBatchPayload | null
     appendixFragments: parseAppendixFragmentsInput(raw.appendixFragments),
     sourceProposals: parseSourceProposals(raw.sourceProposals),
     summary,
+    maturity: parseMaturityInput(raw.maturity),
   };
 }
 

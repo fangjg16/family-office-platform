@@ -215,10 +215,12 @@ export function assembleKbFromFragmentSession(
   }
 
   const maturity = {
-    factorA: "—",
-    factorB: "—",
-    combined: "—",
-    tier: "Early" as const,
+    factorA: session.shell.maturity?.factorA ?? "—",
+    factorB: session.shell.maturity?.factorB ?? "—",
+    combined: session.shell.maturity?.combined ?? "—",
+    tier: session.shell.maturity?.tier ?? ("Early" as const),
+    factorANote: session.shell.maturity?.factorANote,
+    factorBNote: session.shell.maturity?.factorBNote,
   };
 
   return assembleKbFromFragments(

@@ -3,6 +3,7 @@ import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import type { SourceProposalInput } from "./knowledge-network-source-proposals";
 import type {
   StructuredKbData,
+  StructuredKbMaturity,
   StructuredKbSource,
 } from "./knowledge-network-structured-kb-data-types";
 
@@ -24,6 +25,8 @@ export type KbFragmentBatchPayload = {
   appendixFragments?: KbFragmentBatchAppendixFragments | null;
   sourceProposals?: SourceProposalInput[];
   summary?: string;
+  /** batch 0（或末批）由 Hermes 自评；Worker 只透传至 masthead，不重算 */
+  maturity?: Partial<StructuredKbMaturity>;
 };
 
 export type KbFragmentAssemblyShell = Pick<
