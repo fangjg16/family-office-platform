@@ -8,12 +8,20 @@ import {
   handleHermesPutKnowledgeNetworkCurrent,
 } from "./hermes-knowledge-network";
 import { isPlaceholderChunkText } from "./search";
+import { resolveEmbedDimension, resolveEmbedModel } from "./embeddings";
+import {
+  buildDocumentContentRevisionKey,
+  type DocumentContentRevision,
+} from "./knowledge-network-material-snapshot";
 
 export type HermesBridgeEnv = {
   FILES: R2Bucket;
   DB: D1Database;
   JFO_INTERNAL_KEY?: string;
   JFO_API_PUBLIC_BASE?: string;
+  DASHSCOPE_API_KEY?: string;
+  EMBED_MODEL?: string;
+  EMBED_DIMENSION?: string;
 };
 
 const MAX_TEXT_CHARS = 500_000;
@@ -139,12 +147,14 @@ export async function handleHermesManifest(
     created_at: string;
     uploaded_by: string | null;
     chunk_count: number;
+    embedded_chunk_count: number;
     sample_text: string | null;
   };
 
   let sql = `
     SELECT d.id, d.filename, d.scope, d.conversation_id, d.mime, d.created_at, d.uploaded_by,
            (SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id) AS chunk_count,
+           (SELECT COUNT(*) FROM chunks c WHERE c.document_id = d.id AND c.embedding_json IS NOT NULL AND TRIM(c.embedding_json) != '') AS embedded_chunk_count,
            (SELECT c.text FROM chunks c WHERE c.document_id = d.id AND c.chunk_index = 0 LIMIT 1) AS sample_text
     FROM documents d
     WHERE d.project_id = ?
@@ -174,11 +184,23 @@ export async function handleHermesManifest(
 
   const { results } = await env.DB.prepare(sql).bind(...binds).all<Row>();
 
+  const embedModel = resolveEmbedModel(env);
+  const embedDimension = resolveEmbedDimension(env);
+
   const files = (results ?? []).map((r) => {
     const chunkCount = Number(r.chunk_count) || 0;
+    const embeddedChunkCount = Number(r.embedded_chunk_count) || 0;
     const sample = (r.sample_text ?? "").trim();
     const parsed =
       chunkCount > 0 && sample.length > 0 && !isPlaceholderChunkText(sample);
+    const embedded = chunkCount > 0 && embeddedChunkCount >= chunkCount;
+    const revision: DocumentContentRevision = {
+      documentId: r.id,
+      chunkCount,
+      embedModel,
+      embedDimension,
+      createdAt: r.created_at,
+    };
     const scope = r.scope === "session" ? "session" : "package";
     const urls = buildDocUrls(
       base,
@@ -197,6 +219,8 @@ export async function handleHermesManifest(
       uploadedBy: r.uploaded_by,
       chunkCount,
       parsed,
+      embedded,
+      contentRevision: buildDocumentContentRevisionKey(revision),
       ...urls,
     };
   });
@@ -210,7 +234,7 @@ export async function handleHermesManifest(
     syncedAt: new Date().toISOString(),
     files,
     instructions:
-      "Hermes：scope=package 为项目共享资料；scope=session 为本对话附件（须带 userId+conversationId）；scope=all 为二者合并。对每个 parsed=true 的文件 GET textUrl 阅读全文。",
+      "Hermes：scope=package 为项目共享资料；scope=session 为本对话附件（须带 userId+conversationId）；scope=all 为二者合并。对每个 parsed=true 的文件 GET textUrl 阅读全文；readMode=cached 或 contentRevision 未变且 Worker 已注入摘录时跳过 textUrl。",
   });
 }
 

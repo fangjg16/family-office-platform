@@ -15,15 +15,27 @@ export type MaterialSnapshot = {
   fingerprint: string;
 };
 
-function revisionKey(d: DocumentContentRevision): string {
+export function buildDocumentContentRevisionKey(d: DocumentContentRevision): string {
   return `${d.documentId}:${d.chunkCount}:${d.embedModel}:${d.embedDimension}`;
+}
+
+export function buildContentRevisionFromHintDoc(
+  doc: Pick<MaterialHintDocument, "id" | "chunkCount">,
+  env?: EmbedEnv,
+): string {
+  return buildDocumentContentRevisionKey({
+    documentId: doc.id,
+    chunkCount: doc.chunkCount,
+    embedModel: resolveEmbedModel(env ?? {}),
+    embedDimension: resolveEmbedDimension(env ?? {}),
+  });
 }
 
 export function buildMaterialSnapshotFingerprint(
   documents: readonly DocumentContentRevision[],
 ): string {
   return documents
-    .map(revisionKey)
+    .map(buildDocumentContentRevisionKey)
     .sort()
     .join("|");
 }

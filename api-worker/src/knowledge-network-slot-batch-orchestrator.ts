@@ -79,6 +79,7 @@ import {
   readProjectKnowledgeNetworkHtml,
   upsertProjectKnowledgeNetwork,
 } from "./project-knowledge-network";
+import { saveProjectMaterialSnapshot } from "./knowledge-network-material-snapshot-store";
 
 export type SlotBatchOrchestratorEnv = HermesAgentEnv & {
   FILES: R2Bucket;
@@ -87,6 +88,18 @@ export type SlotBatchOrchestratorEnv = HermesAgentEnv & {
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+async function persistKnMaterialSnapshotOnPublish(
+  env: SlotBatchOrchestratorEnv,
+  session: KnSlotBatchSession,
+): Promise<void> {
+  if (!session.materialSnapshot) return;
+  try {
+    await saveProjectMaterialSnapshot(env, session.projectId, session.materialSnapshot);
+  } catch {
+    /* 非阻断：下次 full 可能重复读 textUrl */
+  }
 }
 
 const PUBLISH_STEP_TIMEOUT_MS = 90_000;
@@ -251,6 +264,7 @@ async function runKnFragmentBatchPublishing(
   session.phase = "done";
   session.currentPublishStep = "completed";
   session.updatedAt = nowIso();
+  await persistKnMaterialSnapshotOnPublish(env, session);
   await writeKnSlotBatchSession(env, session);
 
   return { action: "completed", answer, html: htmlToStore };
@@ -388,6 +402,7 @@ async function runKnSlotBatchPublishing(
   session.phase = "done";
   session.currentPublishStep = "completed";
   session.updatedAt = nowIso();
+  await persistKnMaterialSnapshotOnPublish(env, session);
   await writeKnSlotBatchSession(env, session);
 
   return { action: "completed", answer, html: htmlToStore };

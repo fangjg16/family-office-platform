@@ -12,8 +12,15 @@ import {
   type MaterialHintsPayload,
 } from "./knowledge-network-material-hints";
 import type { ChunkRow } from "./search";
+import type { EmbedEnv } from "./embeddings";
+import {
+  buildContentRevisionFromHintDoc,
+  buildDocumentContentRevisionKey,
+  type MaterialSnapshot,
+} from "./knowledge-network-material-snapshot";
+import { loadProjectMaterialSnapshot } from "./knowledge-network-material-snapshot-store";
 
-export type ReadingPlanReadMode = "full" | "excerpt" | "manifest";
+export type ReadingPlanReadMode = "full" | "excerpt" | "manifest" | "cached";
 
 export type ReadingPlanFileRef = {
   fileId: string;
@@ -42,6 +49,18 @@ export type ReadingPlanPayload = {
   touchedSlots: CanonicalKbSlot[];
   globalReadOrder?: GlobalReadOrderEntry[];
   slots?: Partial<Record<CanonicalKbSlot, SlotReadingPlan>>;
+};
+
+export type ReadingPlanCacheContext = {
+  currentSnapshot?: MaterialSnapshot;
+  previousProjectSnapshot?: MaterialSnapshot | null;
+  batchIndex?: number;
+};
+
+export type BuildReadingPlanParams = BuildMaterialHintsParams & {
+  cacheContext?: ReadingPlanCacheContext;
+  documentsById?: Map<string, MaterialHintDocument>;
+  env?: EmbedEnv;
 };
 
 export const READING_PLAN_JSON_MAX_CHARS = 9000;
@@ -155,18 +174,91 @@ function targetSlotsForPlan(
   return [];
 }
 
-function hintToPlanReadMode(entry: MaterialHintEntry): ReadingPlanReadMode {
-  if (entry.readMode === "full") return "full";
-  if (entry.readMode === "excerpt") return "excerpt";
-  if (!entry.parsed) return "manifest";
-  return "manifest";
+function revisionKeyForFile(
+  fileId: string,
+  documentsById?: Map<string, MaterialHintDocument>,
+  env?: EmbedEnv,
+): string | null {
+  const doc = documentsById?.get(fileId);
+  if (!doc) return null;
+  return buildContentRevisionFromHintDoc(doc, env);
 }
 
-function entryToFileRef(entry: MaterialHintEntry, reason?: string): ReadingPlanFileRef {
+function shouldUseCachedReadMode(
+  fileId: string,
+  baseMode: ReadingPlanReadMode,
+  mode: KnowledgeNetworkUpdateMode,
+  ctx: ReadingPlanCacheContext | undefined,
+  documentsById?: Map<string, MaterialHintDocument>,
+  env?: EmbedEnv,
+): boolean {
+  if (!ctx || baseMode === "manifest") return false;
+  const revision = revisionKeyForFile(fileId, documentsById, env);
+  if (!revision) return false;
+
+  if (ctx.previousProjectSnapshot) {
+    const prev = ctx.previousProjectSnapshot.documents.find((d) => d.documentId === fileId);
+    if (prev && buildDocumentContentRevisionKey(prev) === revision) {
+      return true;
+    }
+  }
+
+  if (
+    ctx.batchIndex !== undefined &&
+    ctx.batchIndex > 0 &&
+    ctx.currentSnapshot &&
+    (mode === "initial" || mode === "full")
+  ) {
+    const cur = ctx.currentSnapshot.documents.find((d) => d.documentId === fileId);
+    if (cur && buildDocumentContentRevisionKey(cur) === revision) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+type ReadingPlanApplyOptions = {
+  mode: KnowledgeNetworkUpdateMode;
+  cacheContext?: ReadingPlanCacheContext;
+  documentsById?: Map<string, MaterialHintDocument>;
+  env?: EmbedEnv;
+};
+
+function hintToPlanReadMode(
+  entry: MaterialHintEntry,
+  apply: ReadingPlanApplyOptions,
+): ReadingPlanReadMode {
+  let base: ReadingPlanReadMode;
+  if (entry.readMode === "full") base = "full";
+  else if (entry.readMode === "excerpt") base = "excerpt";
+  else if (!entry.parsed) base = "manifest";
+  else base = "manifest";
+
+  if (
+    shouldUseCachedReadMode(
+      entry.fileId,
+      base,
+      apply.mode,
+      apply.cacheContext,
+      apply.documentsById,
+      apply.env,
+    )
+  ) {
+    return "cached";
+  }
+  return base;
+}
+
+function entryToFileRef(
+  entry: MaterialHintEntry,
+  apply: ReadingPlanApplyOptions,
+  reason?: string,
+): ReadingPlanFileRef {
   return {
     fileId: entry.fileId,
     filename: entry.filename,
-    readMode: hintToPlanReadMode(entry),
+    readMode: hintToPlanReadMode(entry, apply),
     reason: reason ?? entry.reason,
   };
 }
@@ -193,6 +285,7 @@ function splitMustShould(
   entries: MaterialHintEntry[],
   primaryTouched: CanonicalKbSlot[],
   slot: CanonicalKbSlot,
+  apply: ReadingPlanApplyOptions,
 ): { mustRead: ReadingPlanFileRef[]; shouldRead: ReadingPlanFileRef[] } {
   const filtered = filterEntriesForSlot(slot, entries);
   const sorted = [...filtered].sort((a, b) => b.priority - a.priority);
@@ -200,7 +293,7 @@ function splitMustShould(
   const should: ReadingPlanFileRef[] = [];
 
   for (const e of sorted) {
-    const ref = entryToFileRef(e);
+    const ref = entryToFileRef(e, apply);
     const isMust =
       e.readMode === "full" ||
       (primaryTouched.includes(slot) && e.priority >= 55) ||
@@ -217,6 +310,7 @@ function splitMustShould(
 function buildGlobalReadOrder(
   hints: MaterialHintsPayload,
   maxEntries: number,
+  apply: ReadingPlanApplyOptions,
 ): GlobalReadOrderEntry[] {
   const byFile = new Map<
     string,
@@ -225,7 +319,7 @@ function buildGlobalReadOrder(
 
   const ingest = (entry: MaterialHintEntry, slots: CanonicalKbSlot[]) => {
     const existing = byFile.get(entry.fileId);
-    const readMode = hintToPlanReadMode(entry);
+    const readMode = hintToPlanReadMode(entry, apply);
     if (!existing || entry.priority > existing.priority) {
       byFile.set(entry.fileId, {
         fileId: entry.fileId,
@@ -274,12 +368,13 @@ function buildSlotPlans(
   hints: MaterialHintsPayload,
   targetSlots: CanonicalKbSlot[],
   primaryTouched: CanonicalKbSlot[],
+  apply: ReadingPlanApplyOptions,
 ): Partial<Record<CanonicalKbSlot, SlotReadingPlan>> {
   const slots: Partial<Record<CanonicalKbSlot, SlotReadingPlan>> = {};
   for (const slot of targetSlots) {
     const config = SLOT_READING_CONFIG[slot];
     const entries = hints.slots?.[slot] ?? [];
-    const { mustRead, shouldRead } = splitMustShould(entries, primaryTouched, slot);
+    const { mustRead, shouldRead } = splitMustShould(entries, primaryTouched, slot, apply);
     slots[slot] = {
       objective: config.objective,
       mustRead,
@@ -362,12 +457,15 @@ export function buildReadingPlanFromHints(
   options?: {
     maxGlobalOrder?: number;
     forceSlots?: CanonicalKbSlot[];
+    apply?: ReadingPlanApplyOptions;
   },
 ): ReadingPlanPayload | null {
   if (!hints) return null;
 
   const { mode, touchedSlots } = hints;
   if (mode === "reorder") return null;
+
+  const apply: ReadingPlanApplyOptions = options?.apply ?? { mode };
 
   const primaryTouched = [...touchedSlots];
   let targetSlots = targetSlotsForPlan(mode, touchedSlots, hints.slotBatchScoped);
@@ -376,7 +474,11 @@ export function buildReadingPlanFromHints(
   }
 
   if (isIncrementalWithoutTouched(mode, touchedSlots)) {
-    const globalReadOrder = buildGlobalReadOrder(hints, options?.maxGlobalOrder ?? READING_PLAN_GLOBAL_MAX);
+    const globalReadOrder = buildGlobalReadOrder(
+      hints,
+      options?.maxGlobalOrder ?? READING_PLAN_GLOBAL_MAX,
+      apply,
+    );
     if (globalReadOrder.length === 0) return null;
     return truncateReadingPlanPayload(
       { mode, touchedSlots, globalReadOrder },
@@ -384,12 +486,13 @@ export function buildReadingPlanFromHints(
     );
   }
 
-  const slots = buildSlotPlans(hints, targetSlots, primaryTouched);
+  const slots = buildSlotPlans(hints, targetSlots, primaryTouched, apply);
   const globalReadOrder = hints.slotBatchScoped
     ? []
     : buildGlobalReadOrder(
         hints,
         mode === "initial" || mode === "full" ? 8 : READING_PLAN_GLOBAL_MAX,
+        apply,
       );
 
   const payload: ReadingPlanPayload = {
@@ -441,7 +544,7 @@ export function formatReadingPlanBlock(
     "【Slot Reading Plan · deterministic route】",
     "说明：",
     "- 这是 Worker 生成的阅读路线（非事实结论），规定读哪些文件、读到什么程度、何时停止补读。",
-    "- readMode=full：优先 GET textUrl 全文；excerpt：先看 digest/摘录，不足再全文；manifest：仅 manifest 确认，按需再读。",
+    "- readMode=full：优先 GET textUrl 全文；excerpt：先看 digest/摘录，不足再全文；manifest：仅 manifest 确认，按需再读；cached：revision 未变且 Worker 已注入摘录，**跳过 textUrl**。",
     "- 未实际读取的文件不得支撑强结论；关键事实缺失应写 gap，勿用公开行业资料硬填项目事实。",
     "- 若本 plan 与用户本次点名 slot 冲突，以用户点名 slot 为准。",
     "- 上方【Slot Material Hints】为软导航；本 plan 规定 mustRead/shouldRead 顺序与 stopRule。",
@@ -480,13 +583,22 @@ function resolveHintsForReadingPlan(
 }
 
 export function buildReadingPlanFromDocuments(
-  params: BuildMaterialHintsParams,
+  params: BuildReadingPlanParams,
 ): ReadingPlanPayload | null {
   const hints = resolveHintsForReadingPlan(params);
-  return buildReadingPlanFromHints(hints);
+  const documentsById =
+    params.documentsById ??
+    new Map(params.documents.map((d) => [d.id, d] as const));
+  const apply: ReadingPlanApplyOptions = {
+    mode: params.mode,
+    cacheContext: params.cacheContext,
+    documentsById,
+    env: params.env,
+  };
+  return buildReadingPlanFromHints(hints, { apply });
 }
 
-type PlanEnv = { DB: D1Database };
+type PlanEnv = { DB: D1Database; FILES?: R2Bucket } & EmbedEnv;
 
 export async function buildKnowledgeNetworkReadingPlan(
   env: PlanEnv,
@@ -499,13 +611,18 @@ export async function buildKnowledgeNetworkReadingPlan(
     touchedSlots: CanonicalKbSlot[];
     maxFilesPerSlot?: number;
     slotBatchScoped?: boolean;
+    cacheContext?: ReadingPlanCacheContext;
   },
 ): Promise<string> {
   if (!shouldInjectReadingPlan(params.mode)) return "";
 
   let documents: MaterialHintDocument[] = [];
   let chunks: ChunkRow[] = [];
+  let previousProjectSnapshot: MaterialSnapshot | null = null;
   try {
+    if (env.FILES && (params.mode === "initial" || params.mode === "full")) {
+      previousProjectSnapshot = await loadProjectMaterialSnapshot(env, params.projectId);
+    }
     documents = await loadDocumentsForMaterialHints(
       env,
       params.projectId,
@@ -528,6 +645,12 @@ export async function buildKnowledgeNetworkReadingPlan(
     return formatReadingPlanBlock(null, { missingMaterials: true });
   }
 
+  const cacheContext: ReadingPlanCacheContext = {
+    ...params.cacheContext,
+    previousProjectSnapshot:
+      params.cacheContext?.previousProjectSnapshot ?? previousProjectSnapshot,
+  };
+
   const plan = buildReadingPlanFromDocuments({
     mode: params.mode,
     userMessage: params.userMessage,
@@ -536,6 +659,8 @@ export async function buildKnowledgeNetworkReadingPlan(
     chunks,
     maxFilesPerSlot: params.maxFilesPerSlot,
     slotBatchScoped: params.slotBatchScoped,
+    cacheContext,
+    env,
   });
 
   if (!plan) {

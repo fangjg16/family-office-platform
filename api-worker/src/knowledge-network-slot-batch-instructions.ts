@@ -305,6 +305,10 @@ export async function buildSlotBatchHermesInstructionsPackage(
       });
       if (hints) instructions += hints;
 
+      const cacheContext = {
+        currentSnapshot: session.materialSnapshot,
+        batchIndex,
+      };
       const planPayload = buildReadingPlanFromDocuments({
         mode,
         userMessage: session.userMessage,
@@ -313,6 +317,8 @@ export async function buildSlotBatchHermesInstructionsPackage(
         chunks,
         maxFilesPerSlot,
         slotBatchScoped: true,
+        cacheContext,
+        env,
       });
       const planCounts = countReadingPlanFiles(planPayload);
       readingPlanMustRead = planCounts.mustRead;
@@ -326,6 +332,7 @@ export async function buildSlotBatchHermesInstructionsPackage(
         touchedSlots: batchSlots,
         maxFilesPerSlot,
         slotBatchScoped: true,
+        cacheContext,
       });
       if (readingPlan) instructions += readingPlan;
     } else {
