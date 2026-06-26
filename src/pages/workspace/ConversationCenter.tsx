@@ -1571,25 +1571,8 @@ function RankingBlock({
   );
 }
 
-function permissionLineFor(role: WorkspaceRole): string {
-  const tier = roleLabelForProject(role);
-  switch (role) {
-    case "admin":
-      return `Master Agent · ${tier} · 全站管理 / 评分权重可配置`;
-    case "core":
-      return `Master Agent · ${tier} · 财务细节与完整评分`;
-    case "mid":
-      return `Master Agent · ${tier} · 脱敏视图 · 不可重评`;
-    case "low":
-      return `Master Agent · ${tier} · 最低权限对话`;
-    default:
-      return "";
-  }
-}
-
-/** 侧栏展示用：去掉前缀「Master Agent ·」 */
 function permissionLineSidebar(role: WorkspaceRole): string {
-  return permissionLineFor(role).replace(/^Master Agent ·\s*/u, "").trim();
+  return roleLabelForProject(role);
 }
 
 export default function ConversationCenter() {
@@ -3536,7 +3519,7 @@ export default function ConversationCenter() {
               {liveMessages.length === 0 ? (
                 <AiShell>
                   <p className="text-sm text-muted-foreground">
-                    还没有消息。先发送一条问题试试，例如：「给出南宁港项目的首期招商优先级建议」。
+                    还没有消息。先发送一条问题试试。
                   </p>
                 </AiShell>
               ) : (
@@ -3971,15 +3954,7 @@ export default function ConversationCenter() {
               autoComplete="off"
               spellCheck={false}
               aria-label="对话输入"
-              placeholder={
-                isLiveAiMode
-                  ? "输入消息；Shift+Enter 换行，Enter 发送；可说「查外部资料」触发联网"
-                  : playbackActive
-                    ? "按空格填入下一句演示问题；Shift+Enter 换行，Enter 发送"
-                    : isBlankThread
-                      ? "输入消息（需开启 Live 后才能真正发送）"
-                      : "可直接输入；演示项目请按空格填入预设问题"
-              }
+              placeholder="输入消息并发送"
               className={cn(
                 "min-h-12 max-h-[88px] min-w-0 flex-1 resize-none overflow-x-hidden overflow-y-auto rounded-2xl border border-input bg-white px-5 py-2.5 text-sm font-medium leading-relaxed break-words whitespace-pre-wrap shadow-inner [overflow-wrap:anywhere] placeholder:text-muted-foreground/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[hsl(var(--wine-deep)/0.28)] focus-visible:ring-offset-2 focus-visible:ring-offset-background",
                 draftMessage ? "text-foreground" : "text-muted-foreground",

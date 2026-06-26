@@ -195,7 +195,7 @@ export function ProjectPermissionsSection({
                   {m.isPlatformAdmin ? (
                     <option value="admin">Admin</option>
                   ) : m.isCreator ? (
-                    <option value="core">Core 核心级（创建人）</option>
+                    <option value="core">Core 核心级</option>
                   ) : (
                     ASSIGNABLE.map((r) => (
                       <option key={r} value={r}>
