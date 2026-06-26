@@ -3,24 +3,10 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Lock, Shield, User } from "lucide-react";
 import { LoginParticleCanvas } from "@/components/login/LoginParticleCanvas";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 import { loadSessionUserId, saveSessionUser } from "@/workspace/session";
-import {
-  MOCK_PASSWORD,
-  verifyLogin,
-  WORKSPACE_USERS,
-} from "@/workspace/workspace-users";
+import { verifyLogin } from "@/workspace/workspace-users";
 
 const REMEMBER_USER_KEY = "fo-login-remember-user";
-
-const QUICK_USERS = [
-  { id: "candice-guo", hint: "Admin" },
-  { id: "jimmy-huang" },
-  { id: "jessica-hu" },
-  { id: "jensen-fang" },
-  { id: "binghe-su" },
-  { id: "janice-hi", hint: "Guest" },
-] as const;
 
 const inputClass =
   "block w-full rounded-sm border border-[hsl(var(--sand))] bg-white/90 py-2.5 pl-10 pr-4 text-[0.875rem] text-[hsl(var(--warm-charcoal))] shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] placeholder:text-[hsl(var(--warm-charcoal-muted)/0.55)] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[hsl(var(--wine-deep)/0.35)] focus-visible:border-[hsl(var(--wine-deep)/0.45)] disabled:opacity-60 xl:py-3 xl:text-[0.9375rem]";
@@ -260,47 +246,6 @@ export default function Login() {
                   申请试用或注册
                 </Link>
               </p>
-
-              <div className="login-card-divider border-t border-[hsl(var(--warm-charcoal)/0.1)] pt-5">
-                <p className="mb-3 font-display text-[0.62rem] tracking-[0.18em] text-[hsl(var(--warm-charcoal-muted))]">
-                  快速选择
-                </p>
-                <div className="login-quick-grid grid grid-cols-2 gap-2.5">
-                  {QUICK_USERS.map((q) => {
-                    const u = WORKSPACE_USERS[q.id];
-                    const hint = "hint" in q ? q.hint : undefined;
-                    return (
-                      <button
-                        key={q.id}
-                        type="button"
-                        onClick={() => submit(q.id, MOCK_PASSWORD)}
-                        disabled={submitting}
-                        className={cn(
-                          "flex min-h-9 w-full items-center justify-between gap-2 rounded-sm border border-[hsl(var(--sand))] bg-white/60 px-3 py-1.5 transition-colors xl:min-h-10 xl:py-2",
-                          "hover:border-[hsl(var(--wine-deep)/0.38)] hover:bg-white/90",
-                          "focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[hsl(var(--wine-deep)/0.35)] disabled:pointer-events-none disabled:opacity-70"
-                        )}
-                      >
-                        <span className="min-w-0 flex-1 truncate font-display text-[0.8125rem] leading-normal tracking-[0.02em] text-[hsl(var(--warm-charcoal))]">
-                          {u.displayName}
-                        </span>
-                        {hint ? (
-                          <span
-                            className={cn(
-                              "shrink-0 rounded-sm px-1.5 py-0.5 font-display text-[0.5625rem] leading-tight tracking-[0.12em]",
-                              hint === "Guest"
-                                ? "bg-[hsl(var(--warm-charcoal)/0.08)] text-[hsl(var(--warm-charcoal-muted))]"
-                                : "bg-[hsl(var(--wine-muted)/0.55)] text-[hsl(var(--wine-deep))]"
-                            )}
-                          >
-                            {hint}
-                          </span>
-                        ) : null}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
               </div>
 
               <div className="flex items-center justify-center gap-2 px-2 text-xs leading-snug text-[hsl(var(--warm-charcoal-muted))]">

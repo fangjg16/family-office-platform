@@ -243,19 +243,20 @@ export function ProjectDetailDrawer({
                   </ul>
                 </section>
               ))}
-              <ProjectMaterialsSection
-                projectId={project.id}
-                userId={userId}
-                canManage={chatOk && detailTier !== "guest"}
-                canDownload={canDownloadMaterials}
-              />
               {detailTier !== "guest" ? (
-                <ProjectKnowledgeNetworkSection
+                <ProjectMaterialsSection
                   projectId={project.id}
                   userId={userId}
-                  project={project}
+                  canManage={chatOk}
+                  canDownload={canDownloadMaterials}
                 />
               ) : null}
+              <ProjectKnowledgeNetworkSection
+                projectId={project.id}
+                userId={userId}
+                project={project}
+                isGuest={detailTier === "guest"}
+              />
               {canManagePerms ? (
                 <ProjectPermissionsSection project={project} userId={userId} />
               ) : null}
@@ -287,19 +288,20 @@ export function ProjectDetailDrawer({
                   </div>
                 ) : null}
               </dl>
-              <ProjectMaterialsSection
-                projectId={project.id}
-                userId={userId}
-                canManage={chatOk && detailTier !== "guest"}
-                canDownload={canDownloadMaterials}
-              />
               {detailTier !== "guest" ? (
-                <ProjectKnowledgeNetworkSection
+                <ProjectMaterialsSection
                   projectId={project.id}
                   userId={userId}
-                  project={project}
+                  canManage={chatOk}
+                  canDownload={canDownloadMaterials}
                 />
               ) : null}
+              <ProjectKnowledgeNetworkSection
+                projectId={project.id}
+                userId={userId}
+                project={project}
+                isGuest={detailTier === "guest"}
+              />
               {canManagePerms ? (
                 <ProjectPermissionsSection project={project} userId={userId} />
               ) : null}
@@ -309,11 +311,19 @@ export function ProjectDetailDrawer({
               <p className="text-sm text-muted-foreground">
                 暂无该项目的详情副本，请联系管理员。
               </p>
-              <ProjectMaterialsSection
+              {detailTier !== "guest" ? (
+                <ProjectMaterialsSection
+                  projectId={project.id}
+                  userId={userId}
+                  canManage={chatOk}
+                  canDownload={canDownloadMaterials}
+                />
+              ) : null}
+              <ProjectKnowledgeNetworkSection
                 projectId={project.id}
                 userId={userId}
-                canManage={chatOk}
-                canDownload={canDownloadMaterials}
+                project={project}
+                isGuest={detailTier === "guest"}
               />
             </>
           )}

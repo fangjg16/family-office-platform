@@ -1,7 +1,8 @@
 import type { WorkspaceRole, WorkspaceUser } from "./types";
 import { readCachedProjectRole } from "./project-role-cache";
+import { SCOPED_GUEST_PASSWORDS } from "./guest-access";
 
-/** 内部预览环境统一密码 */
+/** 内部预览环境统一密码（限定访客账号见 guest-access.ts） */
 export const MOCK_PASSWORD = "jfo2026";
 
 export const GUEST_USER_ID = "janice-hi";
@@ -26,6 +27,8 @@ const DEFAULT_ROLE_BY_USER: Record<string, WorkspaceRole> = {
   "jensen-fang": "low",
   "binghe-su": "low",
   "janice-hi": "guest",
+  peptide: "guest",
+  aishort: "guest",
 };
 
 export const WORKSPACE_USERS: Record<string, WorkspaceUser> = {
@@ -73,6 +76,20 @@ export const WORKSPACE_USERS: Record<string, WorkspaceUser> = {
     avatarChar: "B",
     avatarClass: "bg-stone-400 text-stone-900 shadow-sm",
   },
+  peptide: {
+    id: "peptide",
+    displayName: "Peptide",
+    orgTitle: "访客 · 多肽项目",
+    avatarChar: "P",
+    avatarClass: "bg-slate-300 text-slate-800 shadow-sm",
+  },
+  aishort: {
+    id: "aishort",
+    displayName: "AIShort",
+    orgTitle: "访客 · AI短剧项目",
+    avatarChar: "A",
+    avatarClass: "bg-slate-300 text-slate-800 shadow-sm",
+  },
 };
 
 /** 登录名 → 用户 id（不区分大小写；键均为 normalizeLoginKey 归一化后的小写串） */
@@ -93,6 +110,8 @@ const LOGIN_ALIASES: Record<string, string> = {
   "janice-hi": "janice-hi",
   binghesu: "binghe-su",
   "binghe-su": "binghe-su",
+  peptide: "peptide",
+  aishort: "aishort",
 };
 
 function normalizeAliasKey(raw: string): string {
@@ -115,7 +134,8 @@ export function verifyLogin(
   const id = normalizeLoginKey(username);
   if (!id) return null;
   if (!WORKSPACE_USERS[id]) return null;
-  if (password !== MOCK_PASSWORD) return null;
+  const expected = SCOPED_GUEST_PASSWORDS[id] ?? MOCK_PASSWORD;
+  if (password !== expected) return null;
   return id;
 }
 

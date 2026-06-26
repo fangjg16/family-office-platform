@@ -50,6 +50,16 @@ export function getProjectRole(userId: string, _projectId: string): WorkspaceRol
 }
 
 export async function canViewProjectKnowledgeNetwork(
+  _env: RoleEnv,
+  userId: string,
+  _projectId: string,
+  _createdBy?: string | null,
+): Promise<boolean> {
+  return Boolean(userId.trim());
+}
+
+/** 列出项目资料包：Guest 不可见 */
+export async function canListProjectFiles(
   env: RoleEnv,
   userId: string,
   projectId: string,

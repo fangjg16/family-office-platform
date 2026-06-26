@@ -9,29 +9,30 @@ import {
   getProjectById,
   sortProjectsForOverview,
 } from "@/workspace/project-registry";
+import { filterProjectsForUser } from "@/workspace/guest-access";
 import { loadLastChatProjectId } from "@/workspace/session";
 
 function pathForConversation(projectId: string, conversationId: string): string {
   return conversationRoutePath(projectId, conversationId);
 }
 
-function pickFirstProjectChatPath(): string | null {
-  const sorted = sortProjectsForOverview(getMergedProjects());
+function pickFirstProjectChatPath(userId: string | null): string | null {
+  const sorted = sortProjectsForOverview(
+    filterProjectsForUser(userId ?? "", getMergedProjects()),
+  );
   const first = sorted[0];
   return first ? conversationRoutePath(first.id, `${first.id}-main`) : null;
 }
 
-function resolveFromLastChatOrSeed(): string {
+function resolveFromLastChatOrSeed(userId: string | null): string {
   const lastChat = loadLastChatProjectId();
   if (lastChat) {
-    if (getProjectById(lastChat)) {
-      return conversationRoutePath(lastChat, `${lastChat}-main`);
-    }
-    if (lastChat.startsWith("proj-")) {
+    const visible = filterProjectsForUser(userId ?? "", getMergedProjects());
+    if (visible.some((p) => p.id === lastChat)) {
       return conversationRoutePath(lastChat, `${lastChat}-main`);
     }
   }
-  return pickFirstProjectChatPath() ?? "/app/projects";
+  return pickFirstProjectChatPath(userId) ?? "/app/projects";
 }
 
 function resolveFromChatState(
@@ -73,8 +74,8 @@ function resolveFromChatState(
 }
 
 /** 同步兜底：上次打开的项目或列表中第一个云端项目 */
-export function resolveChatEntryPath(_userId: string | null): string {
-  return resolveFromLastChatOrSeed();
+export function resolveChatEntryPath(userId: string | null): string {
+  return resolveFromLastChatOrSeed(userId);
 }
 
 /** 顶部「对话中心」：优先云端最近会话，否则上次项目或项目总览 */
@@ -86,5 +87,5 @@ export async function resolveChatEntryPathAsync(
     const fromCloud = resolveFromChatState(state);
     if (fromCloud) return fromCloud;
   }
-  return resolveFromLastChatOrSeed();
+  return resolveFromLastChatOrSeed(userId);
 }

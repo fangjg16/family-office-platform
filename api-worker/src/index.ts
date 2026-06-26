@@ -84,6 +84,7 @@ import {
   getProjectKnowledgeNetworkMeta,
   readProjectKnowledgeNetworkHtml,
 } from "./project-knowledge-network";
+import { resolveProjectKnSlotRegistry } from "./knowledge-network-slot-registry-store";
 import {
   buildKnowledgeNetworkModeInstructions,
   detectKnowledgeNetworkUpdateMode,
@@ -111,6 +112,7 @@ import {
 } from "./knowledge-network-slot-batch-orchestrator";
 import { workspaceUserDisplayName } from "./workspace-display-names";
 import { decodePathProjectId } from "./projects-resolve";
+import { canListProjectFiles } from "./workspace-roles";
 import {
   assertValidHermesBaseUrl,
   hermesChatCompletionsUrl,
@@ -145,6 +147,8 @@ export interface Env {
   KN_SLOT_BATCH_PARALLEL_LIMIT?: string;
   /** 开发 smoke API（batch2/3-smoke）；未设或 0 时路由返回 404 */
   KN_SLOT_BATCH_SMOKE_ENABLED?: string;
+  /** full/initial/incremental 主路径：fragment（默认）| structured */
+  KN_GENERATION_MODE?: string;
 }
 
 function isSlotBatchSmokeApiEnabled(env: Env): boolean {
@@ -297,6 +301,13 @@ async function handleListFiles(
   projectId: string,
   userId: string,
 ): Promise<Response> {
+  const project = await getDbProjectById(env, projectId);
+  if (!project) {
+    return json({ error: "项目不存在" }, 404);
+  }
+  if (!(await canListProjectFiles(env, userId, projectId, project.createdBy))) {
+    return json({ error: "当前权限无法查看项目资料" }, 403);
+  }
   type Row = {
     id: string;
     filename: string;
@@ -839,6 +850,16 @@ async function handleChatViaHermes(
     params.chatMode === "knowledge_network" &&
     Boolean(knMode && shouldUseSlotBatchGeneration(knMode));
 
+  let knSlotRegistry: import("./knowledge-network-kb-config").KnSlotRegistry | null = null;
+  if (params.chatMode === "knowledge_network" && hasExistingKb) {
+    try {
+      const existingHtml = await readProjectKnowledgeNetworkHtml(env, params.projectId);
+      knSlotRegistry = await resolveProjectKnSlotRegistry(env, params.projectId, existingHtml);
+    } catch {
+      knSlotRegistry = null;
+    }
+  }
+
   let instructions = buildHermesAgentInstructions(
     env,
     params.chatMode,
@@ -851,6 +872,7 @@ async function handleChatViaHermes(
       userMessage: params.message,
       hasExistingKb,
       slotBatched: useSlotBatch,
+      knSlotRegistry,
     },
   );
 

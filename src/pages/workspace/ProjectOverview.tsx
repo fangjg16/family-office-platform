@@ -47,6 +47,7 @@ import { workspaceRoleToDetailTier } from "@/workspace/project-details";
 import { useMyProjectRoles } from "@/hooks/use-my-project-roles";
 import { loadSessionUserId } from "@/workspace/session";
 import { setMyProjectRoles } from "@/workspace/project-role-cache";
+import { filterProjectsForUser } from "@/workspace/guest-access";
 import { getProjectRole, getUserById, roleLabelForProject, WORKSPACE_USERS } from "@/workspace/workspace-users";
 import type { WorkspaceRole } from "@/workspace/types";
 
@@ -279,7 +280,9 @@ export default function ProjectOverview() {
   }, [newProjectOpenness]);
 
   const user = getUserById(userId);
-  const visibleProjects = sortProjectsForOverview(getMergedProjects());
+  const visibleProjects = sortProjectsForOverview(
+    filterProjectsForUser(userId ?? "", getMergedProjects()),
+  );
   const phaseOptions = Array.from(new Set(visibleProjects.map((p) => p.phase)));
   const roleOptions = userId
     ? Array.from(

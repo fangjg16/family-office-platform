@@ -8,6 +8,8 @@ export const DEFAULT_ROLE_BY_USER: Record<string, WorkspaceRole> = {
   "jensen-fang": "low",
   "binghe-su": "low",
   "janice-hi": "guest",
+  peptide: "guest",
+  aishort: "guest",
 };
 
 export const KNOWN_WORKSPACE_USER_IDS = Object.keys(DEFAULT_ROLE_BY_USER);

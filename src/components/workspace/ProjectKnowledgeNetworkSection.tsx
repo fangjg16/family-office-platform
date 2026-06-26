@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { History, Loader2, Network, RotateCcw, Sparkles, Upload } from "lucide-react";
+import { History, Loader2, Network, RotateCcw, Sparkles, Upload, FileSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ENABLE_LIVE_CHAT,
@@ -21,6 +21,13 @@ import {
 } from "@/lib/knowledge-network-prompts";
 import { KnowledgeNetworkPreview } from "@/components/workspace/KnowledgeNetworkPreview";
 import { getUserById } from "@/workspace/workspace-users";
+import {
+  canGuestPreviewKnowledgeNetwork,
+  getGuestKnApplyState,
+  shouldShowGuestKnApply,
+  submitGuestKnApply,
+  type GuestKnApplyState,
+} from "@/workspace/guest-access";
 import { Button } from "@/components/ui/button";
 
 type ProjectKnowledgeNetworkSectionProps = {
@@ -28,6 +35,8 @@ type ProjectKnowledgeNetworkSectionProps = {
   userId: string;
   /** 用于创建人上传权限（云端 proj-* 须传 createdBy） */
   project?: Pick<WorkspaceProject, "id" | "createdBy">;
+  /** Guest：仅展示板块与申请入口，获批后可预览 */
+  isGuest?: boolean;
 };
 
 function formatKnDate(iso: string): string {
@@ -58,6 +67,7 @@ export function ProjectKnowledgeNetworkSection({
   projectId,
   userId,
   project,
+  isGuest = false,
 }: ProjectKnowledgeNetworkSectionProps) {
   const navigate = useNavigate();
   const [data, setData] = useState<ProjectKnowledgeNetworkResponse | null>(null);
@@ -68,9 +78,16 @@ export function ProjectKnowledgeNetworkSection({
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [guestApplyState, setGuestApplyState] = useState<GuestKnApplyState>(() =>
+    isGuest ? getGuestKnApplyState(userId, projectId) : "none",
+  );
+  const [guestApplying, setGuestApplying] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const useLive = ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT);
+  const guestKnPreviewOk =
+    !isGuest || canGuestPreviewKnowledgeNetwork(userId, projectId);
+  const showGuestApply = isGuest && shouldShowGuestKnApply(userId, projectId);
   const canPublish =
     useLive &&
     canPublishProjectKnowledgeNetwork(userId, {
@@ -79,9 +96,15 @@ export function ProjectKnowledgeNetworkSection({
     });
 
   const reload = useCallback(async () => {
-    if (!useLive || !userId) {
-      setData(null);
-      setError(null);
+    if (!useLive || !userId || !guestKnPreviewOk) {
+      if (!guestKnPreviewOk) {
+        setData(null);
+        setViewHtml(null);
+        setError(null);
+      } else {
+        setData(null);
+        setError(null);
+      }
       return;
     }
     setLoading(true);
@@ -98,11 +121,25 @@ export function ProjectKnowledgeNetworkSection({
     } finally {
       setLoading(false);
     }
-  }, [projectId, userId, useLive]);
+  }, [projectId, userId, useLive, guestKnPreviewOk]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  useEffect(() => {
+    if (!isGuest) return;
+    setGuestApplyState(getGuestKnApplyState(userId, projectId));
+  }, [isGuest, userId, projectId]);
+
+  const onGuestApply = () => {
+    if (!showGuestApply || guestApplying) return;
+    setGuestApplying(true);
+    setError(null);
+    submitGuestKnApply(userId, projectId);
+    setGuestApplyState("pending");
+    setGuestApplying(false);
+  };
 
   const goChat = (draftMessage: string) => {
     navigate(`/app/chat/${projectId}`, {
@@ -221,14 +258,38 @@ export function ProjectKnowledgeNetworkSection({
             项目知识网络
           </h3>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-            全员可见。对话里可「按板块更新」或「全量重做」；也可上传本地生成的单页 HTML
-            覆盖当前版（旧版自动归档），后续增量更新基于新版。
+            {isGuest
+              ? canGuestPreviewKnowledgeNetwork(userId, projectId)
+                ? "项目知识网络汇总结构化研判与关键结论，您已获准预览完整内容。"
+                : "项目知识网络汇总结构化研判与关键结论。完整内容需提交查看申请，审批通过后可在此预览。"
+              : "全员可见。对话里可「按板块更新」或「全量重做」；也可上传本地生成的单页 HTML 覆盖当前版（旧版自动归档），后续增量更新基于新版。"}
           </p>
         </div>
       </div>
 
       <div className="mt-3 flex flex-wrap gap-2">
-        {data?.hasKnowledgeNetwork ? (
+        {showGuestApply ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="h-8 text-xs"
+              disabled={guestApplying}
+              onClick={onGuestApply}
+            >
+              {guestApplying ? (
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <FileSearch className="mr-1 h-3.5 w-3.5" />
+              )}
+              申请查看知识网络
+            </Button>
+          ) : isGuest && guestApplyState === "pending" ? (
+            <span className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border/80 bg-white/80 px-3 text-xs font-medium text-muted-foreground">
+              申请已提交，请等待审批
+            </span>
+          ) : null}
+        {!isGuest && data?.hasKnowledgeNetwork ? (
           <>
             <Button
               type="button"
@@ -253,7 +314,7 @@ export function ProjectKnowledgeNetworkSection({
             </Button>
           </>
         ) : null}
-        {canPublish ? (
+        {!isGuest && canPublish ? (
           <>
             <input
               ref={fileInputRef}
@@ -284,7 +345,7 @@ export function ProjectKnowledgeNetworkSection({
             </Button>
           </>
         ) : null}
-        {!data?.hasKnowledgeNetwork ? (
+        {!isGuest && !data?.hasKnowledgeNetwork ? (
           <Button
             type="button"
             size="sm"
@@ -302,13 +363,21 @@ export function ProjectKnowledgeNetworkSection({
         <p className="mt-2 text-xs text-emerald-700">{uploadSuccess}</p>
       ) : null}
 
-      {loading ? (
+      {loading && guestKnPreviewOk ? (
         <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
           <Loader2 className="h-4 w-4 animate-spin" />
           加载中…
         </p>
       ) : error ? (
         <p className="mt-4 text-sm text-rose-600">{error}</p>
+      ) : showGuestApply ? (
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          知识网络内容受权限保护。如需预览，请点击上方「申请查看知识网络」。
+        </p>
+      ) : isGuest && guestApplyState === "pending" ? (
+        <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+          您的查看申请已提交，请等待管理员审批。通过后本页将开放预览。
+        </p>
       ) : data?.hasKnowledgeNetwork && viewHtml ? (
         <>
           {data.meta ? (
@@ -382,7 +451,9 @@ export function ProjectKnowledgeNetworkSection({
           )}
         >
           {data?.warning ??
-            "尚未生成项目知识网络。点击上方按钮进入对话并预填提示语。"}
+            (isGuest
+              ? "当前项目尚未发布知识网络，或内容暂不可预览。"
+              : "尚未生成项目知识网络。点击上方按钮进入对话并预填提示语。")}
         </p>
       )}
     </section>
