@@ -114,7 +114,7 @@ export function ProjectPermissionsSection({
               权限管理
             </h3>
             <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
-              为各成员设置本项目内的角色。创建人固定为 Core；平台 Admin 不可在此修改。
+              为各成员设置本项目内的角色。创建人固定为 Core 核心级；平台 Admin 不可在此修改。
             </p>
           </div>
         </div>
@@ -195,7 +195,7 @@ export function ProjectPermissionsSection({
                   {m.isPlatformAdmin ? (
                     <option value="admin">Admin</option>
                   ) : m.isCreator ? (
-                    <option value="core">Core（创建人）</option>
+                    <option value="core">Core 核心级（创建人）</option>
                   ) : (
                     ASSIGNABLE.map((r) => (
                       <option key={r} value={r}>

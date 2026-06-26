@@ -47,7 +47,7 @@ import { workspaceRoleToDetailTier } from "@/workspace/project-details";
 import { useMyProjectRoles } from "@/hooks/use-my-project-roles";
 import { loadSessionUserId } from "@/workspace/session";
 import { setMyProjectRoles } from "@/workspace/project-role-cache";
-import { getProjectRole, getUserById, WORKSPACE_USERS } from "@/workspace/workspace-users";
+import { getProjectRole, getUserById, roleLabelForProject, WORKSPACE_USERS } from "@/workspace/workspace-users";
 import type { WorkspaceRole } from "@/workspace/types";
 
 const CREATE_PERMISSION_OPTIONS = ["core", "mid", "low"] as const;
@@ -83,12 +83,6 @@ const PROJECT_OPENNESS_OPTIONS: {
 function prettyMemberName(displayName: string): string {
   const spaced = displayName.replace(/([a-z])([A-Z])/g, "$1 $2").trim();
   return spaced || displayName;
-}
-
-function createPermissionLabel(permission: CreatePermission): string {
-  if (permission === "core") return "Core";
-  if (permission === "mid") return "Mid";
-  return "Low";
 }
 
 const CATEGORY_ICON: Record<string, typeof Sparkles> = {
@@ -143,28 +137,7 @@ function phaseBadgeClass(phase: ProjectPhase | undefined): string {
 
 /** 卡片脚注用短标签，避免与对话区完整称谓重复抢视觉 */
 function roleFootnote(role: WorkspaceRole): string {
-  switch (role) {
-    case "admin":
-      return "Admin";
-    case "core":
-      return "Core";
-    case "mid":
-      return "Mid";
-    case "low":
-      return "Low";
-    case "guest":
-      return "Guest";
-    default:
-      return role;
-  }
-}
-
-function workspaceRoleLabel(role: WorkspaceRole): string {
-  if (role === "admin") return "Admin";
-  if (role === "core") return "Core";
-  if (role === "mid") return "Mid";
-  if (role === "low") return "Low";
-  return "Guest";
+  return roleLabelForProject(role);
 }
 
 function ProjectCard({
@@ -534,7 +507,7 @@ export default function ProjectOverview() {
                       <option value="all">全部权限</option>
                       {roleOptions.map((role) => (
                         <option key={role} value={role}>
-                          {workspaceRoleLabel(role)}
+                          {roleLabelForProject(role)}
                         </option>
                       ))}
                     </select>
@@ -705,7 +678,7 @@ export default function ProjectOverview() {
                               >
                                 {CREATE_PERMISSION_OPTIONS.map((perm) => (
                                   <option key={perm} value={perm}>
-                                    {createPermissionLabel(perm)}
+                                    {roleLabelForProject(perm)}
                                   </option>
                                 ))}
                               </select>
@@ -723,7 +696,7 @@ export default function ProjectOverview() {
                       </ul>
                     ) : (
                       <p className="mt-2 text-xs text-muted-foreground">
-                        选择成员后可为其分配权限等级 Core / Mid / Low，用于控制后续项目访问范围。
+                        选择成员后可为其分配权限等级 Core 核心级 / Advanced 进阶级 / Basic 基础级，用于控制后续项目访问范围。
                       </p>
                     )}
                   </div>

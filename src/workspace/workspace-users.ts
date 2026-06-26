@@ -40,14 +40,14 @@ export const WORKSPACE_USERS: Record<string, WorkspaceUser> = {
   "jimmy-huang": {
     id: "jimmy-huang",
     displayName: "JimmyHuang",
-    orgTitle: "家族办公室 · Core",
+    orgTitle: "家族办公室 · Core 核心级",
     avatarChar: "J",
     avatarClass: "bg-primary text-primary-foreground shadow-sm",
   },
   "jessica-hu": {
     id: "jessica-hu",
     displayName: "JessicaHu",
-    orgTitle: "投资顾问 · Mid",
+    orgTitle: "投资顾问 · Advanced 进阶级",
     avatarChar: "S",
     avatarClass:
       "bg-[hsl(24,32%,44%)] text-[hsl(40,45%,98%)] shadow-sm",
@@ -55,7 +55,7 @@ export const WORKSPACE_USERS: Record<string, WorkspaceUser> = {
   "jensen-fang": {
     id: "jensen-fang",
     displayName: "JensenFang",
-    orgTitle: "研究部 · Low",
+    orgTitle: "研究部 · Basic 基础级",
     avatarChar: "N",
     avatarClass: "bg-stone-400 text-stone-900 shadow-sm",
   },
@@ -69,7 +69,7 @@ export const WORKSPACE_USERS: Record<string, WorkspaceUser> = {
   "binghe-su": {
     id: "binghe-su",
     displayName: "BingheSu",
-    orgTitle: "研究部 · Low",
+    orgTitle: "研究部 · Basic 基础级",
     avatarChar: "B",
     avatarClass: "bg-stone-400 text-stone-900 shadow-sm",
   },
@@ -159,11 +159,11 @@ export function roleLabelForProject(role: WorkspaceRole): string {
     case "admin":
       return "Admin";
     case "core":
-      return "Core（核心级）";
+      return "Core 核心级";
     case "mid":
-      return "Mid";
+      return "Advanced 进阶级";
     case "low":
-      return "Low";
+      return "Basic 基础级";
     case "guest":
       return "Guest";
     default:

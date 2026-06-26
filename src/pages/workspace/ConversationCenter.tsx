@@ -109,6 +109,7 @@ import type { WorkspaceRole } from "@/workspace/types";
 import {
   getProjectRole,
   getUserById,
+  roleLabelForProject,
   workspaceRoleToUiTier,
   type UiTier,
 } from "@/workspace/workspace-users";
@@ -550,7 +551,7 @@ function PlaybackAssistantRenderer({
           <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
             您可调整各维度评分权重。示例：供应链因素占比{" "}
             <span className="font-mono text-foreground">20% → 25%</span>{" "}
-            已写入当前项目草稿；Core 用户可在本项目中维护本家族数据。
+            已写入当前项目草稿；Core 核心级用户可在本项目中维护本家族数据。
           </p>
         </AiShell>
       );
@@ -1278,7 +1279,7 @@ function ResourceTableBlock({
     tier === "full"
       ? workspaceRole === "admin"
         ? `${projectName}当前共有 3 个家族在智库中登记资源（Admin：可见全站字段，并可调整各维度评分权重，如供应链因素占比）。`
-        : `${projectName}当前共有 3 个家族在智库中登记资源（Core：可录入与修改本家族数据，不可见其他家族明细）。`
+        : `${projectName}当前共有 3 个家族在智库中登记资源（Core 核心级：可录入与修改本家族数据，不可见其他家族明细）。`
       : tier === "mid"
         ? "以下为经脱敏后的资源配置概览：家族以代号呈现，资金为区间描述，细节模糊至区域级。"
         : "按您的权限，仅展示各环节是否已具备资源覆盖情况，不展示主体身份与具体金额。";
@@ -1306,10 +1307,10 @@ function ResourceTableBlock({
     tier === "full"
       ? workspaceRole === "admin"
         ? "权限同步 · Admin · 可调整评分维度权重"
-        : "权限同步 · Core · 本家族数据可维护，其他家族不可见"
+        : "权限同步 · Core 核心级 · 本家族数据可维护，其他家族不可见"
       : tier === "mid"
-        ? "权限同步 · Mid · 脱敏与简化视图"
-        : "权限同步 · Low · 最低权限对话";
+        ? "权限同步 · Advanced 进阶级 · 脱敏与简化视图"
+        : "权限同步 · Basic 基础级 · 最低权限对话";
 
   return (
     <AiShell time={time}>
@@ -1352,7 +1353,7 @@ function MidRefusalBlock({ body, time }: { body: string; time?: string }) {
       <p className="text-sm font-semibold text-foreground">无法按此问题回答</p>
       <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{body}</p>
       <p className="mt-3 text-[11px] text-muted-foreground">
-        ● 权限同步 · Mid · 隐私与主体路径未开放
+        ● 权限同步 · Advanced 进阶级 · 隐私与主体路径未开放
       </p>
     </AiShell>
   );
@@ -1368,7 +1369,7 @@ function MidTextBlock({ title, body, time }: { title?: string; body: string; tim
         {body}
       </div>
       <p className="mt-3 text-[11px] text-muted-foreground">
-        ● Master Agent · Mid · 定性说明
+        ● Master Agent · Advanced 进阶级 · 定性说明
       </p>
     </AiShell>
   );
@@ -1390,12 +1391,12 @@ function CredibilityBlock({
     return (
       <AiShell time={time}>
         <p className="text-muted-foreground">
-          按 Low 权限，无法展示具体合作方名称与金额可信度拆解。核心团队已在内部记录「外部大额意向」的折算规则，您只需知晓：该笔投入在评分中
+          按 Basic 基础级权限，无法展示具体合作方名称与金额可信度拆解。核心团队已在内部记录「外部大额意向」的折算规则，您只需知晓：该笔投入在评分中
           <strong className="text-foreground">不会</strong>
           按已确认资金满分计入。
         </p>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          ● 权限同步 · Low · 隐藏主体与数值
+          ● 权限同步 · Basic 基础级 · 隐藏主体与数值
         </p>
       </AiShell>
     );
@@ -1420,7 +1421,7 @@ function CredibilityBlock({
           </div>
         ) : null}
         <p className="mb-3 text-xs leading-relaxed text-muted-foreground">
-          Mid 权限：<strong className="text-foreground">评分、折算系数与金额口径的具体数值</strong>
+          Advanced 进阶级权限：<strong className="text-foreground">评分、折算系数与金额口径的具体数值</strong>
           不对本视图展示，以下为定性摘要。
         </p>
         <div className="grid gap-3 rounded-2xl border border-border/80 bg-muted/30 p-4 text-xs md:grid-cols-2 md:text-sm">
@@ -1442,10 +1443,10 @@ function CredibilityBlock({
           </div>
         </div>
         <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
-          建议：补充加盖公章的意向函或资金路径说明，有助于提升折算档位与方案排序（具体系数与分值仅 Admin/Core 可见）。
+          建议：补充加盖公章的意向函或资金路径说明，有助于提升折算档位与方案排序（具体系数与分值仅 Admin / Core 核心级可见）。
         </p>
         <p className="mt-2 text-[11px] text-muted-foreground">
-          ● Sub-Agent 5 · 吹牛检测与资金分级 · Mid 脱敏
+          ● Sub-Agent 5 · 吹牛检测与资金分级 · Advanced 进阶级脱敏
         </p>
       </AiShell>
     );
@@ -1500,7 +1501,7 @@ function RankingBlock({
           可行合作路径
         </p>
         <p className="mt-2 text-sm text-muted-foreground">
-          系统已生成多条理论可行组合，并按环节覆盖情况完成初筛。具体排名、分值与参与方细节仅向 Admin / Core 全量开放。
+          系统已生成多条理论可行组合，并按环节覆盖情况完成初筛。具体排名、分值与参与方细节仅向 Admin / Core 核心级全量开放。
         </p>
         <ul className="mt-3 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
           <li>若需推进签约，请通过核心对接人发起「方案评审」流程。</li>
@@ -1519,13 +1520,13 @@ function RankingBlock({
     <AiShell time={time}>
       {tier === "mid" ? (
         <p className="mb-3 rounded-xl border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs font-medium leading-relaxed text-amber-950/90">
-          Mid 权限：仅展示组合与推荐标记，<strong>具体分值隐藏</strong>；不可在本视图
-          <strong>触发重新评分</strong>；如需调整维度权重，请联系 Admin 或 Core。
+          Advanced 进阶级权限：仅展示组合与推荐标记，<strong>具体分值隐藏</strong>；不可在本视图
+          <strong>触发重新评分</strong>；如需调整维度权重，请联系 Admin 或 Core 核心级。
         </p>
       ) : null}
       <p className="mb-3 text-muted-foreground">
         {tier === "mid"
-          ? "以下为 Sub-Agent 4 生成的组合地图经 Sub-Agent 5 排序后的前三名（Mid：名次与组合可见，具体分数隐藏）。"
+          ? "以下为 Sub-Agent 4 生成的组合地图经 Sub-Agent 5 排序后的前三名（Advanced 进阶级：名次与组合可见，具体分数隐藏）。"
           : "以下为 Sub-Agent 4 生成的组合地图经 Sub-Agent 5 评分后的前三名（最终以人工确认稿为准）。"}
       </p>
       <div className="space-y-2.5">
@@ -1571,15 +1572,16 @@ function RankingBlock({
 }
 
 function permissionLineFor(role: WorkspaceRole): string {
+  const tier = roleLabelForProject(role);
   switch (role) {
     case "admin":
-      return "Master Agent · Admin · 全站管理 / 评分权重可配置";
+      return `Master Agent · ${tier} · 全站管理 / 评分权重可配置`;
     case "core":
-      return "Master Agent · Core · 财务细节与完整评分";
+      return `Master Agent · ${tier} · 财务细节与完整评分`;
     case "mid":
-      return "Master Agent · Mid · 脱敏视图 · 不可重评";
+      return `Master Agent · ${tier} · 脱敏视图 · 不可重评`;
     case "low":
-      return "Master Agent · Low · 最低权限对话";
+      return `Master Agent · ${tier} · 最低权限对话`;
     default:
       return "";
   }
@@ -3703,7 +3705,7 @@ export default function ConversationCenter() {
               <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
                 您可调整各维度评分权重。示例：供应链因素占比{" "}
                 <span className="font-mono text-foreground">20% → 25%</span>{" "}
-                已写入当前项目草稿；Core 用户可在本项目中维护本家族数据。
+                已写入当前项目草稿；Core 核心级用户可在本项目中维护本家族数据。
               </p>
             </AiShell>
           ) : null}
