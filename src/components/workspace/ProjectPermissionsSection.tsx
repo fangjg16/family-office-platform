@@ -187,7 +187,7 @@ export function ProjectPermissionsSection({
                     setSavedHint(null);
                   }}
                   className={cn(
-                    "w-full shrink-0 rounded-lg border border-border/80 bg-white px-2.5 py-1.5 text-[11px] font-medium text-foreground sm:w-44",
+                    "w-full shrink-0 rounded-lg border border-border/80 bg-white px-2 py-1.5 text-[11px] font-medium text-foreground sm:w-36",
                     locked && "cursor-not-allowed opacity-70",
                   )}
                   aria-label={`${m.displayName} 的项目角色`}
