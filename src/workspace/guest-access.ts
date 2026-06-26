@@ -54,6 +54,15 @@ export function canGuestPreviewKnowledgeNetwork(
   return false;
 }
 
+/** Guest 获批预览后仅可预览/新标签打开，不可下载 HTML */
+export function canGuestDownloadKnowledgeNetwork(
+  userId: string,
+  projectId: string,
+): boolean {
+  if (!canGuestPreviewKnowledgeNetwork(userId, projectId)) return false;
+  return false;
+}
+
 export function shouldShowGuestKnApply(userId: string, projectId: string): boolean {
   if (isScopedGuestUser(userId)) return false;
   return getGuestKnApplyState(userId, projectId) === "none";

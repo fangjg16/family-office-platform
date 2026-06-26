@@ -22,6 +22,7 @@ import {
 import { KnowledgeNetworkPreview } from "@/components/workspace/KnowledgeNetworkPreview";
 import { getUserById } from "@/workspace/workspace-users";
 import {
+  canGuestDownloadKnowledgeNetwork,
   canGuestPreviewKnowledgeNetwork,
   getGuestKnApplyState,
   shouldShowGuestKnApply,
@@ -433,6 +434,9 @@ export function ProjectKnowledgeNetworkSection({
 
           <KnowledgeNetworkPreview
             html={viewHtml}
+            allowDownload={
+              isGuest ? canGuestDownloadKnowledgeNetwork(userId, projectId) : true
+            }
             filename={`[AI]_${projectId}_知识网络_v${
               viewVersion === "current"
                 ? knVersionDisplay(data.meta!)

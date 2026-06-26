@@ -5,9 +5,15 @@ import { Button } from "@/components/ui/button";
 type KnowledgeNetworkPreviewProps = {
   html: string;
   filename?: string;
+  /** 默认 true；Guest 获批预览时为 false，仅保留预览与新标签页打开 */
+  allowDownload?: boolean;
 };
 
-export function KnowledgeNetworkPreview({ html, filename }: KnowledgeNetworkPreviewProps) {
+export function KnowledgeNetworkPreview({
+  html,
+  filename,
+  allowDownload = true,
+}: KnowledgeNetworkPreviewProps) {
   const [open, setOpen] = useState(false);
   const safeName = filename?.trim() || "[AI]_项目知识网络.html";
 
@@ -50,10 +56,12 @@ export function KnowledgeNetworkPreview({ html, filename }: KnowledgeNetworkPrev
           <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
           新标签页打开
         </Button>
-        <Button type="button" size="sm" variant="outline" onClick={downloadHtml}>
-          <Download className="mr-1.5 h-3.5 w-3.5" />
-          下载 HTML
-        </Button>
+        {allowDownload ? (
+          <Button type="button" size="sm" variant="outline" onClick={downloadHtml}>
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+            下载 HTML
+          </Button>
+        ) : null}
       </div>
       {open ? (
         <div
