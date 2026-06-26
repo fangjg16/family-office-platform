@@ -176,12 +176,6 @@ export function ProjectPermissionsSection({
                         </span>
                       ) : null}
                     </p>
-                    <p className="text-[10px] text-muted-foreground">
-                      默认 {roleLabelForProject(m.defaultRole)}
-                      {m.effectiveRole !== m.defaultRole
-                        ? ` · 当前生效 ${roleLabelForProject(m.effectiveRole)}`
-                        : null}
-                    </p>
                   </div>
                 </div>
                 <select
