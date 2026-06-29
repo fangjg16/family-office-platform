@@ -1,11 +1,13 @@
 import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
+import { extractSnapshotOverviewFallback } from "./knowledge-network-fragment-normalize";
 import { listUndeliveredCanonicalFragments } from "./knowledge-network-fragment-merge";
 import {
   renderWorkerGapStubAppendixDataDictionary,
   renderWorkerGapStubAppendixGlossary,
   renderWorkerGapStubFragment,
 } from "./knowledge-network-fragment-stub";
+import { normalizeSessionFragmentCitations } from "./knowledge-network-fragment-citations";
 import type { KnSlotBatchSession } from "./knowledge-network-slot-batch-types";
 import {
   resolveStructuredKbDisplayOrder,
@@ -17,11 +19,7 @@ import type {
   KbFragmentRegistryContext,
   KbFragmentValidationResult,
 } from "./knowledge-network-fragment-types";
-import {
-  buildFragmentRegistryContext,
-  validateAppendixFragment,
-  validateCanonicalSlotFragment,
-} from "./knowledge-network-fragment-validation";
+import { validateCanonicalSlotFragment } from "./knowledge-network-fragment-validation";
 import type { StructuredKbData } from "./knowledge-network-structured-kb-data-types";
 
 export function joinCanonicalFragmentsInOrder(
@@ -79,46 +77,12 @@ export function assembleKbFromFragments(
     };
   }
 
-  const registry = buildFragmentRegistryContext(input.shell.sources ?? []);
-  const slotResults = validateAllCanonicalFragments(input.fragments, registry);
-  const slotFail = firstHardFragmentFailure(slotResults);
-  if (slotFail && !slotFail.ok) {
-    return {
-      ok: false,
-      error: `${slotFail.slot} fragment 校验失败（${slotFail.level}）：${slotFail.reason}`,
-    };
-  }
-
   const appendixFragments = input.appendixFragments ?? {};
   if (!appendixFragments.glossary?.trim()) {
     return { ok: false, error: "assemble 失败：缺少 glossary appendix fragment" };
   }
   if (!appendixFragments["data-dictionary"]?.trim()) {
     return { ok: false, error: "assemble 失败：缺少 data-dictionary appendix fragment" };
-  }
-
-  const glossaryResult = validateAppendixFragment(
-    "glossary",
-    appendixFragments.glossary,
-    registry,
-  );
-  if (!glossaryResult.ok) {
-    return {
-      ok: false,
-      error: `glossary fragment 校验失败（${glossaryResult.level}）：${glossaryResult.reason}`,
-    };
-  }
-
-  const dictResult = validateAppendixFragment(
-    "data-dictionary",
-    appendixFragments["data-dictionary"],
-    registry,
-  );
-  if (!dictResult.ok) {
-    return {
-      ok: false,
-      error: `data-dictionary fragment 校验失败（${dictResult.level}）：${dictResult.reason}`,
-    };
   }
 
   const shellData: StructuredKbData = {
@@ -133,8 +97,9 @@ export function assembleKbFromFragments(
     sources: input.shell.sources ?? [],
   };
 
+  const normalizedFragments = normalizeSessionFragmentCitations(input.fragments);
   const displayOrder = resolveStructuredKbDisplayOrder(shellData);
-  const mainSectionsHtml = joinCanonicalFragmentsInOrder(input.fragments, displayOrder);
+  const mainSectionsHtml = joinCanonicalFragmentsInOrder(normalizedFragments, displayOrder);
 
   const html = renderKbTemplateWithSections(
     shellData,
@@ -223,6 +188,16 @@ export function assembleKbFromFragmentSession(
     factorBNote: session.shell.maturity?.factorBNote,
   };
 
+  const snapshotFallback = extractSnapshotOverviewFallback(
+    session.fragments?.snapshot ?? "",
+  );
+  const autoSummary =
+    session.shell.meta?.autoSummary?.trim() ||
+    snapshotFallback.autoSummary ||
+    "";
+  const lead =
+    session.shell.meta?.lead?.trim() || snapshotFallback.lead || "";
+
   return assembleKbFromFragments(
     {
       shell: {
@@ -238,12 +213,10 @@ export function assembleKbFromFragmentSession(
           renderingMode: "chinese-only",
         },
         meta: {
-          title: session.shell.meta?.title ?? session.projectTitle,
-          autoSummary:
-            session.shell.meta?.autoSummary ??
-            session.prep?.projectShell.meta.autoSummary ??
-            "",
           ...session.shell.meta,
+          title: session.shell.meta?.title ?? session.projectTitle,
+          autoSummary,
+          lead,
         },
         maturity,
         sources: session.sourceRegistry ?? session.shell.sources ?? [],
