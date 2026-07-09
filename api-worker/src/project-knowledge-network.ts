@@ -309,14 +309,10 @@ export async function upsertProjectKnowledgeNetwork(
     await archiveCurrentVersion(env, prev);
   }
   const fromUpload = Boolean(params.uploadFileName?.trim());
-  const { version, versionLabel: resolvedLabel } = resolveKnVersionOnUpload(
+  const { version, versionLabel } = resolveKnVersionOnUpload(
     prev,
     fromUpload ? params.uploadFileName : null,
   );
-  const versionLabel =
-    !fromUpload && resolvedLabel && !resolvedLabel.includes(".")
-      ? String(version)
-      : resolvedLabel;
   const displayVer = formatKnVersionDisplay(version, versionLabel);
   const summary = params.answerSummary?.trim() ?? "";
   const changelog =
@@ -375,6 +371,120 @@ export async function upsertProjectKnowledgeNetwork(
     updatedBy: userId,
     lastJobId: params.lastJobId ?? null,
     changelog,
+  };
+}
+
+export type KnRollbackResult = {
+  meta: ProjectKnowledgeNetworkMeta;
+  removedVersion: number | null;
+  removedVersionLabel: string | null;
+};
+
+/** 将当前版回退为指定归档版（不新增版本号）；未指定时取最新归档版 */
+export async function rollbackProjectKnowledgeNetwork(
+  env: ProjectKnowledgeNetworkEnv,
+  projectId: string,
+  userId: string,
+  archiveVersion?: number,
+): Promise<KnRollbackResult> {
+  const prev = await getProjectKnowledgeNetworkMeta(env, projectId);
+  if (!prev) {
+    throw new Error("项目尚无知识网络，无法回滚");
+  }
+
+  const archived = await listProjectKnowledgeNetworkVersions(env, projectId);
+  if (archived.length === 0) {
+    throw new Error("无可回滚的归档版本");
+  }
+
+  const targetVersion =
+    archiveVersion != null && Number.isFinite(archiveVersion)
+      ? archiveVersion
+      : archived[0].version;
+
+  if (targetVersion === prev.version) {
+    throw new Error(
+      `v${formatKnVersionDisplay(targetVersion, prev.versionLabel)} 已是当前版本`,
+    );
+  }
+
+  const row = archived.find((v) => v.version === targetVersion);
+  if (!row) {
+    throw new Error(`归档版本 ${targetVersion} 不存在`);
+  }
+
+  const html = await readProjectKnowledgeNetworkVersionHtml(env, projectId, targetVersion);
+  if (!html?.trim()) {
+    throw new Error(`无法读取归档 v${targetVersion} 的 HTML`);
+  }
+
+  const badVersion = prev.version;
+
+  await env.DB.prepare(
+    `DELETE FROM project_knowledge_network_versions WHERE project_id = ? AND version = ?`,
+  )
+    .bind(projectId, targetVersion)
+    .run();
+
+  if (badVersion !== targetVersion) {
+    try {
+      await env.FILES.delete(projectKnowledgeNetworkArchiveR2Key(projectId, badVersion));
+    } catch {
+      /* 坏版本可能未写入归档路径 */
+    }
+  }
+
+  const now = nowIso();
+  const versionLabel = row.versionLabel;
+  const displayVer = formatKnVersionDisplay(targetVersion, versionLabel);
+  const changelog = `回退至 v${displayVer}（撤销 v${formatKnVersionDisplay(prev.version, prev.versionLabel)}）`;
+
+  const remaining = await listProjectKnowledgeNetworkVersions(env, projectId);
+  const archivedAsc: KnVersionLedgerEntry[] = [...remaining].reverse().map((v) => ({
+    version: v.version,
+    versionLabel: v.versionLabel,
+    updatedAt: v.updatedAt,
+    updatedBy: v.updatedBy,
+    changelog: v.changelog,
+  }));
+
+  const currentEntry: KnVersionLedgerEntry = {
+    version: targetVersion,
+    versionLabel,
+    updatedAt: now,
+    updatedBy: userId,
+    changelog,
+  };
+
+  let out = applyKbVersionDisplay(html, displayVer);
+  out = mergeKnVersionLedgerHtml(out, archivedAsc, currentEntry).html;
+
+  const r2Key = projectKnowledgeNetworkR2Key(projectId);
+  await env.FILES.put(r2Key, out, {
+    httpMetadata: { contentType: "text/html; charset=utf-8" },
+  });
+
+  await env.DB.prepare(
+    `UPDATE project_knowledge_networks
+     SET version = ?, version_label = ?, updated_at = ?, updated_by = ?, changelog = ?, last_job_id = NULL
+     WHERE project_id = ?`,
+  )
+    .bind(targetVersion, versionLabel, now, userId, changelog, projectId)
+    .run();
+
+  return {
+    meta: {
+      projectId,
+      r2Key,
+      version: targetVersion,
+      versionLabel,
+      updatedAt: now,
+      updatedBy: userId,
+      lastJobId: null,
+      changelog,
+    },
+    removedVersion: badVersion,
+    removedVersionLabel: prev.versionLabel,
   };
 }
 

@@ -79,6 +79,7 @@ import {
   handleGetProjectKnowledgeNetwork,
   handleGetProjectKnowledgeNetworkVersion,
   handlePutProjectKnowledgeNetwork,
+  handleRollbackProjectKnowledgeNetwork,
 } from "./project-knowledge-network-routes";
 import {
   getProjectKnowledgeNetworkMeta,
@@ -1680,6 +1681,17 @@ export default {
           env,
           projectId,
           version,
+          url.searchParams.get("userId"),
+        );
+      } else if (
+        /^\/api\/projects\/[^/]+\/knowledge-network\/rollback$/u.test(path) &&
+        request.method === "POST"
+      ) {
+        const projectId = decodePathProjectId(path.split("/")[3] ?? "");
+        response = await handleRollbackProjectKnowledgeNetwork(
+          request,
+          env,
+          projectId,
           url.searchParams.get("userId"),
         );
       } else if (

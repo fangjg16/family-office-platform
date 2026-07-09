@@ -5,6 +5,7 @@ import {
   listProjectKnowledgeNetworkVersions,
   readProjectKnowledgeNetworkHtml,
   readProjectKnowledgeNetworkVersionHtml,
+  rollbackProjectKnowledgeNetwork,
   upsertProjectKnowledgeNetwork,
   validateProjectKnowledgeNetworkHtml,
   type ProjectKnowledgeNetworkEnv,
@@ -132,6 +133,83 @@ export async function handlePutProjectKnowledgeNetwork(
     warning: strictValidation.warning ?? null,
     message: `已发布为项目知识网络 v${vDisplay}；旧版已归档，后续「按板块更新」将基于此版。`,
   });
+}
+
+/** POST /api/projects/:projectId/knowledge-network/rollback?userId= — 回滚至归档版 */
+export async function handleRollbackProjectKnowledgeNetwork(
+  request: Request,
+  env: ProjectKnowledgeNetworkEnv,
+  projectId: string,
+  userIdRaw: string | null,
+): Promise<Response> {
+  const userId = normalizeUserId(userIdRaw);
+  if (!userId) {
+    return json({ error: "缺少 userId 查询参数" }, 400);
+  }
+
+  const project = await getProjectById(env, projectId);
+  if (!project) {
+    return json({ error: "项目不存在" }, 404);
+  }
+  if (!(await canPublishProjectKnowledgeNetwork(env, userId, projectId, project.createdBy))) {
+    return json(
+      { error: "当前角色无权回滚项目知识网络", code: "PUBLISH_FORBIDDEN" },
+      403,
+    );
+  }
+
+  let body: { archiveVersion?: number } = {};
+  try {
+    const text = await request.text();
+    if (text.trim()) {
+      body = JSON.parse(text) as { archiveVersion?: number };
+    }
+  } catch {
+    return json({ error: "请求体须为 JSON：{ archiveVersion? }" }, 400);
+  }
+
+  const archiveVersion =
+    body.archiveVersion != null && Number.isFinite(body.archiveVersion)
+      ? body.archiveVersion
+      : undefined;
+
+  try {
+    const result = await rollbackProjectKnowledgeNetwork(
+      env,
+      projectId,
+      userId,
+      archiveVersion,
+    );
+
+    const vDisplay = formatKnVersionDisplay(result.meta.version, result.meta.versionLabel);
+    const removedDisplay =
+      result.removedVersion != null
+        ? formatKnVersionDisplay(result.removedVersion, result.removedVersionLabel)
+        : null;
+
+    return json({
+      ok: true,
+      projectId,
+      hasKnowledgeNetwork: true,
+      meta: metaJson({
+        version: result.meta.version,
+        versionLabel: result.meta.versionLabel,
+        updatedAt: result.meta.updatedAt,
+        updatedBy: result.meta.updatedBy,
+        lastJobId: result.meta.lastJobId,
+        changelog: result.meta.changelog,
+        r2Key: result.meta.r2Key,
+      }),
+      removedVersion: result.removedVersion,
+      removedVersionDisplay: removedDisplay,
+      message: removedDisplay
+        ? `已回滚至 v${vDisplay}（已撤销 v${removedDisplay}）`
+        : `已回滚至 v${vDisplay}`,
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "回滚失败";
+    return json({ error: msg }, 400);
+  }
 }
 
 /** GET /api/projects/:projectId/knowledge-network?userId=&html=1 */

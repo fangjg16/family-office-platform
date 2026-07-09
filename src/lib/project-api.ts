@@ -471,6 +471,51 @@ export async function uploadProjectKnowledgeNetwork(
   return data;
 }
 
+export type RollbackProjectKnowledgeNetworkResult = {
+  ok: boolean;
+  projectId: string;
+  hasKnowledgeNetwork: boolean;
+  meta: ProjectKnowledgeNetworkMeta | null;
+  removedVersion?: number | null;
+  removedVersionDisplay?: string | null;
+  message?: string;
+};
+
+/** 回滚至上一归档版（或指定 archiveVersion） */
+export async function rollbackProjectKnowledgeNetwork(
+  projectId: string,
+  userId: string,
+  options?: { archiveVersion?: number },
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<RollbackProjectKnowledgeNetworkResult> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT");
+  const q = new URLSearchParams({ userId });
+  const res = await fetch(
+    `${base}/api/projects/${encodeURIComponent(projectId)}/knowledge-network/rollback?${q}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        options?.archiveVersion != null && Number.isFinite(options.archiveVersion)
+          ? { archiveVersion: options.archiveVersion }
+          : {},
+      ),
+    },
+  );
+  const data = (await res.json().catch(() => ({}))) as RollbackProjectKnowledgeNetworkResult & {
+    error?: string;
+    code?: string;
+  };
+  if (res.status === 403) {
+    throw new Error(data.error || "无权回滚项目知识网络");
+  }
+  if (!res.ok) {
+    throw new Error(data.error || `回滚失败（${res.status}）`);
+  }
+  return data;
+}
+
 export async function fetchProjectKnowledgeNetworkVersionHtml(
   projectId: string,
   version: number,

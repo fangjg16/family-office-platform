@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { History, Loader2, Network, RotateCcw, Sparkles, Upload, FileSearch } from "lucide-react";
+import { History, Loader2, Network, RotateCcw, Sparkles, Upload, FileSearch, Undo2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ENABLE_LIVE_CHAT,
@@ -8,6 +8,7 @@ import {
   fetchProjectKnowledgeNetwork,
   fetchProjectKnowledgeNetworkVersionHtml,
   knVersionDisplay,
+  rollbackProjectKnowledgeNetwork,
   uploadProjectKnowledgeNetwork,
   type ProjectKnowledgeNetworkResponse,
 } from "@/lib/project-api";
@@ -78,6 +79,7 @@ export function ProjectKnowledgeNetworkSection({
   const [viewHtml, setViewHtml] = useState<string | null>(null);
   const [loadingVersion, setLoadingVersion] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [rollingBack, setRollingBack] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
   const [guestApplyState, setGuestApplyState] = useState<GuestKnApplyState>(() =>
     isGuest ? getGuestKnApplyState(userId, projectId) : "none",
@@ -180,6 +182,41 @@ export function ProjectKnowledgeNetworkSection({
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const latestArchivedVersion = data?.versions?.[0] ?? null;
+
+  const onRollbackToPrevious = async (archiveVersion?: number) => {
+    if (!canPublish || !data?.meta) return;
+    const target =
+      archiveVersion != null
+        ? data.versions?.find((v) => v.version === archiveVersion)
+        : latestArchivedVersion;
+    if (!target) {
+      setError("无可回滚的归档版本");
+      return;
+    }
+    const fromDisplay = knVersionDisplay(data.meta);
+    const toDisplay = knVersionDisplay(target);
+    const ok = window.confirm(
+      `确定将知识网络从 v${fromDisplay} 回滚至 v${toDisplay}？\n\n当前 v${fromDisplay} 将被撤销；此操作不会新增版本号。`,
+    );
+    if (!ok) return;
+
+    setUploadSuccess(null);
+    setError(null);
+    setRollingBack(true);
+    try {
+      const result = await rollbackProjectKnowledgeNetwork(projectId, userId, {
+        archiveVersion: target.version,
+      });
+      setUploadSuccess(result.message ?? `已回滚至 v${toDisplay}`);
+      await reload();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "回滚失败");
+    } finally {
+      setRollingBack(false);
     }
   };
 
@@ -344,6 +381,28 @@ export function ProjectKnowledgeNetworkSection({
               )}
               上传 HTML 覆盖
             </Button>
+            {(data?.versions?.length ?? 0) > 0 ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                className="h-8 border-amber-200 text-xs text-amber-900 hover:bg-amber-50"
+                disabled={rollingBack || uploading}
+                title={
+                  latestArchivedVersion
+                    ? `回滚至归档 v${knVersionDisplay(latestArchivedVersion)}`
+                    : "回滚至上一归档版"
+                }
+                onClick={() => void onRollbackToPrevious()}
+              >
+                {rollingBack ? (
+                  <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Undo2 className="mr-1 h-3.5 w-3.5" />
+                )}
+                回滚到上一版
+              </Button>
+            ) : null}
           </>
         ) : null}
         {!isGuest && !data?.hasKnowledgeNetwork ? (
@@ -428,6 +487,26 @@ export function ProjectKnowledgeNetworkSection({
               </select>
               {loadingVersion ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+              ) : null}
+              {canPublish &&
+              viewVersion !== "current" &&
+              data.meta &&
+              viewVersion !== data.meta.version ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  className="h-7 border-amber-200 px-2 text-[11px] text-amber-900 hover:bg-amber-50"
+                  disabled={rollingBack}
+                  onClick={() => void onRollbackToPrevious(viewVersion)}
+                >
+                  {rollingBack ? (
+                    <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  ) : (
+                    <Undo2 className="mr-1 h-3 w-3" />
+                  )}
+                  恢复此版本
+                </Button>
               ) : null}
             </div>
           ) : null}
