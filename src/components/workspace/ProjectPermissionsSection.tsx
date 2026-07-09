@@ -11,8 +11,13 @@ import type { WorkspaceProject } from "@/workspace/projects";
 import { patchMyProjectRole } from "@/workspace/project-role-cache";
 import { roleLabelForProject } from "@/workspace/workspace-users";
 import type { WorkspaceRole } from "@/workspace/types";
+import { isScopedGuestUser } from "@/workspace/guest-access";
 
 const ASSIGNABLE: WorkspaceRole[] = ["guest", "low", "mid", "core"];
+
+function visiblePermissionMembers(members: ProjectPermissionMember[]): ProjectPermissionMember[] {
+  return members.filter((m) => !isScopedGuestUser(m.userId));
+}
 
 type ProjectPermissionsSectionProps = {
   project: WorkspaceProject;
@@ -68,7 +73,7 @@ export function ProjectPermissionsSection({
     setError(null);
     setSavedHint(null);
     try {
-      const updates = members
+      const updates = visiblePermissionMembers(members)
         .filter((m) => !m.isPlatformAdmin)
         .map((m) => ({
           userId: m.userId,
@@ -90,7 +95,7 @@ export function ProjectPermissionsSection({
 
   const dirty =
     members?.some((m) => {
-      if (m.isPlatformAdmin || m.isCreator) return false;
+      if (m.isPlatformAdmin || m.isCreator || isScopedGuestUser(m.userId)) return false;
       const picked = draft[m.userId] ?? m.defaultRole;
       const current = m.overrideRole ?? m.defaultRole;
       return picked !== current;
@@ -153,7 +158,7 @@ export function ProjectPermissionsSection({
 
       {members && !loading ? (
         <ul className="mt-4 space-y-2">
-          {members.map((m) => {
+          {visiblePermissionMembers(members).map((m) => {
             const locked = m.isPlatformAdmin || m.isCreator;
             const value = m.isCreator
               ? "core"
