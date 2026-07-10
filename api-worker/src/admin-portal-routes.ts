@@ -11,6 +11,8 @@ import {
   countAllProjectDocuments,
   type AdminProjectDocuments,
 } from "./admin-portal-documents";
+import { loadProjectCognitionMap } from "./admin-portal-cognition";
+import { buildAdminTokenUsageStats } from "./token-usage";
 
 type Env = {
   DB: D1Database;
@@ -454,10 +456,13 @@ async function buildBootstrapPayload(env: Env) {
   const projectIds = projects.map((p) => p.id);
   const users = await buildAdminUsers(env, projects);
   const conversations = await buildAdminConversations(env, projects);
-  const [projectDocuments, documentCount, auditRaw] = await Promise.all([
+  const [projectDocuments, documentCount, auditRaw, tokenUsage, projectCognition] =
+    await Promise.all([
     buildProjectDocumentsMap(env, projectIds),
     countAllProjectDocuments(env, projectIds),
     listRecentChatAuditLog(env, 400),
+    buildAdminTokenUsageStats(env, 90),
+    loadProjectCognitionMap(env, projectIds),
   ]);
   const auditByConversation = buildAuditByConversation(auditRaw);
   const overview = buildOverviewStats(
@@ -477,6 +482,8 @@ async function buildBootstrapPayload(env: Env) {
     projectDocuments,
     auditByConversation,
     overview,
+    tokenUsage,
+    projectCognition,
     counts: {
       projects: projects.length,
       users: users.length,

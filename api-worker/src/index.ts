@@ -7,6 +7,10 @@ import {
   handleAdminListProjects,
   handleAdminListUsers,
 } from "./admin-portal-routes";
+import {
+  handleGenerateProjectCognition,
+  handleGetProjectCognition,
+} from "./admin-portal-cognition";
 import { handleBackfillProjectKnowledgeNetworks } from "./project-knowledge-network-admin";
 import { handleReembedDocuments } from "./documents-embed-admin";
 import {
@@ -120,6 +124,11 @@ import {
 } from "./knowledge-network-slot-batch-orchestrator";
 import { workspaceUserDisplayName } from "./workspace-display-names";
 import { decodePathProjectId } from "./projects-resolve";
+import {
+  estimateUsageFromMessages,
+  parseUsageFromLlmRaw,
+  recordTokenUsage,
+} from "./token-usage";
 import { canListProjectFiles } from "./workspace-roles";
 import {
   assertValidHermesBaseUrl,
@@ -500,7 +509,14 @@ async function callChatCompletions(
   model: string,
   messages: { role: string; content: string }[],
   label: string,
-): Promise<{ answer: string; raw: unknown }> {
+): Promise<{
+  answer: string;
+  raw: unknown;
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  usageEstimated: boolean;
+}> {
   const res = await fetch(url, {
     method: "POST",
     headers: {
@@ -539,7 +555,28 @@ async function callChatCompletions(
     (raw.output as string) ||
     "";
 
-  return { answer: answer || "模型未返回正文。", raw };
+  const parsedUsage = parseUsageFromLlmRaw(raw);
+  const promptTokens =
+    parsedUsage?.promptTokens ??
+    estimateUsageFromMessages(
+      messages.filter((m) => m.role === "user"),
+    ).promptTokens;
+  const completionTokens =
+    parsedUsage?.completionTokens ??
+    estimateUsageFromMessages(
+      messages.filter((m) => m.role === "assistant").length
+        ? messages.filter((m) => m.role === "assistant")
+        : [{ role: "assistant", content: answer }],
+    ).completionTokens;
+
+  return {
+    answer: answer || "模型未返回正文。",
+    raw,
+    promptTokens,
+    completionTokens,
+    totalTokens: promptTokens + completionTokens,
+    usageEstimated: !parsedUsage,
+  };
 }
 
 async function callQwen(env: Env, messages: { role: string; content: string }[]) {
@@ -608,26 +645,46 @@ function shouldFallbackToDashscope(hermesErrorMessage: string): boolean {
 async function callLlm(
   env: Env,
   messages: { role: string; content: string }[],
+  record?: {
+    userId?: string | null;
+    projectId?: string | null;
+    conversationId?: string | null;
+    source: string;
+  },
 ): Promise<{ answer: string; raw: unknown; llmBackend: string }> {
   const dashscopeReady = Boolean((env.DASHSCOPE_API_KEY || "").trim());
+  const model = (env.HERMES_MODEL || "qwen-plus").trim();
+
+  const finalize = async (result: Awaited<ReturnType<typeof callChatCompletions>>, backend: string) => {
+    if (record) {
+      await recordTokenUsage(env, {
+        userId: record.userId,
+        projectId: record.projectId,
+        conversationId: record.conversationId,
+        source: record.source,
+        model,
+        promptTokens: result.promptTokens,
+        completionTokens: result.completionTokens,
+        isEstimated: result.usageEstimated,
+      });
+    }
+    return { answer: result.answer, raw: result.raw, llmBackend: backend };
+  };
 
   if (isHermesAgentConfigured(env)) {
     try {
-      const result = await callHermes(env, messages);
-      return { ...result, llmBackend: "hermes-chat" };
+      return await finalize(await callHermes(env, messages), "hermes-chat");
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       if (dashscopeReady && shouldFallbackToDashscope(msg)) {
-        const result = await callQwen(env, messages);
-        return { ...result, llmBackend: "dashscope-fallback" };
+        return await finalize(await callQwen(env, messages), "dashscope-fallback");
       }
       throw e;
     }
   }
 
   if (dashscopeReady) {
-    const result = await callQwen(env, messages);
-    return { ...result, llmBackend: "dashscope" };
+    return await finalize(await callQwen(env, messages), "dashscope");
   }
 
   throw new Error("未配置 HERMES_BASE_URL/HERMES_API_KEY，也未配置 DASHSCOPE_API_KEY");
@@ -1478,7 +1535,9 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
 
     try {
       const plain = stripHtmlToPlainTextForSummary(knHtml);
-      const { answer: summary } = await callQwen(env, [
+      const { answer: summary } = await callLlm(
+        env,
+        [
         { role: "system", content: buildKnowledgeNetworkSummarySystemPrompt() },
         {
           role: "user",
@@ -1492,7 +1551,14 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
             plain,
           ].join("\n"),
         },
-      ]);
+      ],
+        {
+          userId,
+          projectId,
+          conversationId: body.conversationId,
+          source: "chat-kn-summary",
+        },
+      );
       const answer = `${summary.trim()}\n\n---\n基于已发布 **v${knMeta.version}** 摘录作答；完整 HTML 见 **项目详情 → 项目知识网络**（本条**不会**生成新版 HTML）。`;
       return json({
         answer,
@@ -1568,11 +1634,35 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     ];
     ctx.waitUntil(
       refreshConversationMemorySummary(env, userId, conversationKey, fullHistory, async (prompt) => {
-        const { answer } = await callQwen(env, [
+        const { answer } = await callLlm(env, [
           { role: "system", content: "你是简洁的对话摘要助手。" },
           { role: "user", content: prompt },
-        ]);
+        ], {
+          userId,
+          projectId,
+          conversationId: body.conversationId,
+          source: "memory-summary",
+        });
         return answer;
+      }),
+    );
+  };
+
+  const recordStreamChatUsage = (assistantAnswer: string) => {
+    const usage = estimateUsageFromMessages([
+      { role: "user", content: message },
+      { role: "assistant", content: assistantAnswer },
+    ]);
+    ctx.waitUntil(
+      recordTokenUsage(env, {
+        userId,
+        projectId,
+        conversationId: body.conversationId,
+        source: "chat",
+        model: (env.HERMES_MODEL || "qwen-plus").trim(),
+        promptTokens: usage.promptTokens,
+        completionTokens: usage.completionTokens,
+        isEstimated: true,
       }),
     );
   };
@@ -1600,7 +1690,10 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
             ...(conversationTopic ? { conversationTopic } : {}),
           },
           upstream,
-          onDone: (answer) => scheduleMemoryRefresh(answer),
+          onDone: (answer) => {
+            scheduleMemoryRefresh(answer);
+            recordStreamChatUsage(answer);
+          },
         };
       });
       return new Response(stream, {
@@ -1615,7 +1708,12 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     const prepared = await prepareStandardChatContext(contextParams);
     const [conversationTopic, llmResult] = await Promise.all([
       firstUserTurn ? generateConversationTopic(env, message) : Promise.resolve(undefined),
-      callLlm(env, prepared.messages),
+      callLlm(env, prepared.messages, {
+        userId,
+        projectId,
+        conversationId: body.conversationId,
+        source: "chat",
+      }),
     ]);
     const { answer, llmBackend } = llmResult;
     scheduleMemoryRefresh(answer);
@@ -1859,6 +1957,29 @@ export default {
         response = await handleAdminListUsers(request, env);
       } else if (path === "/api/admin/conversations" && request.method === "GET") {
         response = await handleAdminListConversations(request, env);
+      } else if (/^\/api\/admin\/projects\/[^/]+\/cognition$/u.test(path)) {
+        const projectId = decodeURIComponent(path.split("/")[4] ?? "");
+        if (!projectId) {
+          response = json({ error: "无效 projectId" }, 400);
+        } else if (request.method === "GET") {
+          response = await handleGetProjectCognition(request, env, projectId);
+        } else if (request.method === "POST") {
+          const model = (env.HERMES_MODEL || "qwen-plus").trim();
+          response = await handleGenerateProjectCognition(
+            request,
+            env,
+            projectId,
+            async (messages) => {
+              const result = await callLlm(env, messages, {
+                projectId,
+                source: "admin-cognition",
+              });
+              return { answer: result.answer, raw: result.raw, model };
+            },
+          );
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
       } else if (
         /^\/api\/users\/[^/]+\/project-roles$/u.test(path) &&
         request.method === "GET"
