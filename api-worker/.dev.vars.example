@@ -1,5 +1,8 @@
 # 推荐：直连千问（与百炼 / Railway 里 DASHSCOPE_API_KEY 相同）
 DASHSCOPE_API_KEY=sk-your-dashscope-key
+# 可选：覆盖 wrangler.toml 中的 EMBED_MODEL / EMBED_DIMENSION / EMBED_INSTRUCT
+# EMBED_MODEL=text-embedding-v4
+# EMBED_DIMENSION=1024
 
 # 对话里说「查外部资料」等时联网搜索（与 Railway Hermes 的 TAVILY 可填同一 Key）
 TAVILY_API_KEY=tvly-your-tavily-key
@@ -9,6 +12,10 @@ HERMES_BASE_URL=https://hermes-agent-production-02eb.up.railway.app
 HERMES_API_KEY=your-hermes-api-server-key
 HERMES_MODEL=qwen-plus
 ALLOWED_ORIGIN=https://fangjg16.github.io
+
+# 管理后台登录（默认账号 admin / 密码 admin2026）
+# ADMIN_PORTAL_USERNAME=admin
+# ADMIN_PORTAL_PASSWORD=admin2026
 
 # Hermes 只读网站资料（与 HERMES_API_KEY 不同，见 docs/HERMES-R2-手把手.md）
 JFO_INTERNAL_KEY=请设一串随机密码

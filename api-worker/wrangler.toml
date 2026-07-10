@@ -17,6 +17,7 @@ database_id = "8dc29473-1d34-4c72-90ea-bf720d073daa"
 
 [vars]
 ALLOWED_ORIGIN = "https://fangjg16.github.io"
+ADMIN_PORTAL_USERNAME = "admin"
 HERMES_MODEL = "qwen-plus"
 # 文档 RAG 向量（DashScope 原生 API：text-embedding-v4 + query/document 非对称检索）
 EMBED_MODEL = "text-embedding-v4"

@@ -731,10 +731,18 @@ export async function handleGetActiveAgentJobs(
   return json({ ok: true, userId, jobs });
 }
 
-export async function handleGetChatState(
+export type ChatStateData = {
+  userId: string;
+  projectIds: string[];
+  conversations: SyncConversation[];
+  messagesByConversation: Record<string, SyncChatMessage[]>;
+  syncedAt: string;
+};
+
+export async function loadChatStateData(
   env: ChatSyncEnv,
   userId: string,
-): Promise<Response> {
+): Promise<ChatStateData> {
   await reconcileStalePendingJobMessages(env, userId);
 
   const { results: projectRows } = await env.DB.prepare(`SELECT id FROM projects`).all<{
@@ -831,14 +839,21 @@ export async function handleGetChatState(
     messagesByConversation[r.conversation_id] = list;
   }
 
-  return json({
-    ok: true,
+  return {
     userId,
     projectIds: activeProjectIds,
     conversations,
     messagesByConversation,
     syncedAt: nowIso(),
-  });
+  };
+}
+
+export async function handleGetChatState(
+  env: ChatSyncEnv,
+  userId: string,
+): Promise<Response> {
+  const data = await loadChatStateData(env, userId);
+  return json({ ok: true, ...data });
 }
 
 export async function handlePutChatState(

@@ -1,5 +1,12 @@
 import { citationMapFromSlots, getCitationSlots } from "./citations";
 import { handleGetChatAudit } from "./chat-audit-admin";
+import { handleAdminPortalLogin } from "./admin-portal-auth";
+import {
+  handleAdminBootstrap,
+  handleAdminListConversations,
+  handleAdminListProjects,
+  handleAdminListUsers,
+} from "./admin-portal-routes";
 import { handleBackfillProjectKnowledgeNetworks } from "./project-knowledge-network-admin";
 import { handleReembedDocuments } from "./documents-embed-admin";
 import {
@@ -140,6 +147,10 @@ export interface Env {
   JFO_INTERNAL_KEY?: string;
   JFO_API_PUBLIC_BASE?: string;
   ALLOWED_ORIGIN?: string;
+  /** 管理后台登录账号（默认 admin） */
+  ADMIN_PORTAL_USERNAME?: string;
+  /** 管理后台登录密码（默认 admin2026；生产建议 wrangler secret put） */
+  ADMIN_PORTAL_PASSWORD?: string;
   /** slot-batch v2 开关：0/false 回退 v1；默认启用 v2 */
   KN_SLOT_BATCH_V2_ENABLED?: string;
   /** 强制全量走 v1 串行 */
@@ -212,12 +223,28 @@ type ChatBody = {
 
 const GITHUB_PAGES_ORIGIN = "https://fangjg16.github.io";
 
+const LOCAL_DEV_ORIGINS = [
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
+];
+
+function isAllowedOrigin(origin: string | null, env: Env): boolean {
+  if (!origin) return false;
+  const primary = (env.ALLOWED_ORIGIN || GITHUB_PAGES_ORIGIN).trim();
+  const candidates = [primary, GITHUB_PAGES_ORIGIN, ...LOCAL_DEV_ORIGINS];
+  for (const allowed of candidates) {
+    if (origin === allowed || origin === `${allowed}/` || origin.startsWith(`${allowed}/`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function corsHeaders(origin: string | null, env: Env): HeadersInit {
   const allowed = (env.ALLOWED_ORIGIN || GITHUB_PAGES_ORIGIN).trim();
-  const ok =
-    origin === allowed ||
-    origin === `${allowed}/` ||
-    origin?.startsWith(`${allowed}/`);
+  const ok = isAllowedOrigin(origin, env);
   return {
     "Access-Control-Allow-Origin": ok && origin ? origin : allowed,
     "Access-Control-Allow-Methods": "GET, POST, PUT, PATCH, DELETE, OPTIONS",
@@ -1822,6 +1849,16 @@ export default {
         }
       } else if (path === "/api/admin/chat-audit" && request.method === "GET") {
         response = await handleGetChatAudit(request, env, url);
+      } else if (path === "/api/admin/login" && request.method === "POST") {
+        response = await handleAdminPortalLogin(request, env);
+      } else if (path === "/api/admin/bootstrap" && request.method === "GET") {
+        response = await handleAdminBootstrap(request, env);
+      } else if (path === "/api/admin/projects" && request.method === "GET") {
+        response = await handleAdminListProjects(request, env);
+      } else if (path === "/api/admin/users" && request.method === "GET") {
+        response = await handleAdminListUsers(request, env);
+      } else if (path === "/api/admin/conversations" && request.method === "GET") {
+        response = await handleAdminListConversations(request, env);
       } else if (
         /^\/api\/users\/[^/]+\/project-roles$/u.test(path) &&
         request.method === "GET"
