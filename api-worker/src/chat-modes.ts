@@ -181,6 +181,98 @@ export function knowledgeNetworkSystemLines(projectNameHint?: string): string[] 
   return skillIntentSystemLines("knowledge_network", projectNameHint);
 }
 
+export type AdminSkillCatalogRow = {
+  id: SkillIntent;
+  label: string;
+  route: "快答" | "Hermes 深度任务";
+  triggerHint: string;
+  summary: string;
+};
+
+const SKILL_LABELS: Record<SkillIntent, string> = {
+  standard: "标准快答",
+  project_intake: "项目入驻评估",
+  knowledge_network: "项目知识网络",
+  ic_memo: "IC 备忘录",
+  dd_checklist: "尽调清单",
+  dd_claim_audit: "声明审计",
+  document_reorganize: "文件索引",
+  public_info_search: "公开信息检索",
+  term_annotator: "术语注释",
+  comp_analysis: "可比分析",
+  background_check: "背景调查",
+  risk_matrix: "风险矩阵",
+  returns_analysis: "回报测算",
+  sensitivity_analysis: "敏感性分析",
+  value_creation_plan: "增值方案",
+  gap_tracking: "信息缺口",
+  node_monitoring: "节点监控",
+};
+
+function summarizeSkill(intent: SkillIntent): string {
+  const lines = skillIntentSystemLines(intent);
+  const first = lines[0] ?? "";
+  return first.replace(/^【[^】]+】/u, "").trim() || "按项目资料与对话上下文作答。";
+}
+
+function triggerHintFor(intent: SkillIntent): string {
+  const hints: Partial<Record<SkillIntent, string>> = {
+    standard: "默认（未命中深度意图）",
+    project_intake: "入驻 / 五维 / 深度分析 / 成熟度诊断",
+    knowledge_network: "知识网络 / 生成 HTML / 章节重排",
+    ic_memo: "投资委员会 / IC 备忘录 / 表决建议",
+    dd_checklist: "尽调清单 / diligence request",
+    dd_claim_audit: "声明审计 / 交叉验证 / 矛盾",
+    document_reorganize: "整理文件 / 文档索引",
+    public_info_search: "查外部资料 / 联网搜索",
+    term_annotator: "术语表 / glossary",
+    comp_analysis: "可比交易 / 对标",
+    background_check: "背景调查 / 实控人",
+    risk_matrix: "风险矩阵 / 风险评估",
+    returns_analysis: "回报测算 / IRR / 估值",
+    sensitivity_analysis: "敏感性分析 / what if",
+    value_creation_plan: "增值方案 / 投后",
+    gap_tracking: "信息缺口 / 还缺什么",
+    node_monitoring: "节点监控 / 关键节点",
+  };
+  return hints[intent] ?? intent;
+}
+
+/** 管理后台只读技能目录（与运行时 chat-modes 同源） */
+export function buildAdminSkillCatalog(): AdminSkillCatalogRow[] {
+  const rows: AdminSkillCatalogRow[] = [
+    {
+      id: "standard",
+      label: SKILL_LABELS.standard,
+      route: "快答",
+      triggerHint: triggerHintFor("standard"),
+      summary: "同步/流式快答，结合项目资料包 RAG 与对话上下文。",
+    },
+  ];
+
+  for (const rule of INTENT_RULES) {
+    rows.push({
+      id: rule.intent,
+      label: SKILL_LABELS[rule.intent],
+      route: "Hermes 深度任务",
+      triggerHint: triggerHintFor(rule.intent),
+      summary: summarizeSkill(rule.intent),
+    });
+  }
+
+  if (!rows.some((r) => r.id === "knowledge_network")) {
+    rows.push({
+      id: "knowledge_network",
+      label: SKILL_LABELS.knowledge_network,
+      route: "Hermes 深度任务",
+      triggerHint: triggerHintFor("knowledge_network"),
+      summary: summarizeSkill("knowledge_network"),
+    });
+  }
+
+  return rows;
+}
+
 export function extractKnowledgeNetworkHtml(answer: string): string | null {
   const fence = answer.match(/```html\s*([\s\S]*?)```/i);
   if (!fence) return null;

@@ -13,12 +13,16 @@ import {
 } from "./admin-portal-documents";
 import { loadProjectCognitionMap } from "./admin-portal-cognition";
 import { buildAdminTokenUsageStats } from "./token-usage";
+import { buildAdminKnowledgeCatalog } from "./admin-portal-knowledge";
+import { buildAdminAgentsCatalog } from "./admin-portal-agents";
 
 type Env = {
   DB: D1Database;
   ADMIN_PORTAL_USERNAME?: string;
   ADMIN_PORTAL_PASSWORD?: string;
   JFO_INTERNAL_KEY?: string;
+  EMBED_MODEL?: string;
+  EMBED_DIMENSION?: string;
 };
 
 function json(data: unknown, status = 200): Response {
@@ -567,6 +571,10 @@ async function buildBootstrapPayload(env: Env) {
     buildAdminTokenUsageStats(env, 90),
     loadProjectCognitionMap(env, projectIds),
   ]);
+  const [knowledgeCatalog, agentsCatalog] = await Promise.all([
+    buildAdminKnowledgeCatalog(env, projects),
+    buildAdminAgentsCatalog(env, projects),
+  ]);
   const auditByConversation = buildAuditByConversation(auditRaw);
   const overview = buildOverviewStats(
     projects,
@@ -596,6 +604,8 @@ async function buildBootstrapPayload(env: Env) {
     projectCognition,
     activeUserDaily,
     projectStats,
+    knowledgeCatalog,
+    agentsCatalog,
     counts: {
       projects: projects.length,
       users: users.length,
