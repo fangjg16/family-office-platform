@@ -102,6 +102,20 @@ export type AdminOverviewStats = {
   pendingReviewCount: number;
 };
 
+export type AdminActiveUserDailyRow = {
+  date: string;
+  activeUsers: number;
+  conversations: number;
+};
+
+export type AdminProjectStats = {
+  documentCount: number;
+  conversationCount: number;
+  participantCount: number;
+  tokenTotal: number;
+  riskLevel: "低" | "中" | "中高" | "高";
+};
+
 export type AdminUserRow = {
   id: string;
   displayName: string;
@@ -423,6 +437,95 @@ function countProjectsByPhase(projects: ProjectJson[]) {
   return { active, completed, paused, cancelled };
 }
 
+function formatChartDate(day: string): string {
+  const d = new Date(`${day}T12:00:00.000Z`);
+  if (Number.isNaN(d.getTime())) return day;
+  return `${d.getUTCMonth() + 1}/${d.getUTCDate()}`;
+}
+
+function conversationDayKey(isoLike: string): string | null {
+  const raw = isoLike.trim();
+  if (!raw) return null;
+  if (/^\d{4}-\d{2}-\d{2}/u.test(raw)) return raw.slice(0, 10);
+  const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})/u);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : null;
+}
+
+function buildActiveUserDaily(
+  conversations: AdminConversationRow[],
+  days = 14,
+): AdminActiveUserDailyRow[] {
+  const span = Math.min(Math.max(days, 7), 90);
+  const start = new Date();
+  start.setUTCDate(start.getUTCDate() - (span - 1));
+  start.setUTCHours(0, 0, 0, 0);
+
+  const out: AdminActiveUserDailyRow[] = [];
+  for (let i = 0; i < span; i += 1) {
+    const d = new Date(start);
+    d.setUTCDate(start.getUTCDate() + i);
+    const key = d.toISOString().slice(0, 10);
+    const dayConvs = conversations.filter((c) => {
+      const activeDay = conversationDayKey(c.lastActiveAt);
+      const startedDay = conversationDayKey(c.startedAt);
+      return activeDay === key || startedDay === key;
+    });
+    const userIds = new Set(dayConvs.map((c) => c.userId));
+    out.push({
+      date: formatChartDate(key),
+      activeUsers: userIds.size,
+      conversations: dayConvs.length,
+    });
+  }
+  return out;
+}
+
+function riskLevelScore(risk: RiskLevel): number {
+  if (risk === "拦截") return 4;
+  if (risk === "关注") return 3;
+  if (risk === "提示") return 2;
+  return 1;
+}
+
+function projectRiskFromConversations(risks: RiskLevel[]): AdminProjectStats["riskLevel"] {
+  if (risks.length === 0) return "低";
+  const score = Math.max(...risks.map(riskLevelScore));
+  if (score >= 4) return "高";
+  if (score >= 3) return "中高";
+  if (score >= 2) return "中";
+  return "低";
+}
+
+function buildProjectStatsMap(
+  projectIds: string[],
+  conversations: AdminConversationRow[],
+  projectDocuments: Record<string, AdminProjectDocuments>,
+  users: AdminUserRow[],
+): Record<string, AdminProjectStats> {
+  const map: Record<string, AdminProjectStats> = {};
+  for (const projectId of projectIds) {
+    const docs = projectDocuments[projectId];
+    const documentCount = docs
+      ? docs.projectDocuments.length + docs.conversationDocuments.length
+      : 0;
+    const projectConversations = conversations.filter((c) => c.projectId === projectId);
+    const participantIds = new Set<string>();
+    for (const user of users) {
+      if (user.projectAccess.some((row) => row.projectId === projectId)) {
+        participantIds.add(user.id);
+      }
+    }
+    map[projectId] = {
+      documentCount,
+      conversationCount: projectConversations.length,
+      participantCount: participantIds.size,
+      tokenTotal: projectConversations.reduce((sum, c) => sum + c.tokensEst, 0),
+      riskLevel: projectRiskFromConversations(projectConversations.map((c) => c.risk)),
+    };
+  }
+  return map;
+}
+
 function buildOverviewStats(
   projects: ProjectJson[],
   users: AdminUserRow[],
@@ -472,6 +575,13 @@ async function buildBootstrapPayload(env: Env) {
     documentCount,
     auditRaw,
   );
+  const activeUserDaily = buildActiveUserDaily(conversations, 14);
+  const projectStats = buildProjectStatsMap(
+    projectIds,
+    conversations,
+    projectDocuments,
+    users,
+  );
 
   return {
     ok: true as const,
@@ -484,6 +594,8 @@ async function buildBootstrapPayload(env: Env) {
     overview,
     tokenUsage,
     projectCognition,
+    activeUserDaily,
+    projectStats,
     counts: {
       projects: projects.length,
       users: users.length,
