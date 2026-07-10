@@ -5,6 +5,12 @@ import { requireAdminPortalAuth } from "./admin-portal-auth";
 import { resolveProjectRole, type WorkspaceRole } from "./workspace-roles";
 import { workspaceUserProfile } from "./workspace-user-profiles";
 import { KNOWN_WORKSPACE_USER_IDS } from "./workspace-known-users";
+import { listRecentChatAuditLog, type AuditLogEntry } from "./chat-audit";
+import {
+  buildProjectDocumentsMap,
+  countAllProjectDocuments,
+  type AdminProjectDocuments,
+} from "./admin-portal-documents";
 
 type Env = {
   DB: D1Database;
@@ -62,6 +68,36 @@ export type AdminConversationRow = {
   toolsInvoked: string[];
   kbCitations: number;
   turns: { role: "user" | "assistant"; content: string; time: string }[];
+};
+
+export type AdminAuditEntry = {
+  id: string;
+  userId: string;
+  conversationId: string;
+  messageId: string;
+  event: "created" | "deleted";
+  role: "user" | "assistant";
+  contentPreview: string;
+  createdAt: string;
+  source: string;
+};
+
+export type AdminOverviewStats = {
+  projectCount: number;
+  projectsByPhase: {
+    active: number;
+    completed: number;
+    paused: number;
+    cancelled: number;
+  };
+  userCount: number;
+  conversationCount: number;
+  todayActiveUsers: number;
+  todayConversations: number;
+  documentCount: number;
+  auditEventCount: number;
+  auditDeletedCount: number;
+  pendingReviewCount: number;
 };
 
 export type AdminUserRow = {
@@ -336,11 +372,101 @@ async function buildAdminConversations(
   return allRows;
 }
 
+function conversationAuditKey(userId: string, conversationId: string): string {
+  return `${userId}::${conversationId}`;
+}
+
+function mapAuditEntry(entry: AuditLogEntry): AdminAuditEntry {
+  const preview = entry.content.replace(/\s+/gu, " ").trim();
+  return {
+    id: entry.id,
+    userId: entry.userId,
+    conversationId: entry.conversationId,
+    messageId: entry.messageId,
+    event: entry.event,
+    role: entry.role,
+    contentPreview: preview.length > 160 ? `${preview.slice(0, 160)}…` : preview,
+    createdAt: entry.createdAt,
+    source: entry.source,
+  };
+}
+
+function buildAuditByConversation(
+  entries: AuditLogEntry[],
+): Record<string, AdminAuditEntry[]> {
+  const map: Record<string, AdminAuditEntry[]> = {};
+  for (const entry of entries) {
+    const key = conversationAuditKey(entry.userId, entry.conversationId);
+    const list = map[key] ?? [];
+    list.push(mapAuditEntry(entry));
+    map[key] = list;
+  }
+  for (const key of Object.keys(map)) {
+    map[key].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+  return map;
+}
+
+function countProjectsByPhase(projects: ProjectJson[]) {
+  let active = 0;
+  let completed = 0;
+  let paused = 0;
+  let cancelled = 0;
+  for (const p of projects) {
+    if (p.phase.startsWith("Active")) active += 1;
+    else if (p.phase.startsWith("Completed")) completed += 1;
+    else if (p.phase.startsWith("Paused")) paused += 1;
+    else if (p.phase.startsWith("Cancelled")) cancelled += 1;
+  }
+  return { active, completed, paused, cancelled };
+}
+
+function buildOverviewStats(
+  projects: ProjectJson[],
+  users: AdminUserRow[],
+  conversations: AdminConversationRow[],
+  documentCount: number,
+  auditEntries: AuditLogEntry[],
+): AdminOverviewStats {
+  const today = new Date().toISOString().slice(0, 10);
+  const todayRows = conversations.filter((c) => c.lastActiveAt.startsWith(today));
+  const todayUserIds = new Set(todayRows.map((c) => c.userId));
+  const auditDeletedCount = auditEntries.filter((e) => e.event === "deleted").length;
+
+  return {
+    projectCount: projects.length,
+    projectsByPhase: countProjectsByPhase(projects),
+    userCount: users.length,
+    conversationCount: conversations.length,
+    todayActiveUsers: todayUserIds.size,
+    todayConversations: todayRows.length,
+    documentCount,
+    auditEventCount: auditEntries.length,
+    auditDeletedCount,
+    pendingReviewCount: conversations.filter((c) => c.lifecycleQueue === "待合规复核")
+      .length,
+  };
+}
+
 async function buildBootstrapPayload(env: Env) {
   const allProjects = await listProjects(env);
   const projects = allProjects.filter((p) => !isTestProject(p.id, p.name));
+  const projectIds = projects.map((p) => p.id);
   const users = await buildAdminUsers(env, projects);
   const conversations = await buildAdminConversations(env, projects);
+  const [projectDocuments, documentCount, auditRaw] = await Promise.all([
+    buildProjectDocumentsMap(env, projectIds),
+    countAllProjectDocuments(env, projectIds),
+    listRecentChatAuditLog(env, 400),
+  ]);
+  const auditByConversation = buildAuditByConversation(auditRaw);
+  const overview = buildOverviewStats(
+    projects,
+    users,
+    conversations,
+    documentCount,
+    auditRaw,
+  );
 
   return {
     ok: true as const,
@@ -348,10 +474,15 @@ async function buildBootstrapPayload(env: Env) {
     projects,
     users,
     conversations,
+    projectDocuments,
+    auditByConversation,
+    overview,
     counts: {
       projects: projects.length,
       users: users.length,
       conversations: conversations.length,
+      documents: documentCount,
+      auditEvents: auditRaw.length,
     },
   };
 }

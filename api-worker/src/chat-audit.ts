@@ -281,30 +281,79 @@ export async function listChatAuditLog(
       created_at: string;
     }>();
 
-  return (results ?? []).map((r) => {
-    let files: { name: string }[] | undefined;
-    if (r.files_json) {
-      try {
-        const parsed = JSON.parse(r.files_json) as { name: string }[];
-        if (Array.isArray(parsed) && parsed.length > 0) files = parsed;
-      } catch {
-        /* ignore */
-      }
+  return (results ?? []).map((r) => mapAuditRow(r));
+}
+
+function mapAuditRow(r: {
+  id: string;
+  user_id: string;
+  conversation_id: string;
+  message_id: string;
+  event: string;
+  role: string;
+  content: string;
+  files_json: string | null;
+  knowledge_network_html: string | null;
+  time_label: string | null;
+  sort_index: number | null;
+  source: string;
+  created_at: string;
+}): AuditLogEntry {
+  let files: { name: string }[] | undefined;
+  if (r.files_json) {
+    try {
+      const parsed = JSON.parse(r.files_json) as { name: string }[];
+      if (Array.isArray(parsed) && parsed.length > 0) files = parsed;
+    } catch {
+      /* ignore */
     }
-    return {
-      id: r.id,
-      userId: r.user_id,
-      conversationId: r.conversation_id,
-      messageId: r.message_id,
-      event: r.event === "deleted" ? "deleted" : "created",
-      role: r.role === "assistant" ? "assistant" : "user",
-      content: r.content,
-      files,
-      knowledgeNetworkHtml: r.knowledge_network_html,
-      timeLabel: r.time_label,
-      sortIndex: r.sort_index,
-      source: r.source,
-      createdAt: r.created_at,
-    };
-  });
+  }
+  return {
+    id: r.id,
+    userId: r.user_id,
+    conversationId: r.conversation_id,
+    messageId: r.message_id,
+    event: r.event === "deleted" ? "deleted" : "created",
+    role: r.role === "assistant" ? "assistant" : "user",
+    content: r.content,
+    files,
+    knowledgeNetworkHtml: r.knowledge_network_html,
+    timeLabel: r.time_label,
+    sortIndex: r.sort_index,
+    source: r.source,
+    createdAt: r.created_at,
+  };
+}
+
+/** 管理后台：最近审计事件（无需筛选条件） */
+export async function listRecentChatAuditLog(
+  env: ChatAuditEnv,
+  limit = 300,
+): Promise<AuditLogEntry[]> {
+  const capped = Math.min(Math.max(limit, 1), 500);
+  const { results } = await env.DB.prepare(
+    `SELECT id, user_id, conversation_id, message_id, event, role, content,
+            files_json, knowledge_network_html, time_label, sort_index, source, created_at
+     FROM chat_message_audit_log
+     ORDER BY created_at DESC
+     LIMIT ?`,
+  )
+    .bind(capped)
+    .all<{
+      id: string;
+      user_id: string;
+      conversation_id: string;
+      message_id: string;
+      event: string;
+      role: string;
+      content: string;
+      files_json: string | null;
+      knowledge_network_html: string | null;
+      time_label: string | null;
+      sort_index: number | null;
+      source: string;
+      created_at: string;
+    }>();
+
+  return (results ?? []).map((r) => mapAuditRow(r));
 }
