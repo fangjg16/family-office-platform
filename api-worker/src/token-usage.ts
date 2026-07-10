@@ -102,6 +102,87 @@ export function parseUsageFromLlmRaw(
   };
 }
 
+export function parseUsageFromHermesRunRaw(
+  raw: unknown,
+): { promptTokens: number; completionTokens: number; totalTokens: number } | null {
+  const direct = parseUsageFromLlmRaw(raw);
+  if (direct) return direct;
+  if (!raw || typeof raw !== "object") return null;
+  const record = raw as Record<string, unknown>;
+  const nestedKeys = ["usage", "token_usage", "metrics", "meta"] as const;
+  for (const key of nestedKeys) {
+    const nested = record[key];
+    if (!nested || typeof nested !== "object") continue;
+    const parsed = parseUsageFromLlmRaw({ usage: nested as Record<string, unknown> });
+    if (parsed) return parsed;
+    const prompt = Number(
+      (nested as Record<string, unknown>).prompt_tokens ??
+        (nested as Record<string, unknown>).input_tokens ??
+        0,
+    );
+    const completion = Number(
+      (nested as Record<string, unknown>).completion_tokens ??
+        (nested as Record<string, unknown>).output_tokens ??
+        0,
+    );
+    const total = Number((nested as Record<string, unknown>).total_tokens ?? prompt + completion);
+    if (Number.isFinite(total) && total > 0) {
+      return {
+        promptTokens: Math.max(0, Math.round(prompt)),
+        completionTokens: Math.max(0, Math.round(completion)),
+        totalTokens: Math.round(total),
+      };
+    }
+  }
+  return null;
+}
+
+export type AgentJobTokenUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  isEstimated: boolean;
+  model?: string | null;
+};
+
+export async function recordAgentJobTokenUsage(
+  env: Env,
+  job: {
+    user_id: string | null;
+    project_id: string;
+    conversation_id: string | null;
+    skill_intent: string;
+  },
+  answer: string,
+  usage?: AgentJobTokenUsage,
+): Promise<void> {
+  const model = usage?.model?.trim() || "hermes-agent";
+  if (usage && usage.promptTokens + usage.completionTokens > 0) {
+    await recordTokenUsage(env, {
+      userId: job.user_id,
+      projectId: job.project_id,
+      conversationId: job.conversation_id,
+      source: `agent-${job.skill_intent}`,
+      model,
+      promptTokens: usage.promptTokens,
+      completionTokens: usage.completionTokens,
+      isEstimated: usage.isEstimated,
+    });
+    return;
+  }
+
+  const estimated = estimateUsageFromMessages([{ role: "assistant", content: answer }]);
+  await recordTokenUsage(env, {
+    userId: job.user_id,
+    projectId: job.project_id,
+    conversationId: job.conversation_id,
+    source: `agent-${job.skill_intent}`,
+    model,
+    promptTokens: estimated.promptTokens,
+    completionTokens: estimated.completionTokens,
+    isEstimated: true,
+  });
+}
+
 export function estimateUsageFromMessages(
   messages: { role: string; content: string }[],
 ): { promptTokens: number; completionTokens: number; totalTokens: number } {
@@ -232,7 +313,8 @@ export async function buildAdminTokenUsageStats(
   const sinceIso = start.toISOString();
 
   const meteredRows = await loadMeteredRows(env, sinceIso);
-  const hasMetered = meteredRows.length > 0;
+  const messageRows = await loadMessageRowsForEstimate(env, sinceIso);
+  const meteredConversationDays = new Set<string>();
 
   const dailyMap = new Map<string, { input: number; output: number; total: number }>();
   const userMap = new Map<
@@ -282,9 +364,12 @@ export async function buildAdminTokenUsageStats(
     roleGroupMap.set(group, roleRow);
   };
 
-  if (hasMetered) {
+  if (meteredRows.length > 0) {
     for (const row of meteredRows) {
       const day = dayKeyFromIso(row.created_at);
+      if (row.conversation_id) {
+        meteredConversationDays.add(`${row.conversation_id}::${day}`);
+      }
       addUsage(
         row.user_id,
         row.conversation_id,
@@ -294,16 +379,17 @@ export async function buildAdminTokenUsageStats(
         row.is_estimated === 1,
       );
     }
-  } else {
-    const messages = await loadMessageRowsForEstimate(env, sinceIso);
-    for (const row of messages) {
-      const day = dayKeyFromIso(row.updated_at);
-      const tokens = estimateTokensFromText(row.content ?? "");
-      if (row.role === "assistant") {
-        addUsage(row.user_id, row.conversation_id, day, 0, tokens, true);
-      } else {
-        addUsage(row.user_id, row.conversation_id, day, tokens, 0, true);
-      }
+  }
+
+  for (const row of messageRows) {
+    const day = dayKeyFromIso(row.updated_at);
+    const convKey = `${row.conversation_id}::${day}`;
+    if (meteredConversationDays.has(convKey)) continue;
+    const tokens = estimateTokensFromText(row.content ?? "");
+    if (row.role === "assistant") {
+      addUsage(row.user_id, row.conversation_id, day, 0, tokens, true);
+    } else {
+      addUsage(row.user_id, row.conversation_id, day, tokens, 0, true);
     }
   }
 

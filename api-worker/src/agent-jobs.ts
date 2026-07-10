@@ -35,6 +35,14 @@ import {
   validateStructuredSlotPatch,
 } from "./knowledge-network-structured-patch";
 import {
+  applyKbFragmentIncrementalToKnowledgeNetworkHtml,
+  extractKbFragmentIncrementalFromAnswer,
+  kbFragmentIncrementalSummaryForJob,
+  shouldUseKbFragmentIncrementalMode,
+  validateMergedKnowledgeNetworkAfterFragmentIncremental,
+} from "./knowledge-network-fragment-incremental";
+import { resolveKnGenerationMode } from "./knowledge-network-generation-mode";
+import {
   evaluateStructuredKbPublishGate,
   extractStructuredKbDataFromAnswer,
   stripStructuredKbPayloadFromDisplayAnswer,
@@ -43,7 +51,8 @@ import {
 } from "./knowledge-network-structured-kb-data";
 import { formatKnVersionDisplay, resolveKnVersionOnUpload } from "./knowledge-network-version";
 import { resolveKnUserMessage } from "./kn-job-user-message";
-import { resolveKnowledgeNetworkSlotsFromMessage } from "./knowledge-network-slot-aliases";
+import { resolveKnowledgeNetworkSlotsFromMessage, resolveKnTouchedSlotsFromMessage } from "./knowledge-network-slot-aliases";
+import { resolveProjectKnSlotRegistry } from "./knowledge-network-slot-registry-store";
 import {
   getProjectKnowledgeNetworkMeta,
   readProjectKnowledgeNetworkHtml,
@@ -57,7 +66,13 @@ import {
   shouldUseSlotBatchGeneration,
   startKnSlotBatchHermesRun,
   getKnSlotBatchProgress,
+  recordKnSlotBatchReconcileFailure,
 } from "./knowledge-network-slot-batch-orchestrator";
+import {
+  recordAgentJobTokenUsage,
+  parseUsageFromHermesRunRaw,
+  type AgentJobTokenUsage,
+} from "./token-usage";
 
 export type AgentJobEnv = HermesAgentEnv & {
   DB: D1Database;
@@ -214,6 +229,17 @@ type StructuredPatchWriteResult =
     }
   | { ok: false; skipped: true }
   | { ok: false; blocked: true; reason: string }
+  | { ok: false; skipped: false; error: string };
+
+type FragmentIncrementalWriteResult =
+  | {
+      ok: true;
+      meta: NonNullable<Awaited<ReturnType<typeof getProjectKnowledgeNetworkMeta>>>;
+      html: string;
+      slot: string;
+      summary: string;
+    }
+  | { ok: false; skipped: true }
   | { ok: false; skipped: false; error: string };
 
 export type StructuredKbDataWriteResult =
@@ -423,6 +449,88 @@ async function tryAcceptHermesPutForJob(
   return null;
 }
 
+async function tryWriteKnowledgeNetworkFromKbFragmentIncremental(
+  env: AgentJobEnv,
+  row: AgentJobRow,
+  result: { answer: string },
+  knMode: KnowledgeNetworkUpdateMode,
+): Promise<FragmentIncrementalWriteResult> {
+  const message = await resolveKnUserMessage(env, row);
+  const generationMode = resolveKnGenerationMode(env, { userMessage: message });
+  const previousHtml = await readProjectKnowledgeNetworkHtml(env, row.project_id, {
+    mergeVersionLedger: false,
+  });
+  const slotRegistry = await resolveProjectKnSlotRegistry(
+    env,
+    row.project_id,
+    previousHtml,
+  );
+  const touchedSlots = resolveKnTouchedSlotsFromMessage(message, slotRegistry);
+  if (!shouldUseKbFragmentIncrementalMode(generationMode, knMode, touchedSlots, slotRegistry)) {
+    return { ok: false, skipped: true };
+  }
+
+  const expectedSlot = touchedSlots[0]!;
+  const extracted = extractKbFragmentIncrementalFromAnswer(result.answer, expectedSlot);
+  if (!extracted.ok) {
+    if (extracted.skipped) {
+      return { ok: false, skipped: true };
+    }
+    return { ok: false, skipped: false, error: extracted.error };
+  }
+
+  if (!previousHtml?.trim()) {
+    return {
+      ok: false,
+      skipped: false,
+      error: "无当前 KB HTML，无法 fragment incremental（请使用首次/全量）",
+    };
+  }
+
+  const applied = applyKbFragmentIncrementalToKnowledgeNetworkHtml(
+    previousHtml,
+    extracted.batch,
+    extracted.slot,
+    extracted.sectionHtml,
+  );
+  if (!applied.ok) {
+    return { ok: false, skipped: false, error: applied.error };
+  }
+
+  const validation = validateMergedKnowledgeNetworkAfterFragmentIncremental(applied.html, {
+    previousHtml,
+    slot: extracted.slot,
+    slotRegistry,
+  });
+  if (!validation.ok) {
+    return {
+      ok: false,
+      skipped: false,
+      error: validation.error ?? "fragment incremental 合并后 strict 校验失败",
+    };
+  }
+
+  const summary = kbFragmentIncrementalSummaryForJob(extracted.batch, extracted.slot);
+  const written = await writeKnowledgeNetworkFromHtml(
+    env,
+    row,
+    applied.html,
+    summary,
+    knMode,
+  );
+  if (!written.ok) {
+    return { ok: false, skipped: false, error: written.error };
+  }
+
+  return {
+    ok: true,
+    meta: written.meta,
+    html: written.html,
+    slot: extracted.slot,
+    summary,
+  };
+}
+
 async function tryWriteKnowledgeNetworkFromStructuredSlotPatch(
   env: AgentJobEnv,
   row: AgentJobRow,
@@ -430,8 +538,9 @@ async function tryWriteKnowledgeNetworkFromStructuredSlotPatch(
   knMode: KnowledgeNetworkUpdateMode,
 ): Promise<StructuredPatchWriteResult> {
   const message = await resolveKnUserMessage(env, row);
+  const generationMode = resolveKnGenerationMode(env, { userMessage: message });
   const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(message);
-  if (!shouldUseStructuredSlotPatchMode(knMode, touchedSlots)) {
+  if (!shouldUseStructuredSlotPatchMode(knMode, touchedSlots, { generationMode })) {
     return { ok: false, skipped: true };
   }
 
@@ -746,11 +855,38 @@ export async function finalizeKnowledgeNetworkJobResult(
     };
   }
 
-  // incremental / reorder：PUT 优先，再 structured slot patch / slot-html / html fallback
+  // incremental / reorder：PUT 优先，再 fragment incremental / structured patch / slot-html
   const putAccepted = await tryAcceptHermesPutForJob(env, row, result);
   if (putAccepted) {
     return putAccepted;
   }
+
+  const fragmentWritten = await tryWriteKnowledgeNetworkFromKbFragmentIncremental(
+    env,
+    row,
+    result,
+    knMode,
+  );
+  if (fragmentWritten.ok) {
+    const vDisplay = formatKnVersionDisplay(
+      fragmentWritten.meta.version,
+      fragmentWritten.meta.versionLabel,
+    );
+    const note =
+      `\n\n已通过 **kb-fragment-batch incremental** 写入**项目知识网络 v${vDisplay}**（仅更新 \`${fragmentWritten.slot}\`）。`;
+    const answer = result.answer.includes("项目知识网络 v")
+      ? result.answer
+      : `${result.answer.trim() || fragmentWritten.summary}${note}`;
+    return {
+      status: "ok",
+      answer,
+      knowledgeNetworkHtml: fragmentWritten.html,
+    };
+  }
+  const fragmentFallbackError =
+    !fragmentWritten.ok && !fragmentWritten.skipped && "error" in fragmentWritten
+      ? fragmentWritten.error
+      : null;
 
   const structuredWritten = await tryWriteKnowledgeNetworkFromStructuredSlotPatch(
     env,
@@ -786,7 +922,7 @@ export async function finalizeKnowledgeNetworkJobResult(
     };
   }
   const structuredFallbackError =
-    !structuredWritten.ok && "error" in structuredWritten
+    !structuredWritten.ok && "error" in structuredWritten && !("skipped" in structuredWritten && structuredWritten.skipped)
       ? structuredWritten.error
       : null;
 
@@ -813,11 +949,11 @@ export async function finalizeKnowledgeNetworkJobResult(
     };
   }
   const patchFallbackError =
-    patchWritten.skipped && !structuredFallbackError
+    patchWritten.skipped && !fragmentFallbackError && !structuredFallbackError
       ? null
       : patchWritten.skipped
-        ? structuredFallbackError
-        : patchWritten.error ?? structuredFallbackError;
+        ? fragmentFallbackError ?? structuredFallbackError
+        : patchWritten.error ?? fragmentFallbackError ?? structuredFallbackError;
 
   // 路径 B：从 Hermes 回复提取整页 HTML 写入（PUT / slot patch 失败时的 fallback）
   const extracted = extractKnHtmlFromResult(result);
@@ -956,6 +1092,7 @@ export async function completeAgentJob(
   env: AgentJobEnv,
   jobId: string,
   result: { answer: string; knowledgeNetworkHtml: string | null },
+  tokenUsage?: AgentJobTokenUsage,
 ): Promise<void> {
   const rowBefore = await env.DB.prepare(
     `SELECT id, project_id, user_id, conversation_id, skill_intent, status,
@@ -979,6 +1116,12 @@ export async function completeAgentJob(
   }
 
   const displayAnswer = stripStructuredKbPayloadFromDisplayAnswer(finalized.answer);
+
+  try {
+    await recordAgentJobTokenUsage(env, rowBefore, displayAnswer, tokenUsage);
+  } catch {
+    /* 计量失败不阻断任务收尾 */
+  }
 
   await env.DB.prepare(
     `UPDATE agent_jobs SET status = 'completed', answer = ?, knowledge_network_html = ?, error = NULL, updated_at = ? WHERE id = ?`,
@@ -1177,30 +1320,38 @@ export async function reconcileAgentJob(
 
   const slotSession = await readKnSlotBatchSession(env, row.project_id, row.id);
   if (slotSession) {
-    const adv = await advanceKnSlotBatchJob(env, row, {
-      pollTimeoutMs: options?.hermesPollTimeoutMs ?? 8_000,
-    });
-    const updated = await reloadAgentJob(env, row.id);
-    const progress = await getKnSlotBatchProgress(
-      env,
-      row.project_id,
-      row.id,
-      adv.action === "continue" ? (adv.hermesStatus ?? "running") : adv.action,
-    );
-    if (adv.action === "completed") {
-      return { row: updated ?? row, hermesStatus: "completed", slotBatchProgress: progress };
-    }
-    if (adv.action === "failed") {
+    try {
+      const adv = await advanceKnSlotBatchJob(env, row, {
+        pollTimeoutMs: options?.hermesPollTimeoutMs ?? 8_000,
+      });
+      const updated = await reloadAgentJob(env, row.id);
+      const progress = await getKnSlotBatchProgress(
+        env,
+        row.project_id,
+        row.id,
+        adv.action === "continue" ? (adv.hermesStatus ?? "running") : adv.action,
+      );
+      if (adv.action === "completed") {
+        return { row: updated ?? row, hermesStatus: "completed", slotBatchProgress: progress };
+      }
+      if (adv.action === "failed") {
+        return { row: updated ?? row, hermesStatus: "failed", slotBatchProgress: progress };
+      }
+      if (adv.action === "continue") {
+        return {
+          row: updated ?? row,
+          hermesStatus: adv.hermesStatus ?? "running",
+          slotBatchProgress: progress,
+        };
+      }
+      return { row: updated ?? row, hermesStatus: null, slotBatchProgress: progress };
+    } catch (e) {
+      const errMsg = e instanceof Error ? e.message : String(e);
+      await recordKnSlotBatchReconcileFailure(env, row, errMsg);
+      const updated = await reloadAgentJob(env, row.id);
+      const progress = await getKnSlotBatchProgress(env, row.project_id, row.id, "failed");
       return { row: updated ?? row, hermesStatus: "failed", slotBatchProgress: progress };
     }
-    if (adv.action === "continue") {
-      return {
-        row: updated ?? row,
-        hermesStatus: adv.hermesStatus ?? "running",
-        slotBatchProgress: progress,
-      };
-    }
-    return { row: updated ?? row, hermesStatus: null, slotBatchProgress: progress };
   }
 
   if (row.skill_intent === "knowledge_network") {
@@ -1255,7 +1406,16 @@ export async function reconcileAgentJob(
       if (snap.status === "completed") {
         const intent = row.skill_intent as SkillIntent;
         const finalized = finalizeHermesOutput(snap.output, intent);
-        await completeAgentJob(env, row.id, finalized);
+        const parsedUsage = parseUsageFromHermesRunRaw(snap.raw);
+        const tokenUsage: AgentJobTokenUsage | undefined = parsedUsage
+          ? {
+              promptTokens: parsedUsage.promptTokens,
+              completionTokens: parsedUsage.completionTokens,
+              isEstimated: false,
+              model: "hermes-agent",
+            }
+          : undefined;
+        await completeAgentJob(env, row.id, finalized, tokenUsage);
         const updated = await reloadAgentJob(env, row.id);
         return { row: updated ?? row, hermesStatus: "completed" };
       }

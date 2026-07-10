@@ -1,5 +1,7 @@
 import { CHAT_STATUS } from "./chat-context";
 
+import { parseUsageFromLlmRaw } from "./token-usage";
+
 function sseLine(event: string, data: unknown): string {
   return `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
 }
@@ -31,18 +33,35 @@ export function jfoSseError(message: string): ReadableStream<Uint8Array> {
   });
 }
 
+export type StreamCompletionUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  usageEstimated: boolean;
+};
+
 /** 将 OpenAI 兼容 SSE 转为平台事件：meta / delta / done */
 export function transformOpenAiStreamToJfo(
   upstream: ReadableStream<Uint8Array>,
   meta: Record<string, unknown>,
-  onDone?: (fullAnswer: string) => void,
+  onDone?: (fullAnswer: string, usage?: StreamCompletionUsage) => void,
   options?: { emitMeta?: boolean },
 ): ReadableStream<Uint8Array> {
   const enc = new TextEncoder();
   const dec = new TextDecoder();
   let buffer = "";
   let full = "";
+  let streamUsage: StreamCompletionUsage | undefined;
   const emitMeta = options?.emitMeta !== false;
+
+  const captureUsage = (json: unknown) => {
+    const parsed = parseUsageFromLlmRaw(json);
+    if (!parsed || parsed.totalTokens <= 0) return;
+    streamUsage = {
+      promptTokens: parsed.promptTokens,
+      completionTokens: parsed.completionTokens,
+      usageEstimated: false,
+    };
+  };
 
   return new ReadableStream({
     async start(controller) {
@@ -66,7 +85,9 @@ export function transformOpenAiStreamToJfo(
             try {
               const json = JSON.parse(payload) as {
                 choices?: { delta?: { content?: string }; finish_reason?: string }[];
+                usage?: Record<string, unknown>;
               };
+              captureUsage(json);
               const delta = json.choices?.[0]?.delta?.content ?? "";
               if (delta) {
                 full += delta;
@@ -77,7 +98,7 @@ export function transformOpenAiStreamToJfo(
             }
           }
         }
-        onDone?.(full);
+        onDone?.(full, streamUsage);
         controller.enqueue(
           enc.encode(sseLine("done", { answer: full, knowledgeNetworkHtml: null })),
         );
@@ -85,7 +106,7 @@ export function transformOpenAiStreamToJfo(
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         if (full.trim().length > 0) {
-          onDone?.(full);
+          onDone?.(full, streamUsage);
           controller.enqueue(
             enc.encode(
               sseLine("done", {
@@ -143,7 +164,7 @@ export async function fetchChatCompletionsStream(
 export type ChatPipelinePrepareResult = {
   meta: Record<string, unknown>;
   upstream: ReadableStream<Uint8Array>;
-  onDone?: (fullAnswer: string) => void;
+  onDone?: (fullAnswer: string, usage?: StreamCompletionUsage) => void;
 };
 
 /**

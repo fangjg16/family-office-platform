@@ -59,6 +59,7 @@ import {
   buildChatPipelineStream,
   fetchChatCompletionsStream,
   jfoSseError,
+  type StreamCompletionUsage,
   transformOpenAiStreamToJfo,
 } from "./chat-stream";
 import { CHAT_STATUS, prepareStandardChatContext } from "./chat-context";
@@ -126,6 +127,7 @@ import { workspaceUserDisplayName } from "./workspace-display-names";
 import { decodePathProjectId } from "./projects-resolve";
 import {
   estimateUsageFromMessages,
+  parseUsageFromHermesRunRaw,
   parseUsageFromLlmRaw,
   recordTokenUsage,
 } from "./token-usage";
@@ -819,7 +821,15 @@ async function processHermesJobBackground(
     });
     if (result.status === "completed") {
       const finalized = finalizeHermesOutput(result.output, intent);
-      await completeAgentJob(env, jobId, finalized);
+      const parsedUsage = parseUsageFromHermesRunRaw(result.raw);
+      await completeAgentJob(env, jobId, finalized, parsedUsage
+        ? {
+            promptTokens: parsedUsage.promptTokens,
+            completionTokens: parsedUsage.completionTokens,
+            isEstimated: false,
+            model: "hermes-agent",
+          }
+        : undefined);
       return;
     }
     await failAgentJob(env, jobId, result.error || `Hermes 任务结束：${result.status}`);
@@ -845,13 +855,18 @@ async function processHermesJobViaChat(
       instructions +=
         "\n\n【聊天兼容·无 bash】无法 curl。交付方式仅有：在本条回复末尾附完整 ```html 整页；禁止只写路径或要求用户再发一条。";
     }
-    const { answer } = await callHermes(env, [
+    const hermes = await callHermes(env, [
       { role: "system", content: instructions },
       ...params.history.slice(-12),
       { role: "user", content: params.message },
     ]);
-    const finalized = finalizeHermesOutput(answer, intent);
-    await completeAgentJob(env, jobId, finalized);
+    const finalized = finalizeHermesOutput(hermes.answer, intent);
+    await completeAgentJob(env, jobId, finalized, {
+      promptTokens: hermes.promptTokens,
+      completionTokens: hermes.completionTokens,
+      isEstimated: hermes.usageEstimated,
+      model: (env.HERMES_MODEL || "qwen-plus").trim(),
+    });
   } catch (e) {
     await failAgentJob(env, jobId, e instanceof Error ? e.message : String(e));
   }
@@ -1648,18 +1663,36 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
     );
   };
 
-  const recordStreamChatUsage = (assistantAnswer: string) => {
+  const recordStreamChatUsage = (
+    assistantAnswer: string,
+    streamUsage?: StreamCompletionUsage,
+  ) => {
+    const model = (env.HERMES_MODEL || "qwen-plus").trim();
+    const base = {
+      userId,
+      projectId,
+      conversationId: body.conversationId,
+      source: "chat",
+      model,
+    };
+    if (streamUsage && !streamUsage.usageEstimated) {
+      ctx.waitUntil(
+        recordTokenUsage(env, {
+          ...base,
+          promptTokens: streamUsage.promptTokens,
+          completionTokens: streamUsage.completionTokens,
+          isEstimated: false,
+        }),
+      );
+      return;
+    }
     const usage = estimateUsageFromMessages([
       { role: "user", content: message },
       { role: "assistant", content: assistantAnswer },
     ]);
     ctx.waitUntil(
       recordTokenUsage(env, {
-        userId,
-        projectId,
-        conversationId: body.conversationId,
-        source: "chat",
-        model: (env.HERMES_MODEL || "qwen-plus").trim(),
+        ...base,
         promptTokens: usage.promptTokens,
         completionTokens: usage.completionTokens,
         isEstimated: true,
@@ -1690,9 +1723,9 @@ async function handleChat(request: Request, env: Env, ctx: ExecutionContext): Pr
             ...(conversationTopic ? { conversationTopic } : {}),
           },
           upstream,
-          onDone: (answer) => {
+          onDone: (answer, streamUsage) => {
             scheduleMemoryRefresh(answer);
-            recordStreamChatUsage(answer);
+            recordStreamChatUsage(answer, streamUsage);
           },
         };
       });
