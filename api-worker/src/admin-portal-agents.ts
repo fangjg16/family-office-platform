@@ -75,27 +75,52 @@ const PERMISSION_RULES: AdminPermissionRuleRow[] = [
   {
     role: "admin",
     label: "Admin",
-    capabilities: ["全项目运营数据", "管理后台", "发布知识网络", "项目资料包"],
+    capabilities: [
+      "全平台所有项目",
+      "管理后台",
+      "发布知识网络 HTML",
+      "下载资料包原文件",
+      "项目对话（全档数据）",
+    ],
   },
   {
     role: "core",
-    label: "Core",
-    capabilities: ["授权项目核心数据", "发布知识网络", "项目资料包"],
+    label: "Core 核心级",
+    capabilities: [
+      "授权项目核心档数据",
+      "发布知识网络 HTML",
+      "下载资料包原文件",
+      "项目对话（完整数值与主体信息）",
+    ],
   },
   {
     role: "mid",
-    label: "Mid",
-    capabilities: ["授权项目进阶数据", "项目资料包", "脱敏区间答复"],
+    label: "Advanced 进阶级",
+    capabilities: [
+      "授权项目进阶档数据",
+      "查看资料包列表",
+      "项目对话（脱敏区间 / 定性答复）",
+      "不可下载原文件（项目创建人除外）",
+    ],
   },
   {
     role: "low",
-    label: "Low",
-    capabilities: ["基础流程与风险提示", "项目资料包（只读）"],
+    label: "Basic 基础级",
+    capabilities: [
+      "基础流程与风险提示",
+      "查看资料包列表",
+      "项目对话（基础档）",
+      "不可发布知识网络",
+    ],
   },
   {
     role: "guest",
     label: "Guest",
-    capabilities: ["公开级摘要", "不可见项目资料包列表"],
+    capabilities: [
+      "项目公开摘要（guestSummary）",
+      "不可进入项目对话",
+      "不可见资料包文件列表",
+    ],
   },
 ];
 
