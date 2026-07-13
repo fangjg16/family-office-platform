@@ -8,6 +8,10 @@ import {
   handleAdminListUsers,
 } from "./admin-portal-routes";
 import {
+  handleGetAdminUserPermissions,
+  handlePutAdminUserPermissions,
+} from "./admin-portal-permissions";
+import {
   handleGenerateProjectCognition,
   handleGetProjectCognition,
 } from "./admin-portal-cognition";
@@ -1990,6 +1994,17 @@ export default {
         response = await handleAdminListUsers(request, env);
       } else if (path === "/api/admin/conversations" && request.method === "GET") {
         response = await handleAdminListConversations(request, env);
+      } else if (/^\/api\/admin\/users\/[^/]+\/permissions$/u.test(path)) {
+        const routeUserId = normalizeUserId(path.split("/")[4]);
+        if (!routeUserId) {
+          response = json({ error: "无效 userId" }, 400);
+        } else if (request.method === "GET") {
+          response = await handleGetAdminUserPermissions(request, env, routeUserId);
+        } else if (request.method === "PUT") {
+          response = await handlePutAdminUserPermissions(request, env, routeUserId);
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
       } else if (/^\/api\/admin\/projects\/[^/]+\/cognition$/u.test(path)) {
         const projectId = decodeURIComponent(path.split("/")[4] ?? "");
         if (!projectId) {

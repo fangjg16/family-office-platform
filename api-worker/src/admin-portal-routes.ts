@@ -34,9 +34,9 @@ function json(data: unknown, status = 200): Response {
 
 const ROLE_ACCESS_LABEL: Record<WorkspaceRole, string> = {
   admin: "Admin",
-  core: "Core",
-  mid: "Mid",
-  low: "Low",
+  core: "Core 核心级",
+  mid: "Advanced 进阶级",
+  low: "Basic 基础级",
   guest: "Guest",
 };
 
