@@ -11,6 +11,7 @@ import {
   handleGetAdminUserPermissions,
   handlePutAdminUserPermissions,
 } from "./admin-portal-permissions";
+import { handleAdminDownloadDocument } from "./admin-portal-documents";
 import {
   handleGenerateProjectCognition,
   handleGetProjectCognition,
@@ -2002,6 +2003,15 @@ export default {
           response = await handleGetAdminUserPermissions(request, env, routeUserId);
         } else if (request.method === "PUT") {
           response = await handlePutAdminUserPermissions(request, env, routeUserId);
+        } else {
+          response = json({ error: "Method Not Allowed" }, 405);
+        }
+      } else if (/^\/api\/admin\/documents\/[^/]+\/download$/u.test(path)) {
+        const docId = decodeURIComponent(path.split("/")[4] ?? "");
+        if (!docId) {
+          response = json({ error: "无效 documentId" }, 400);
+        } else if (request.method === "GET") {
+          response = await handleAdminDownloadDocument(request, env, docId);
         } else {
           response = json({ error: "Method Not Allowed" }, 405);
         }

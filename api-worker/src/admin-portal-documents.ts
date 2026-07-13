@@ -1,6 +1,13 @@
+import { requireAdminPortalAuth } from "./admin-portal-auth";
+import type { DocumentRow } from "./documents-access";
 import { workspaceUserDisplayName } from "./workspace-display-names";
 
-type Env = { DB: D1Database };
+type Env = {
+  DB: D1Database;
+  FILES?: R2Bucket;
+  ADMIN_PORTAL_USERNAME?: string;
+  ADMIN_PORTAL_PASSWORD?: string;
+};
 
 export type AdminDocParseStatus = "已解析" | "解析中" | "失败";
 
@@ -31,6 +38,13 @@ type DocRow = {
   uploaded_by: string | null;
   chunk_count: number;
 };
+
+function json(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "Content-Type": "application/json; charset=utf-8" },
+  });
+}
 
 function parseStatusFromChunks(chunkCount: number): AdminDocParseStatus {
   return chunkCount > 0 ? "已解析" : "解析中";
@@ -111,4 +125,54 @@ export async function buildProjectDocumentsMap(
     map[projectId] = await listProjectDocumentsForAdmin(env, projectId);
   }
   return map;
+}
+
+/** GET /api/admin/documents/:documentId/download?projectId=&disposition=inline|attachment */
+export async function handleAdminDownloadDocument(
+  request: Request,
+  env: Env,
+  documentId: string,
+): Promise<Response> {
+  const auth = await requireAdminPortalAuth(request, env);
+  if (auth) return auth;
+
+  if (!env.FILES) return json({ error: "文件存储未配置" }, 503);
+
+  const id = documentId.trim();
+  if (!id) return json({ error: "缺少 documentId" }, 400);
+
+  const url = new URL(request.url);
+  const projectId = (url.searchParams.get("projectId") ?? "").trim();
+  const dispositionParam = (url.searchParams.get("disposition") ?? "attachment").trim();
+  const disposition = dispositionParam === "inline" ? "inline" : "attachment";
+
+  const row = projectId
+    ? await env.DB.prepare(
+        `SELECT id, project_id, filename, scope, conversation_id, uploaded_by, r2_key, mime
+         FROM documents WHERE id = ? AND project_id = ?`,
+      )
+        .bind(id, projectId)
+        .first<DocumentRow & { project_id: string; mime: string | null }>()
+    : await env.DB.prepare(
+        `SELECT id, project_id, filename, scope, conversation_id, uploaded_by, r2_key, mime
+         FROM documents WHERE id = ?`,
+      )
+        .bind(id)
+        .first<DocumentRow & { project_id: string; mime: string | null }>();
+
+  if (!row) return json({ error: "文件不存在或已删除" }, 404);
+  if (!row.r2_key) return json({ error: "文件对象不存在" }, 404);
+
+  const object = await env.FILES.get(row.r2_key);
+  if (!object) return json({ error: "R2 中找不到文件对象" }, 404);
+
+  const mime = row.mime || object.httpMetadata?.contentType || "application/octet-stream";
+  const headers = new Headers();
+  headers.set("Content-Type", mime);
+  headers.set(
+    "Content-Disposition",
+    `${disposition}; filename="${encodeURIComponent(row.filename)}"`,
+  );
+
+  return new Response(object.body, { status: 200, headers });
 }
