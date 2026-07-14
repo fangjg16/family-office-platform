@@ -7,15 +7,28 @@ import {
   resolveParallelBatchLimit,
   type SlotBatchArchitecture,
 } from "./knowledge-network-slot-batch-config";
+import { resolveGeneratingBatchSlots } from "./knowledge-network-slot-batch-slot-progress";
+import {
+  buildBatchRunTimeoutRetryMessage,
+  isBatchRunTimedOut,
+  resolveBatchRunTimeoutMs,
+} from "./knowledge-network-slot-batch-run-timeout";
 import { assembleKbFromFragmentSession } from "./knowledge-network-fragment-assembler";
 import { formatWorkerStubAuditAnswerBlock } from "./knowledge-network-fragment-stub-audit";
-import { mergeFragmentBatchIntoSession } from "./knowledge-network-fragment-merge";
+import { rewriteSessionFragmentCitations } from "./knowledge-network-fragment-citations";
 import { buildMinimalFragmentBatchRepairPrompt } from "./knowledge-network-fragment-batch-instructions";
+import {
+  buildAppendixWrapupInstructions,
+  buildAppendixWrapupUserMessage,
+  mergeAppendixWrapupFromAnswer,
+  needsAppendixWrapup,
+} from "./knowledge-network-appendix-wrapup";
 import {
   isFragmentGenerationSession,
   resolveKnGenerationMode,
 } from "./knowledge-network-generation-mode";
 import { extractKbFragmentBatchFromAnswer } from "./knowledge-network-fragment-extract";
+import { mergeFragmentBatchIntoSession } from "./knowledge-network-fragment-merge";
 import { syncAgentJobTerminalToChat } from "./chat-sync";
 import {
   buildSlotBatchHermesInstructionsPackage,
@@ -250,7 +263,8 @@ async function runKnFragmentBatchPublishing(
     `已通过 **kb-fragment-batch**（预处理 + ${KN_SLOT_BATCH_PLAN.length} 批并行 / 13 slot HTML fragment）写入项目知识网络 **v${versionDisplay}**。` +
     `${stubAudit}\n` +
     `批次耗时：${timingSummary}。\n` +
-    `Factor A/B/Combined 由 Hermes 在 batch 0 \`maturity\` 字段自评并写入页面 masthead。`;
+    `Factor A/B/Combined 由 Worker 入库前按固定公式计算（Hermes 不自评）。` +
+    `${session.appendixWrapupCompleted ? "\nAppendix B/C 经同 Job 全文收尾 Run 合成。" : ""}`;
 
   try {
     await withPublishStepTimeout(env, session, "syncing_chat", async () => {
@@ -408,6 +422,26 @@ async function runKnSlotBatchPublishing(
   return { action: "completed", answer, html: htmlToStore };
 }
 
+/** reconcile / poll 未捕获异常时：持久化 lastError 并终态失败（避免前端空进度） */
+export async function recordKnSlotBatchReconcileFailure(
+  env: SlotBatchOrchestratorEnv,
+  row: AgentJobRow,
+  error: string,
+): Promise<void> {
+  const session = await readKnSlotBatchSession(env, row.project_id, row.id);
+  const errDetail = error.trim() || "知识网络生成失败";
+  if (session) {
+    session.phase = "failed";
+    session.lastError = errDetail;
+    session.publishError = errDetail;
+    session.updatedAt = nowIso();
+    await writeKnSlotBatchSession(env, session);
+  }
+  if (isAgentJobActive(row.status)) {
+    await failSlotBatchJob(env, row.id, errDetail);
+  }
+}
+
 async function failSlotBatchJob(
   env: SlotBatchOrchestratorEnv,
   jobId: string,
@@ -509,6 +543,7 @@ export async function initKnSlotBatchSession(params: {
     slotQuality: {},
     batchTimings: [],
     batchRepairAttempts: {},
+    batchRunTimeoutRetries: {},
     batchSummaries: [],
     unresolvedGaps: [],
     sourceRegistry: [],
@@ -567,6 +602,7 @@ export async function initKnSlotBatchBatch2Smoke(params: {
       },
     ],
     batchRepairAttempts: {},
+    batchRunTimeoutRetries: {},
     batchSummaries: [...(params.fixture.batchSummaries ?? [])],
     unresolvedGaps: [...(params.fixture.unresolvedGaps ?? [])],
     sourceRegistry: params.fixture.shell.sources ?? [],
@@ -669,6 +705,7 @@ export async function initKnSlotBatchBatch3Smoke(params: {
       },
     ],
     batchRepairAttempts: {},
+    batchRunTimeoutRetries: {},
     batchSummaries: [...(params.fixture.batchSummaries ?? [])],
     unresolvedGaps: [...(params.fixture.unresolvedGaps ?? [])],
     sourceRegistry: params.fixture.shell.sources ?? [],
@@ -942,6 +979,12 @@ function finalizeSessionSources(
   session.proposalKeyToId = Object.fromEntries(proposalKeyToId);
 
   if (isFragmentGenerationSession(session)) {
+    if (session.fragments && proposalKeyToId.size) {
+      session.fragments = rewriteSessionFragmentCitations(
+        session.fragments,
+        proposalKeyToId,
+      );
+    }
     return { ok: true };
   }
 
@@ -1238,6 +1281,140 @@ function hasActiveBatchRepair(session: KnSlotBatchSession): boolean {
   return false;
 }
 
+async function restartTimedOutBatchRun(
+  env: SlotBatchOrchestratorEnv,
+  session: KnSlotBatchSession,
+  batchIndex: number,
+  timeoutMs: number,
+  options?: { run?: KnSlotBatchRunState },
+): Promise<{ ok: true; runId: string } | { ok: false; error: string; capacityWait?: boolean }> {
+  const retries = session.batchRunTimeoutRetries?.[batchIndex] ?? 0;
+  if (retries >= 1) {
+    return {
+      ok: false,
+      error: `批次 ${batchIndex + 1} Hermes run 超时（${Math.round(timeoutMs / 60_000)} 分钟），已重试仍失败`,
+    };
+  }
+  session.batchRunTimeoutRetries = {
+    ...(session.batchRunTimeoutRetries ?? {}),
+    [batchIndex]: retries + 1,
+  };
+  const timing = session.batchTimings.find((t) => t.batchIndex === batchIndex);
+  if (timing) {
+    timing.repairAttempted = true;
+    timing.repairStartedAt = nowIso();
+  }
+  const repairMsg = buildBatchRunTimeoutRetryMessage(
+    batchIndex,
+    timeoutMs,
+    hermesBatchOutputFormatLabel(session),
+  );
+  const started = await startBatchHermesRun(env, session, batchIndex, {
+    userMessageOverride: repairMsg,
+  });
+  if (!started.ok) {
+    return started;
+  }
+  clearSessionWaitingCapacity(session);
+  if (options?.run) {
+    options.run.runId = started.runId;
+    options.run.status = "running";
+    options.run.startedAt = nowIso();
+    options.run.error = undefined;
+  }
+  if (!session.currentRunId) {
+    session.currentRunId = started.runId;
+    await env.DB.prepare(`UPDATE agent_jobs SET hermes_run_id = ?, updated_at = ? WHERE id = ?`)
+      .bind(started.runId, nowIso(), session.jobId)
+      .run();
+  }
+  return { ok: true, runId: started.runId };
+}
+
+/** P3：running batch 超 wall-clock → cancel + 单 batch 重试（stale 检测） */
+async function enforceTimedOutParallelBatchRuns(
+  env: SlotBatchOrchestratorEnv,
+  row: AgentJobRow,
+  session: KnSlotBatchSession,
+): Promise<SlotBatchAdvanceResult | null> {
+  const timeoutMs = resolveBatchRunTimeoutMs(env);
+  const runs = session.batchRuns ?? [];
+  let mutated = false;
+
+  for (const run of runs) {
+    if (run.merged || run.status !== "running" || !run.runId) continue;
+    if (!isBatchRunTimedOut(run.startedAt, timeoutMs)) continue;
+
+    await cancelHermesRun(env, run.runId);
+    const restarted = await restartTimedOutBatchRun(env, session, run.batchIndex, timeoutMs, {
+      run,
+    });
+    if (!restarted.ok) {
+      if (isHermesCapacityError(restarted.error)) {
+        run.status = "queued";
+        run.runId = undefined;
+        run.error = restarted.error;
+        markSessionWaitingCapacity(session);
+        mutated = true;
+        continue;
+      }
+      run.status = "failed";
+      run.error = restarted.error;
+      await failParallelSlotBatchJob(env, session, row.id, restarted.error);
+      return { action: "failed", error: restarted.error };
+    }
+    mutated = true;
+  }
+
+  if (mutated) {
+    session.updatedAt = nowIso();
+    await writeKnSlotBatchSession(env, session);
+  }
+  return null;
+}
+
+async function enforceTimedOutSerialBatchRun(
+  env: SlotBatchOrchestratorEnv,
+  row: AgentJobRow,
+  session: KnSlotBatchSession,
+  runId: string,
+): Promise<SlotBatchAdvanceResult | null> {
+  const timeoutMs = resolveBatchRunTimeoutMs(env);
+  const timing = session.batchTimings.find((t) => t.batchIndex === session.currentBatchIndex);
+  const startedAt = timing?.startedAt;
+  if (!isBatchRunTimedOut(startedAt, timeoutMs)) return null;
+
+  await cancelHermesRun(env, runId);
+  const restarted = await restartTimedOutBatchRun(
+    env,
+    session,
+    session.currentBatchIndex,
+    timeoutMs,
+  );
+  if (!restarted.ok) {
+    if (isHermesCapacityError(restarted.error)) {
+      session.phase = "waiting_capacity";
+      session.updatedAt = nowIso();
+      await writeKnSlotBatchSession(env, session);
+      return { action: "continue", hermesStatus: "queued" };
+    }
+    session.phase = "failed";
+    session.lastError = restarted.error;
+    session.publishError = restarted.error;
+    await writeKnSlotBatchSession(env, session);
+    await failSlotBatchJob(env, row.id, restarted.error);
+    return { action: "failed", error: restarted.error };
+  }
+  if (timing) {
+    timing.startedAt = nowIso();
+  }
+  session.phase = "waiting_hermes";
+  session.currentRunId = restarted.runId;
+  session.updatedAt = nowIso();
+  await writeKnSlotBatchSession(env, session);
+  return { action: "continue", hermesStatus: "running" };
+}
+
 async function tryStartQueuedParallelBatches(
   env: SlotBatchOrchestratorEnv,
   session: KnSlotBatchSession,
@@ -1290,12 +1467,117 @@ async function tryStartQueuedParallelBatches(
   await writeKnSlotBatchSession(env, session);
 }
 
+/**
+ * Fragment 同 Job B/C 全文收尾：缺/薄附录时启动一次 Hermes Run；已在跑则 poll+merge。
+ * 返回 null 表示可进入 assembling/publishing。
+ */
+async function ensureFragmentAppendixWrapup(
+  env: SlotBatchOrchestratorEnv,
+  row: AgentJobRow,
+  session: KnSlotBatchSession,
+): Promise<SlotBatchAdvanceResult | null> {
+  if (!isFragmentGenerationSession(session)) return null;
+  if (session.appendixWrapupCompleted) return null;
+  if (!needsAppendixWrapup(session)) {
+    session.appendixWrapupCompleted = true;
+    return null;
+  }
+
+  const attempts = session.appendixWrapupRepairAttempts ?? 0;
+
+  if (!session.appendixWrapupRunId) {
+    if (!isHermesAgentConfigured(env)) {
+      // 无 Hermes：assemble 时 Worker stub 兜底
+      session.appendixWrapupCompleted = true;
+      return null;
+    }
+    const instructions = buildAppendixWrapupInstructions(session);
+    const userMessage = buildAppendixWrapupUserMessage(session);
+    const sessionId = `jfo-kn-appendix-${session.projectId}-${session.jobId}`;
+    const { runId, error } = await startHermesRun(env, {
+      userMessage,
+      sessionId,
+      instructions,
+      history: [],
+    });
+    if (!runId) {
+      if (attempts >= 1) {
+        session.appendixWrapupCompleted = true;
+        session.lastError = error ?? "Appendix wrap-up 启动失败；将用 Worker stub";
+        return null;
+      }
+      await failSlotBatchJob(env, row.id, error ?? "Appendix wrap-up 启动失败");
+      return { action: "failed", error: error ?? "Appendix wrap-up 启动失败" };
+    }
+    session.appendixWrapupRunId = runId;
+    session.currentRunId = runId;
+    session.phase = "appendix_wrapup";
+    session.updatedAt = nowIso();
+    await writeKnSlotBatchSession(env, session);
+    await env.DB.prepare(`UPDATE agent_jobs SET hermes_run_id = ?, updated_at = ? WHERE id = ?`)
+      .bind(runId, nowIso(), session.jobId)
+      .run();
+    return { action: "continue", hermesStatus: "running" };
+  }
+
+  const snap = await pollHermesRun(env, session.appendixWrapupRunId, { timeoutMs: 12_000 });
+  if (!["completed", "failed", "cancelled"].includes(snap.status)) {
+    session.phase = "appendix_wrapup";
+    await writeKnSlotBatchSession(env, session);
+    return { action: "continue", hermesStatus: snap.status };
+  }
+
+  if (snap.status !== "completed") {
+    session.appendixWrapupRepairAttempts = attempts + 1;
+    session.appendixWrapupRunId = undefined;
+    if (attempts >= 1) {
+      session.appendixWrapupCompleted = true;
+      session.lastError = snap.error ?? "Appendix wrap-up 失败；将用 Worker stub";
+      await writeKnSlotBatchSession(env, session);
+      return null;
+    }
+    await writeKnSlotBatchSession(env, session);
+    return ensureFragmentAppendixWrapup(env, row, session);
+  }
+
+  const merged = mergeAppendixWrapupFromAnswer(session, snap.output ?? "");
+  if (!merged.ok) {
+    session.appendixWrapupRepairAttempts = attempts + 1;
+    session.appendixWrapupRunId = undefined;
+    if (attempts >= 1) {
+      session.appendixWrapupCompleted = true;
+      session.lastError = merged.error;
+      await writeKnSlotBatchSession(env, session);
+      return null;
+    }
+    await writeKnSlotBatchSession(env, session);
+    return ensureFragmentAppendixWrapup(env, row, session);
+  }
+
+  session.appendixWrapupCompleted = true;
+  session.updatedAt = nowIso();
+  await writeKnSlotBatchSession(env, session);
+  return null;
+}
+
 async function advanceParallelSlotBatches(
   env: SlotBatchOrchestratorEnv,
   row: AgentJobRow,
   session: KnSlotBatchSession,
   options?: { pollTimeoutMs?: number },
 ): Promise<SlotBatchAdvanceResult> {
+  if (session.phase === "appendix_wrapup") {
+    const wrap = await ensureFragmentAppendixWrapup(env, row, session);
+    if (wrap) return wrap;
+    session.phase = "assembling";
+    session.updatedAt = nowIso();
+    await writeKnSlotBatchSession(env, session);
+    return runKnSlotBatchPublishing(env, row, session);
+  }
+
+  const timeoutResult = await enforceTimedOutParallelBatchRuns(env, row, session);
+  if (timeoutResult) return timeoutResult;
+
   await tryStartQueuedParallelBatches(env, session);
   const runs = session.batchRuns ?? [];
   let anyRunning = false;
@@ -1468,6 +1750,12 @@ async function advanceParallelSlotBatches(
     await failParallelSlotBatchJob(env, session, row.id, srcFinal.error);
     return { action: "failed", error: srcFinal.error };
   }
+
+  if (isFragmentGenerationSession(session)) {
+    const wrap = await ensureFragmentAppendixWrapup(env, row, session);
+    if (wrap) return wrap;
+  }
+
   session.phase = "assembling";
   session.updatedAt = nowIso();
   await writeKnSlotBatchSession(env, session);
@@ -1546,6 +1834,15 @@ export async function advanceKnSlotBatchJob(
     return { action: "idle" };
   }
 
+  if (session.phase === "appendix_wrapup") {
+    const wrap = await ensureFragmentAppendixWrapup(env, row, session);
+    if (wrap) return wrap;
+    session.phase = "assembling";
+    session.updatedAt = nowIso();
+    await writeKnSlotBatchSession(env, session);
+    return runKnSlotBatchPublishing(env, row, session);
+  }
+
   if (session.parallelMode && session.phase === "preprocessing") {
     const started = await startParallelBatchHermesRuns(env, session);
     if (!started.ok) {
@@ -1560,7 +1857,9 @@ export async function advanceKnSlotBatchJob(
 
   if (
     session.parallelMode &&
-    (session.phase === "waiting_batches" || session.phase === "waiting_capacity")
+    (session.phase === "waiting_batches" ||
+      session.phase === "waiting_capacity" ||
+      session.phase === "appendix_wrapup")
   ) {
     return advanceParallelSlotBatches(env, row, session, options);
   }
@@ -1578,6 +1877,13 @@ export async function advanceKnSlotBatchJob(
     session.currentBatchIndex >= KN_SLOT_BATCH_PLAN.length;
 
   if (!output && runId && !runId.startsWith("chat-fallback-") && !skipHermesPoll) {
+    if (
+      !session.parallelMode &&
+      (session.phase === "waiting_hermes" || session.phase === "processing")
+    ) {
+      const serialTimeout = await enforceTimedOutSerialBatchRun(env, row, session, runId);
+      if (serialTimeout) return serialTimeout;
+    }
     const snap = await pollHermesRun(env, runId, { timeoutMs: options?.pollTimeoutMs ?? 12_000 });
     status = snap.status;
     output = snap.output;
@@ -1759,6 +2065,10 @@ export async function advanceKnSlotBatchJob(
       if (!srcFinal.ok) {
         await failSlotBatchJob(env, row.id, srcFinal.error);
         return { action: "failed", error: srcFinal.error };
+      }
+      if (isFragmentGenerationSession(session)) {
+        const wrap = await ensureFragmentAppendixWrapup(env, row, session);
+        if (wrap) return wrap;
       }
       session.phase = "assembling";
       session.updatedAt = nowIso();
@@ -1975,7 +2285,11 @@ export async function getKnSlotBatchProgress(
 ): Promise<KnSlotBatchProgressPayload | null> {
   const session = await readKnSlotBatchSession(env, projectId, jobId);
   if (!session) return null;
-  const currentBatchSlots = [...KN_SLOT_BATCH_PLAN[session.currentBatchIndex]!];
+  const generatingSlots = resolveGeneratingBatchSlots(session);
+  const currentBatchSlots =
+    generatingSlots.length > 0
+      ? generatingSlots
+      : ([...KN_SLOT_BATCH_PLAN[session.currentBatchIndex]!] as CanonicalKbSlot[]);
   const parallelDone = session.batchRuns?.filter((r) => r.merged).length ?? 0;
   const view = buildKnSlotBatchProgressView(session);
   return {

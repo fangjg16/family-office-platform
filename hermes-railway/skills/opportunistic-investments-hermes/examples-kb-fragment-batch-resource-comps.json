@@ -1,0 +1,20 @@
+{
+  "type": "kb-fragment-batch",
+  "schemaVersion": "2.91",
+  "mode": "full",
+  "batchIndex": 2,
+  "summary": "批次 2：资源网络与市场对标；公开资料作背景，项目级关系待验证。",
+  "sourceProposals": [
+    {
+      "sourceKey": "prop-industry-benchmark",
+      "type": "公开资料",
+      "title": "行业产能与价格基准报告",
+      "usedIn": ["comps-benchmark", "industry-market"]
+    }
+  ],
+  "fragments": {
+    "resource-network": "<section class=\"block kb-panel\" id=\"resource-network\"><h2 class=\"section-title\"><span class=\"section-num\">五</span>资源网络与关键协作</h2><table><thead><tr><th>主体/资源</th><th>关系与作用</th><th>强度/可验证性</th><th>依赖与风险</th></tr></thead><tbody><tr><td>酶制剂供应商</td><td>提供核心酶制剂与工艺支持</td><td>待验证</td><td>供应集中度与成本波动</td></tr><tr><td>废弃 PET 回收渠道</td><td>原料收购网络</td><td>未披露</td><td>原料质量与收购价波动</td></tr></tbody></table></section>",
+    "comps-benchmark": "<section class=\"block kb-panel\" id=\"comps-benchmark\"><h2 class=\"section-title\"><span class=\"section-num\">八</span>市场对标与可比案例</h2><table><thead><tr><th>可比对象</th><th>可比逻辑</th><th>指标/倍数</th><th>可借鉴/差异</th></tr></thead><tbody><tr><td>化学法 rPET 产能项目</td><td>同为 PCR 级再生料供给</td><td>公开价约 1.7 万元/吨（参考）</td><td>酶法成本竞争力待验证 <a href=\"#source-prop-industry-benchmark\">prop-industry-benchmark</a></td></tr></tbody></table></section>"
+  },
+  "appendixFragments": { "glossary": null, "data-dictionary": null }
+}

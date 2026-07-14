@@ -1,0 +1,12 @@
+{
+  "type": "kb-fragment-batch",
+  "schemaVersion": "2.91",
+  "mode": "full",
+  "batchIndex": 3,
+  "summary": "批次 3：投资回报与敏感性；无融资条款故估值与 IRR 待补。",
+  "sourceProposals": [],
+  "fragments": {
+    "valuation-returns": "<section class=\"block kb-panel\" id=\"valuation-returns\"><h2 class=\"section-title\"><span class=\"section-num\">九</span>投资回报与敏感性分析</h2><div class=\"valuation-grid\"><div class=\"valuation-box\"><div class=\"valuation-label\">投资额</div><div class=\"valuation-value\">待定</div><div class=\"valuation-note\">BP 未披露融资方案</div></div><div class=\"valuation-box\"><div class=\"valuation-label\">回收路径</div><div class=\"valuation-value\">产品销售 / 技术授权</div><div class=\"valuation-note\">需拆分现金流归属</div></div><div class=\"valuation-box\"><div class=\"valuation-label\">关键敏感变量</div><div class=\"valuation-value\">酶制剂成本、产能利用率、rPET 售价</div><div class=\"valuation-note\">均缺一手数据</div></div></div><div class=\"scenario-grid\"><div class=\"scenario-cards\"><div class=\"scenario-card down\"><div class=\"sc-label\">Downside</div><div class=\"sc-irr\">待测算</div><div class=\"sc-detail\">成本高于化学法、产能爬坡失败</div></div><div class=\"scenario-card base\"><div class=\"sc-label\">Base</div><div class=\"sc-irr\">待测算</div><div class=\"sc-detail\">试点线达产、部分客户签约</div></div><div class=\"scenario-card up\"><div class=\"sc-label\">Upside</div><div class=\"sc-irr\">待测算</div><div class=\"sc-detail\">成本优势兑现、授权费规模化</div></div></div></div><table><thead><tr><th>敏感变量</th><th>影响方向</th><th>阈值/区间</th><th>观察方式</th></tr></thead><tbody><tr><td>单位酶制剂成本</td><td>决定毛利与竞争力</td><td>待试点核算</td><td>成本 workpaper</td></tr></tbody></table></section>"
+  },
+  "appendixFragments": { "glossary": null, "data-dictionary": null }
+}

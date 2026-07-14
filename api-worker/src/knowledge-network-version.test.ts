@@ -21,9 +21,25 @@ describe("parseKnVersionFromFilename", () => {
   it("returns null when absent", () => {
     expect(parseKnVersionFromFilename("知识网络.html")).toBeNull();
   });
+
+  it("parses v11 before underscore date suffix", () => {
+    expect(
+      parseKnVersionFromFilename("[AI] 演员AI版权投资_知识网络_v11_20260625.html"),
+    ).toBe("11");
+  });
 });
 
 describe("resolveKnVersionOnUpload", () => {
+  it("upload v11 after v6 keeps semantic v11", () => {
+    const r = resolveKnVersionOnUpload(
+      { version: 5, versionLabel: "6" },
+      "[AI] 演员AI版权投资_知识网络_v11_20260625.html",
+    );
+    expect(r.version).toBe(6);
+    expect(r.versionLabel).toBe("11");
+    expect(formatKnVersionDisplay(r.version, r.versionLabel)).toBe("11");
+  });
+
   it("uses filename version label", () => {
     const r = resolveKnVersionOnUpload(
       { version: 2, versionLabel: null },
@@ -47,6 +63,26 @@ describe("resolveKnVersionOnUpload", () => {
     expect(r.version).toBe(1);
     expect(r.versionLabel).toBe("1");
   });
+
+  it("agent after upload v5.8 yields display v6", () => {
+    const r = resolveKnVersionOnUpload({ version: 3, versionLabel: "5.8" }, null);
+    expect(r.version).toBe(4);
+    expect(r.versionLabel).toBe("6");
+    expect(formatKnVersionDisplay(r.version, r.versionLabel)).toBe("6");
+  });
+
+  it("agent after upload v6 yields display v7", () => {
+    const r = resolveKnVersionOnUpload({ version: 5, versionLabel: "6" }, null);
+    expect(r.version).toBe(6);
+    expect(r.versionLabel).toBe("7");
+    expect(formatKnVersionDisplay(r.version, r.versionLabel)).toBe("7");
+  });
+
+  it("agent chain increments semantic major", () => {
+    const r = resolveKnVersionOnUpload({ version: 6, versionLabel: "7" }, null);
+    expect(r.versionLabel).toBe("8");
+  });
+
   it("prefers internal version when integer label lags", () => {
     expect(formatKnVersionDisplay(3, "2")).toBe("3");
   });

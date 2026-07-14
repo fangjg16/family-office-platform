@@ -1,8 +1,15 @@
 import {
   CANONICAL_KB_SLOTS,
 } from "./knowledge-network-html-validation";
+import type { KnSlotRegistry } from "./knowledge-network-kb-config";
+import {
+  extensionSlotLabel,
+  resolveExtensionSlotsFromMessage,
+} from "./knowledge-network-extension-slots";
 
 export type CanonicalKbSlot = (typeof CANONICAL_KB_SLOTS)[number];
+
+export type KnTouchedSlot = CanonicalKbSlot | string;
 
 const SLOT_ALIAS_PATTERNS: ReadonlyArray<{ slot: CanonicalKbSlot; patterns: RegExp[] }> = [
   {
@@ -164,6 +171,27 @@ export function resolveKnowledgeNetworkSlotsFromMessage(
   return CANONICAL_KB_SLOTS.filter((s) => found.has(s));
 }
 
+/** canonical + extension（按 display-order 排序） */
+export function resolveKnTouchedSlotsFromMessage(
+  message: string,
+  registry?: KnSlotRegistry | null,
+): KnTouchedSlot[] {
+  const m = message.trim();
+  if (!m) return [];
+
+  const found = new Set<KnTouchedSlot>();
+  for (const s of resolveKnowledgeNetworkSlotsFromMessage(m)) found.add(s);
+  if (registry?.hasExtensions) {
+    for (const ext of resolveExtensionSlotsFromMessage(m, registry)) found.add(ext);
+  }
+
+  if (registry?.hasExtensions) {
+    const ordered = registry.displayOrder.filter((id) => found.has(id));
+    return ordered.length > 0 ? ordered : [...found];
+  }
+  return CANONICAL_KB_SLOTS.filter((s) => found.has(s));
+}
+
 export function messageMentionsKbSlot(
   message: string,
   slot: CanonicalKbSlot,
@@ -205,15 +233,26 @@ const SLOT_ZH_LABEL: Record<CanonicalKbSlot, string> = {
   "decision-framework": "决策框架",
 };
 
-export function buildKnowledgeNetworkSlotResolutionLines(message: string): string {
-  const slots = resolveKnowledgeNetworkSlotsFromMessage(message);
+export function buildKnowledgeNetworkSlotResolutionLines(
+  message: string,
+  registry?: KnSlotRegistry | null,
+): string {
+  const slots = resolveKnTouchedSlotsFromMessage(message, registry);
   if (slots.length === 0) return "";
-  const parts = slots.map((s) => `${SLOT_ZH_LABEL[s]} → #${s}`);
+  const parts = slots.map((s) => {
+    if (CANONICAL_KB_SLOTS.includes(s as CanonicalKbSlot)) {
+      return `${SLOT_ZH_LABEL[s as CanonicalKbSlot]} → #${s}`;
+    }
+    return `${extensionSlotLabel(s, registry)} → #${s}`;
+  });
+  const extNote = registry?.hasExtensions
+    ? "；含 extension slot（自定义模块，仅 fragment incremental / 上传维护）"
+    : "";
   return [
     "",
-    "【用户点名 slot（v2.91 13-slot · 中文与 #anchor 等价）】",
+    "【用户点名 slot（v2.91 · 中文与 #anchor 等价）】",
     parts.join("；"),
-    "增量模式：仅修改上述 slot 内容面板；reorder 模式：仅改 KB-CONFIG/nav/编号，不改内容面板。",
+    `增量模式：仅修改上述 slot 内容面板；reorder 模式：仅改 KB-CONFIG/nav/编号，不改内容面板${extNote}。`,
   ].join("\n");
 }
 

@@ -61,10 +61,25 @@ export function mergeFragmentBatchIntoSession(
 
   const batch = extracted.batch;
   const parallel = session.parallelMode === true;
-  const registry = buildFragmentRegistryContext(session.sourceRegistry ?? session.shell.sources ?? []);
+  const proposals = proposalsFromFragmentBatch(batch);
+  const registry = buildFragmentRegistryContext(
+    session.sourceRegistry ?? session.shell.sources ?? [],
+    [...(session.pendingSourceProposals ?? []), ...proposals],
+  );
 
   if (!parallel && batchIndex === 0) {
     if (batch.summary) session.shell.summary = batch.summary;
+    if (batch.overviewMeta) {
+      session.shell.meta = {
+        title: session.shell.meta?.title ?? session.projectTitle,
+        autoSummary: session.shell.meta?.autoSummary ?? "",
+        ...session.shell.meta,
+        ...(batch.overviewMeta.lead ? { lead: batch.overviewMeta.lead } : {}),
+        ...(batch.overviewMeta.autoSummary
+          ? { autoSummary: batch.overviewMeta.autoSummary }
+          : {}),
+      };
+    }
     if (batch.maturity) {
       session.shell.maturity = {
         factorA: batch.maturity.factorA ?? session.shell.maturity?.factorA ?? "—",
@@ -96,7 +111,18 @@ export function mergeFragmentBatchIntoSession(
     };
   }
 
-  const proposals = proposalsFromFragmentBatch(batch);
+  if (parallel && batch.overviewMeta && batchIndex === 0) {
+    session.shell.meta = {
+      title: session.shell.meta?.title ?? session.projectTitle,
+      autoSummary: session.shell.meta?.autoSummary ?? "",
+      ...session.shell.meta,
+      ...(batch.overviewMeta.lead ? { lead: batch.overviewMeta.lead } : {}),
+      ...(batch.overviewMeta.autoSummary
+        ? { autoSummary: batch.overviewMeta.autoSummary }
+        : {}),
+    };
+  }
+
   if (proposals.length) {
     session.pendingSourceProposals = [...(session.pendingSourceProposals ?? []), ...proposals];
   }

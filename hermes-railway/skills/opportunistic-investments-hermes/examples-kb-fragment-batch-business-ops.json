@@ -1,0 +1,17 @@
+{
+  "type": "kb-fragment-batch",
+  "schemaVersion": "2.91",
+  "mode": "full",
+  "batchIndex": 1,
+  "summary": "批次 1：业务模式以 journey-wrap 展示多路径变现；法律与监管表验证权利与合规缺口。",
+  "sourceProposals": [],
+  "fragments": {
+    "business-operations": "<section class=\"block kb-panel\" id=\"business-operations\"><h2 class=\"section-title\"><span class=\"section-num\">四</span>业务模式与运营假设</h2><div class=\"journey-wrap\"><div class=\"journey\" style=\"--journey-cols:4\"><div class=\"journey-corner\"></div><div class=\"journey-stage\">原料收购</div><div class=\"journey-stage\">酶解再生</div><div class=\"journey-stage\">聚合造粒</div><div class=\"journey-stage\">销售回款</div><div class=\"journey-lane-label\">产品销售路径</div><div class=\"journey-node\">废弃 PET 收集</div><div class=\"journey-node\">酶制剂解聚</div><div class=\"journey-node\">PCR 级 rPET</div><div class=\"journey-node\">纤维厂/品牌方</div><div class=\"journey-lane-label\">技术授权路径</div><div class=\"journey-node\">工艺包输出</div><div class=\"journey-node\">许可费/分成</div><div class=\"journey-node\">代工伙伴</div><div class=\"journey-node\">持续服务费</div></div></div><table><thead><tr><th>应用/产品场景</th><th>价值主张</th><th>证据/缺口</th></tr></thead><tbody><tr><td>PCR 级 rPET 销售</td><td>低碳再生料替代化学法 rPET</td><td>定价与客户未披露</td></tr></tbody></table><table><thead><tr><th>客户/受众/付费方</th><th>需求</th><th>获客/渠道</th><th>验证状态</th></tr></thead><tbody><tr><td>纤维厂、品牌方</td><td>稳定 PCR 级原料</td><td>待确认</td><td>无付费客户记录</td></tr></tbody></table><table><thead><tr><th>收入来源</th><th>定价/费率</th><th>成本/履约</th><th>单位经济/KPI</th></tr></thead><tbody><tr><td>产品销售 / 技术授权</td><td>元/吨或许可费</td><td>酶制剂、能耗、人工</td><td>单位成本未披露</td></tr></tbody></table><table><thead><tr><th>待验证假设</th><th>为什么关键</th><th>验证方式</th></tr></thead><tbody><tr><td>酶法成本可低于化学法参考价约 1.7 万元/吨</td><td>决定商业化竞争力</td><td>试点成本核算与访谈</td></tr></tbody></table></section>",
+    "legal-ownership": "<section class=\"block kb-panel\" id=\"legal-ownership\"><h2 class=\"section-title\"><span class=\"section-num\">六</span>法律结构与权属关系</h2><table><thead><tr><th>主体/权利</th><th>角色/归属</th><th>限制/负担</th><th>证据/缺口</th></tr></thead><tbody><tr><td>标的公司/项目公司</td><td>拟承接 IP 与产销</td><td>股权与控制权未披露</td><td>需 cap table <a href=\"#source-U-1\">U-1</a></td></tr><tr><td>酶法再生相关专利/技术</td><td>核心工艺权属</td><td>许可范围待确认</td><td>专利清单缺失</td></tr></tbody></table><table><thead><tr><th>关系</th><th>从</th><th>到</th><th>状态</th><th>风险</th></tr></thead><tbody><tr><td>控股关系</td><td>创始人/控股方</td><td>项目公司</td><td>未披露</td><td>控制权不清影响投资结构</td></tr></tbody></table></section>",
+    "regulatory-compliance": "<section class=\"block kb-panel\" id=\"regulatory-compliance\"><h2 class=\"section-title\"><span class=\"section-num\">七</span>监管合规与许可路径</h2><table><thead><tr><th>监管/规则</th><th>适用原因</th><th>状态/许可</th><th>红线/下一步</th></tr></thead><tbody><tr><td>化工/再生塑料生产许可</td><td>产业化产线投产</td><td>未披露</td><td>需确认环评与生产许可路径</td></tr><tr><td>食品安全相关标准（若食品级 rPET）</td><td>下游食品接触应用</td><td>待确认</td><td>需标准符合性证明</td></tr></tbody></table></section>"
+  },
+  "appendixFragments": {
+    "glossary": null,
+    "data-dictionary": null
+  }
+}

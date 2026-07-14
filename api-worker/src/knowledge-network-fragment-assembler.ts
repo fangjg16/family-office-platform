@@ -1,5 +1,3 @@
-import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
-import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import { extractSnapshotOverviewFallback } from "./knowledge-network-fragment-normalize";
 import { listUndeliveredCanonicalFragments } from "./knowledge-network-fragment-merge";
 import {
@@ -8,6 +6,7 @@ import {
   renderWorkerGapStubFragment,
 } from "./knowledge-network-fragment-stub";
 import { normalizeSessionFragmentCitations } from "./knowledge-network-fragment-citations";
+import { computeDeterministicMaturityFromFragments } from "./knowledge-network-fragment-maturity";
 import type { KnSlotBatchSession } from "./knowledge-network-slot-batch-types";
 import {
   resolveStructuredKbDisplayOrder,
@@ -21,6 +20,8 @@ import type {
 } from "./knowledge-network-fragment-types";
 import { validateCanonicalSlotFragment } from "./knowledge-network-fragment-validation";
 import type { StructuredKbData } from "./knowledge-network-structured-kb-data-types";
+import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
+import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 
 export function joinCanonicalFragmentsInOrder(
   fragments: Partial<Record<CanonicalKbSlot, string>>,
@@ -179,14 +180,20 @@ export function assembleKbFromFragmentSession(
     prepareSessionFragmentsForAssemble(session);
   }
 
+  const sources = session.sourceRegistry ?? session.shell.sources ?? [];
+  const computed = computeDeterministicMaturityFromFragments(
+    session.fragments ?? {},
+    sources,
+  );
   const maturity = {
-    factorA: session.shell.maturity?.factorA ?? "—",
-    factorB: session.shell.maturity?.factorB ?? "—",
-    combined: session.shell.maturity?.combined ?? "—",
-    tier: session.shell.maturity?.tier ?? ("Early" as const),
-    factorANote: session.shell.maturity?.factorANote,
-    factorBNote: session.shell.maturity?.factorBNote,
+    factorA: computed.factorADisplay,
+    factorB: computed.factorBDisplay,
+    combined: computed.combinedDisplay,
+    tier: computed.tier,
+    factorANote: computed.factorANote,
+    factorBNote: computed.factorBNote,
   };
+  session.shell.maturity = maturity;
 
   const snapshotFallback = extractSnapshotOverviewFallback(
     session.fragments?.snapshot ?? "",

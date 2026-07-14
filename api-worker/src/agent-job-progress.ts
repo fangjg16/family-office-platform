@@ -113,10 +113,14 @@ export function buildAgentJobProgressLabel(params: {
       const phase = slotBatchProgress.phase;
       const publishError = slotBatchProgress.publishError;
       if (phase === "failed" || (publishError && publishError.trim())) {
-        return { progressLabel: "知识网络生成未完成", jobStage: "failed" };
+        return {
+          progressLabel: buildKnSlotBatchUserProgressLabel(slotBatchProgress, elapsedSec),
+          jobStage: "failed",
+        };
       }
       let stage: AgentJobStage = "generating_kb";
       if (phase === "preprocessing") stage = "preparing_materials";
+      if (phase === "appendix_wrapup") stage = "reading_materials";
       if (phase === "assembling" || phase === "publishing") stage = "validating_html";
       if (phase === "between_batches") stage = "reading_materials";
       return {
@@ -128,7 +132,10 @@ export function buildAgentJobProgressLabel(params: {
       const phase = slotBatchProgress.phase;
       const publishError = slotBatchProgress.publishError;
       if (phase === "failed" || (publishError && publishError.trim())) {
-        return { progressLabel: "知识网络生成未完成", jobStage: "failed" };
+        return {
+          progressLabel: buildKnSlotBatchUserProgressLabel(slotBatchProgress, elapsedSec),
+          jobStage: "failed",
+        };
       }
       const batchNo = slotBatchProgress.batchIndex + 1;
       const total = slotBatchProgress.totalBatches;

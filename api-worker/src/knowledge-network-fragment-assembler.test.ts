@@ -57,7 +57,7 @@ describe("kb-fragment D1 assembler", () => {
     const registry = buildFragmentRegistryContext([{ id: "U-1" }]);
     const html =
       `<section class="block kb-panel" id="snapshot">` +
-      `<p>引用 <a href="#source-Z-99">Z-99</a> 与足够长的占位正文用于通过 L3 最小长度检测。</p>` +
+      `<p>引用 <a href="#source-Z-99">Z-99</a></p>` +
       `</section>`;
     const result = validateCanonicalSlotFragment("snapshot", html, registry);
     expect(result.ok).toBe(false);

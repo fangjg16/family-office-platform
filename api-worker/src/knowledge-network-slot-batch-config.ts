@@ -7,6 +7,8 @@ export type SlotBatchEnvConfig = {
   KN_SLOT_BATCH_FORCE_V1?: string;
   KN_SLOT_BATCH_PARALLEL_LIMIT?: string;
   KN_SLOT_BATCH_STARTS_PER_TICK?: string;
+  /** 单 Hermes batch run 超时毫秒（默认 20 分钟） */
+  KN_SLOT_BATCH_RUN_TIMEOUT_MS?: string;
 };
 
 function truthy(v: string | undefined): boolean {

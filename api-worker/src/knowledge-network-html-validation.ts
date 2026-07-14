@@ -1,4 +1,22 @@
+import {
+  CANONICAL_KB_SLOTS,
+  KB_APPENDIX_SLOTS,
+} from "./knowledge-network-canonical-slots";
+import {
+  buildSlotRegistryFromKnowledgeNetworkHtml,
+  extractKbConfigCommentBody,
+  listAllowedNavTargets,
+  parseKbConfigDisplayOrder,
+  validateSlotRegistryShape,
+} from "./knowledge-network-kb-config";
+import type { KnSlotRegistry } from "./knowledge-network-kb-config";
 import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
+
+export { CANONICAL_KB_SLOTS, KB_APPENDIX_SLOTS } from "./knowledge-network-canonical-slots";
+export {
+  extractKbConfigCommentBody,
+  parseKbConfigDisplayOrder,
+} from "./knowledge-network-kb-config";
 
 export type KnHtmlValidationOptions = {
   mode?: KnowledgeNetworkUpdateMode;
@@ -13,6 +31,8 @@ export type KnHtmlValidationOptions = {
    * full/initial/upload 默认 true。
    */
   strictOrphanCitations?: boolean;
+  /** 含 extension slot 的 KB registry（browser upload / incremental 合并） */
+  slotRegistry?: KnSlotRegistry | null;
 };
 
 export type KnHtmlValidationResult = {
@@ -29,31 +49,6 @@ export type KnHtmlValidationForWriteResult = KnHtmlValidationResult & {
 const MAX_KN_HTML_BYTES = 2_500_000;
 const REORDER_MAX_LENGTH_DRIFT_RATIO = 0.08;
 const KB_SCHEMA_VERSION = "2.91";
-
-/** v2.91 core analysis slots (13) */
-export const CANONICAL_KB_SLOTS = [
-  "snapshot",
-  "target-overview",
-  "industry-market",
-  "business-operations",
-  "legal-ownership",
-  "regulatory-compliance",
-  "resource-network",
-  "comps-benchmark",
-  "valuation-returns",
-  "diligence-gaps",
-  "risks-mitigation",
-  "timeline-milestones",
-  "decision-framework",
-] as const;
-
-/** Appendix A–D */
-export const KB_APPENDIX_SLOTS = [
-  "source-index",
-  "glossary",
-  "data-dictionary",
-  "version-ledger",
-] as const;
 
 /** Legacy v2.8 anchors — strict mode rejects */
 export const LEGACY_V28_ANCHORS = [
@@ -271,23 +266,6 @@ function normalizeReorderBody(html: string): string {
   return t.trim();
 }
 
-export function parseKbConfigDisplayOrder(html: string): string[] {
-  const configBody = extractKbConfigCommentBody(html);
-  if (!configBody) return [];
-  const line = configBody.match(/display-order:\s*(.+)$/im);
-  if (!line) return [];
-  return line[1]
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-/** Body inside <!-- KB-CONFIG ... --> (canonical v2.91 line-oriented format). */
-export function extractKbConfigCommentBody(html: string): string | null {
-  const configMatch = html.match(/<!--\s*KB-CONFIG([\s\S]*?)-->/i);
-  return configMatch?.[1] ?? null;
-}
-
 /**
  * Parse schema-version from KB-CONFIG HTML comment (canonical format).
  * Accepts `schema-version: 2.91` on any line inside the comment block.
@@ -438,6 +416,59 @@ function validateConfigNavSectionAlignment(
   return null;
 }
 
+function validateExtendedConfigNavSectionAlignment(
+  uncommented: string,
+  registry: KnSlotRegistry,
+): KnHtmlValidationResult | null {
+  const { displayOrder } = registry;
+  const shapeErr = validateSlotRegistryShape(registry);
+  if (shapeErr) {
+    return { ok: false, error: shapeErr };
+  }
+
+  if (displayOrder.length === 0) {
+    return { ok: false, error: "KB-CONFIG 缺少 display-order" };
+  }
+
+  const dupConfig = displayOrder.filter((x, i) => displayOrder.indexOf(x) !== i);
+  if (dupConfig.length > 0) {
+    return {
+      ok: false,
+      error: `KB-CONFIG display-order 重复：${[...new Set(dupConfig)].join(", ")}`,
+    };
+  }
+
+  for (const slot of displayOrder) {
+    if (!new RegExp(`\\bid=["']${slot}["']`, "i").test(uncommented)) {
+      return { ok: false, error: `缺少 slot section: ${slot}` };
+    }
+  }
+
+  const navTargets = extractNavTargets(uncommented);
+  const navCore = navTargets.filter(
+    (t) => t !== "overview" && !APPENDIX_SLOT_SET.has(t),
+  );
+
+  const missingInNav = displayOrder.filter((s) => !navTargets.includes(s));
+  if (missingInNav.length > 0) {
+    return {
+      ok: false,
+      error: `nav 与 KB-CONFIG 不一致：缺少 ${missingInNav.join(", ")}`,
+    };
+  }
+
+  const navOrdered = navCore.filter((t) => displayOrder.includes(t));
+  const expectedOrdered = displayOrder.filter((t) => navCore.includes(t));
+  if (navOrdered.join(",") !== expectedOrdered.join(",")) {
+    return {
+      ok: false,
+      error: `nav 与 KB-CONFIG 不一致：期望 ${expectedOrdered.join(", ")}，nav 为 ${navOrdered.join(", ")}`,
+    };
+  }
+
+  return null;
+}
+
 function validateAppendices(
   uncommented: string,
   navTargets: string[],
@@ -534,9 +565,16 @@ function validateStrictV291(t: string, options: KnHtmlValidationOptions): KnHtml
   const mode = options.mode;
   const displayOrder = parseKbConfigDisplayOrder(t);
   const navTargets = extractNavTargets(uncommented);
+  const registry =
+    options.slotRegistry ??
+    (options.browserUpload ? buildSlotRegistryFromKnowledgeNetworkHtml(t) : null);
+  const useExtended = Boolean(registry?.hasExtensions);
+  const allowedNav = useExtended && registry
+    ? listAllowedNavTargets(registry)
+    : ALLOWED_NAV_TARGETS;
 
   for (const target of navTargets) {
-    if (!ALLOWED_NAV_TARGETS.has(target)) {
+    if (!allowedNav.has(target)) {
       return { ok: false, error: `未知 nav target：${target}` };
     }
   }
@@ -579,7 +617,9 @@ function validateStrictV291(t: string, options: KnHtmlValidationOptions): KnHtml
         }
       }
     }
-    const alignment = validateConfigNavSectionAlignment(uncommented, displayOrder);
+    const alignment = useExtended && registry
+      ? validateExtendedConfigNavSectionAlignment(uncommented, registry)
+      : validateConfigNavSectionAlignment(uncommented, displayOrder);
     if (alignment) return alignment;
 
     const appendices = validateAppendices(uncommented, navTargets);
@@ -588,7 +628,9 @@ function validateStrictV291(t: string, options: KnHtmlValidationOptions): KnHtml
     const citations = validateCitationsAndRevealAnchor(t, uncommented, false, strictOrphan);
     if (citations) return citations;
   } else if (requiresFullV291Structure(mode)) {
-    const alignment = validateConfigNavSectionAlignment(uncommented, displayOrder);
+    const alignment = useExtended && registry
+      ? validateExtendedConfigNavSectionAlignment(uncommented, registry)
+      : validateConfigNavSectionAlignment(uncommented, displayOrder);
     if (alignment) return alignment;
 
     const appendices = validateAppendices(uncommented, navTargets);

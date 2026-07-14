@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+CIRCLED_NUMS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"]
+
 CANONICAL = [
     "snapshot",
     "target-overview",
@@ -380,13 +382,35 @@ def render_valuation_returns(slot: dict[str, Any]) -> str:
 def render_diligence_gaps(slot: dict[str, Any]) -> str:
     groups = slot.get("groups") or []
     if groups:
-        out = []
+        out = ['<p class="section-sub">OPEN QUESTIONS · 按优先级排序</p>']
+        counter = 0
         for group in groups:
             name = first(group, "name", "priority", "label")
+            title = first(group, "title")
+            label = " ".join(x for x in [str(name or ""), str(title or "")] if x).strip() or "待确认"
             rows = group.get("items") or group.get("rows") or []
-            out.append(f'<div class="oq-group"><h3>{esc(name)}</h3>')
-            out.append(table([("问题/主张", ["question", "claim", "item"]), ("证据强度", ["evidenceStrength", "strength"]), ("Owner", ["owner"]), ("紧急程度/阻塞", ["urgency", "blocker"]), ("需要资料/动作", ["request", "nextStep"])], rows))
-            out.append("</div>")
+            if not rows:
+                continue
+            items = []
+            for row in rows:
+                counter += 1
+                num = CIRCLED_NUMS[counter - 1] if counter <= len(CIRCLED_NUMS) else f"{counter}."
+                question = esc(first(row, "question", "claim", "item"))
+                details = []
+                if first(row, "why", "whyItMatters", "impact"):
+                    details.append(f"影响：{esc(first(row, 'why', 'whyItMatters', 'impact'))}")
+                if first(row, "owner"):
+                    details.append(f"责任方：{esc(first(row, 'owner'))}")
+                if first(row, "request", "nextStep", "action"):
+                    details.append(f"下一步：{esc(first(row, 'request', 'nextStep', 'action'))}")
+                detail_html = f'<span class="oq-action"> —— {"；".join(details)}</span>' if details else ""
+                items.append(f'<li class="oq-item"><span class="oq-num">{num}</span>{question}{detail_html}</li>')
+            out.append(
+                '<details class="oq-group" open>'
+                f'<summary><span class="oq-title">{esc(label)}</span><span class="oq-count">{len(rows)} 项</span></summary>'
+                f'<ol class="oq-list">{"".join(items)}</ol>'
+                "</details>"
+            )
         return "\n".join(out)
     rows = slot.get("rows") or slot.get("items") or []
     if not rows:

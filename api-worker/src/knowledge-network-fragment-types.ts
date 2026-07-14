@@ -21,10 +21,12 @@ export type KbFragmentBatchPayload = {
   schemaVersion: typeof KB_FRAGMENT_BATCH_SCHEMA_VERSION;
   mode: KnowledgeNetworkUpdateMode;
   batchIndex: number;
-  fragments: Partial<Record<CanonicalKbSlot, string>>;
+  fragments: Partial<Record<string, string>>;
   appendixFragments?: KbFragmentBatchAppendixFragments | null;
   sourceProposals?: SourceProposalInput[];
   summary?: string;
+  /** batch 0：Hermes 合成的 masthead lead + 项目概览（≤200 字），Worker 透传 */
+  overviewMeta?: { lead?: string; autoSummary?: string };
   /** batch 0（或末批）由 Hermes 自评；Worker 只透传至 masthead，不重算 */
   maturity?: Partial<StructuredKbMaturity>;
 };
@@ -47,12 +49,12 @@ export type SlotFragmentDeliveryStatus =
   | "undelivered";
 
 export type KbFragmentBatchExtractResult =
-  | { ok: true; batch: KbFragmentBatchPayload }
+  | { ok: true; batch: KbFragmentBatchPayload; jsonRepaired?: boolean }
   | { ok: false; reason: string };
 
 export type KbFragmentValidationResult =
-  | { ok: true; slot: CanonicalKbSlot | KbAppendixFragmentSlot; html: string }
-  | { ok: false; slot: CanonicalKbSlot | KbAppendixFragmentSlot; reason: string; level: "L1" | "L2" | "L3" };
+  | { ok: true; slot: string; html: string }
+  | { ok: false; slot: string; reason: string; level: "L1" | "L2" | "L3" };
 
 export type KbFragmentAssembleResult =
   | { ok: true; html: string; missingSlots: [] }

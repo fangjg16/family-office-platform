@@ -475,29 +475,60 @@ function priorityBadgeClass(priority: string): string {
   return "badge-gray";
 }
 
+const CIRCLED_QUESTION_NUMS = ["①", "②", "③", "④", "⑤", "⑥", "⑦", "⑧", "⑨", "⑩"];
+
 function renderQuestionGroups(groups?: QuestionGroup[]): string {
   if (!groups?.length) {
-    return `<div class="oq-group"><h3>尽调缺口</h3>${renderGapLabel("暂无有效问题组。")}</div>`;
+    return (
+      '<details class="oq-group" open><summary><span class="oq-title">尽调缺口</span>' +
+      '<span class="oq-count">0 项</span></summary>' +
+      `${renderGapLabel("暂无有效问题组。")}</details>`
+    );
   }
-  return groups
-    .map((g) => {
-      const title = g.title ?? g.priority ?? "尽调缺口";
-      const validQs = filterValidRowsForColumns(
-        g.questions,
-        ROW_SPECS.diligenceQuestion.columns,
-        0.4,
+  let counter = 0;
+  const blocks = ['<p class="section-sub">OPEN QUESTIONS · 按优先级排序</p>'];
+  for (const g of groups) {
+    const title = [g.priority, g.title].filter(Boolean).join(" · ") || "尽调缺口";
+    const validQs = filterValidRowsForColumns(
+      g.questions,
+      ROW_SPECS.diligenceQuestion.columns,
+      0.4,
+    );
+    if (!validQs.length) {
+      blocks.push(
+        `<details class="oq-group" open><summary><span class="oq-title">${esc(title)}</span>` +
+          `<span class="oq-count">0 项</span></summary>${renderGapLabel("问题组字段无法映射或暂无有效行。")}</details>`,
       );
-      const body =
-        validQs.length > 0
-          ? renderTable(
-              ["问题/主张", "证据强度", "Owner", "紧急程度/阻塞", "需要资料/动作"],
-              validQs,
-              ROW_SPECS.diligenceQuestion.columns,
-            )
-          : renderGapLabel("问题组字段无法映射或暂无有效行。");
-      return `<div class="oq-group"><h3>${esc(title)}</h3>${body}</div>`;
-    })
-    .join("");
+      continue;
+    }
+    const items = validQs
+      .map((q) => {
+        counter += 1;
+        const num =
+          CIRCLED_QUESTION_NUMS[counter - 1] ?? `${counter}.`;
+        const question = esc(
+          pickRowCell(q, ["question", "claim", "item", "description"]) ?? "",
+        );
+        const details: string[] = [];
+        const why = pickRowCell(q, ["whyItMatters", "why", "impact"]);
+        const owner = pickRowCell(q, ["owner"]);
+        const action = pickRowCell(q, ["requiredEvidence", "action", "nextStep", "request"]);
+        if (why) details.push(`影响：${esc(why)}`);
+        if (owner) details.push(`责任方：${esc(owner)}`);
+        if (action) details.push(`下一步：${esc(action)}`);
+        const detailHtml = details.length
+          ? `<span class="oq-action"> —— ${details.join("；")}</span>`
+          : "";
+        return `<li class="oq-item"><span class="oq-num">${num}</span>${question}${detailHtml}</li>`;
+      })
+      .join("");
+    blocks.push(
+      `<details class="oq-group" open><summary><span class="oq-title">${esc(title)}</span>` +
+        `<span class="oq-count">${validQs.length} 项</span></summary>` +
+        `<ol class="oq-list">${items}</ol></details>`,
+    );
+  }
+  return blocks.join("\n");
 }
 
 function renderRiskMatrix(rows: RiskRow[]): string {

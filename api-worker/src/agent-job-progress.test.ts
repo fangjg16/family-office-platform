@@ -22,7 +22,8 @@ describe("buildAgentJobProgressLabel slot-batch failed", () => {
         publishError: "rendering_html: gaps.map is not a function",
       },
     });
-    expect(progressLabel).toBe("知识网络生成未完成");
+    expect(progressLabel).toContain("知识网络生成未完成");
+    expect(progressLabel).toContain("gaps.map is not a function");
     expect(jobStage).toBe("failed");
   });
 
@@ -42,7 +43,8 @@ describe("buildAgentJobProgressLabel slot-batch failed", () => {
         publishError: "rendering_html: timeout",
       },
     });
-    expect(progressLabel).toBe("知识网络生成未完成");
+    expect(progressLabel).toContain("知识网络生成未完成");
+    expect(progressLabel).toContain("timeout");
   });
 
   it("uses D4 user-facing label when completedFragments present", () => {

@@ -8,15 +8,21 @@ import {
   buildHermesKnowledgeNetworkRequiredReads,
   buildHermesKnowledgeNetworkStructuredKbDataWorkflow,
   buildHermesKnowledgeNetworkStructuredPatchWorkflow,
+  buildHermesKnowledgeNetworkFragmentIncrementalWorkflow,
   isVisualDebugKnRequest,
   messageTouchesMaturityScorecard,
   messageTouchesTimeline,
 } from "./hermes-knowledge-network";
 import { shouldUseStructuredSlotPatchMode } from "./knowledge-network-structured-patch";
+import { resolveKnGenerationMode } from "./knowledge-network-generation-mode";
+import { shouldUseKbFragmentIncrementalMode } from "./knowledge-network-fragment-incremental";
+import { buildFragmentIncrementalRequiredReads } from "./knowledge-network-fragment-batch-reads";
 import {
   buildKnowledgeNetworkSlotResolutionLines,
+  resolveKnTouchedSlotsFromMessage,
   resolveKnowledgeNetworkSlotsFromMessage,
 } from "./knowledge-network-slot-aliases";
+import type { KnSlotRegistry } from "./knowledge-network-kb-config";
 import { buildKnowledgeNetworkDeepRefResolutionLines } from "./knowledge-network-deep-refs";
 import { buildJfoMaterialsInstructions } from "./hermes-materials-instructions";
 import { detectKnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
@@ -41,6 +47,7 @@ export type HermesAgentEnv = {
   HERMES_API_KEY?: string;
   HERMES_MODEL?: string;
   JFO_API_PUBLIC_BASE?: string;
+  KN_GENERATION_MODE?: string;
 };
 
 export type HermesRunStatus =
@@ -224,6 +231,7 @@ export function buildHermesAgentInstructions(
     slotBatchCompact?: boolean;
     slotBatchIndex?: number;
     slotBatchSlots?: import("./knowledge-network-slot-aliases").CanonicalKbSlot[];
+    knSlotRegistry?: KnSlotRegistry | null;
   },
 ): string {
   const jfoBase = (env.JFO_API_PUBLIC_BASE || "https://jfo-api.jfo-api.workers.dev").trim();
@@ -296,16 +304,33 @@ export function buildHermesAgentInstructions(
     const userMessage = ctx?.userMessage ?? "";
     const mode = knMode ?? "initial";
     const visualDebug = isVisualDebugKnRequest(userMessage);
-    const touchedSlots = resolveKnowledgeNetworkSlotsFromMessage(userMessage);
-    const slotPatchSlot = shouldUseStructuredSlotPatchMode(mode, touchedSlots)
-      ? touchedSlots[0]
+    const knSlotRegistry = ctx?.knSlotRegistry ?? null;
+    const touchedSlots = resolveKnTouchedSlotsFromMessage(userMessage, knSlotRegistry);
+    const canonicalTouched = resolveKnowledgeNetworkSlotsFromMessage(userMessage);
+    const generationMode = resolveKnGenerationMode(env, { userMessage });
+    const fragmentIncrementalSlot = shouldUseKbFragmentIncrementalMode(
+      generationMode,
+      mode,
+      touchedSlots,
+      knSlotRegistry,
+    )
+      ? touchedSlots[0]!
       : null;
+    const slotPatchSlot =
+      !fragmentIncrementalSlot &&
+      shouldUseStructuredSlotPatchMode(mode, touchedSlots, { generationMode })
+        ? touchedSlots[0]
+        : null;
     const slotPatchMode = Boolean(slotPatchSlot);
     const batchSlots = ctx?.slotBatchSlots ?? [];
     if (ctx?.slotBatched && batchSlots.length > 0) {
       const requiredReads = ctx.fragmentBatched
         ? ctx.slotBatchCompact
-          ? buildCompactFragmentBatchRequiredReads(batchSlots)
+          ? buildCompactFragmentBatchRequiredReads(
+              batchSlots,
+              ctx.slotBatchIndex ?? 0,
+              mode,
+            )
           : buildFragmentBatchRequiredReadsOverride(
               mode,
               ctx.slotBatchIndex ?? 0,
@@ -318,23 +343,34 @@ export function buildHermesAgentInstructions(
               ctx.slotBatchIndex ?? 0,
               batchSlots,
             );
-      lines.push(requiredReads, buildKnowledgeNetworkSlotResolutionLines(userMessage));
+      lines.push(requiredReads, buildKnowledgeNetworkSlotResolutionLines(userMessage, knSlotRegistry));
     } else {
       lines.push(
         buildHermesKnowledgeNetworkRequiredReads({
           mode,
           touchesTimeline: messageTouchesTimeline(userMessage),
-          touchedSlots,
+          touchedSlots: canonicalTouched,
           slotPatchMode,
           touchesMaturityScorecard: messageTouchesMaturityScorecard(userMessage),
           includeStyleGuide: visualDebug,
           includeComponents: visualDebug,
         }),
-        buildKnowledgeNetworkSlotResolutionLines(userMessage),
-        buildKnowledgeNetworkDeepRefResolutionLines(mode, touchedSlots),
+        buildKnowledgeNetworkSlotResolutionLines(userMessage, knSlotRegistry),
+        buildKnowledgeNetworkDeepRefResolutionLines(mode, canonicalTouched),
       );
     }
-    if (slotPatchSlot) {
+    if (fragmentIncrementalSlot) {
+      lines.push(
+        buildFragmentIncrementalRequiredReads(fragmentIncrementalSlot),
+        buildHermesKnowledgeNetworkFragmentIncrementalWorkflow(
+          jfoBase,
+          projectId,
+          projectTitleHint,
+          fragmentIncrementalSlot,
+        ),
+        "预注入摘录只供事实依据；fragment incremental 交付 kb-fragment-batch JSON，Worker 合并 section 入库，勿整页 PUT。",
+      );
+    } else if (slotPatchSlot) {
       lines.push(
         buildHermesKnowledgeNetworkStructuredPatchWorkflow(
           jfoBase,

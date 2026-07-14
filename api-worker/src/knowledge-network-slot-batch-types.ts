@@ -21,6 +21,7 @@ export type KnSlotBatchPhase =
   | "waiting_hermes"
   | "processing"
   | "between_batches"
+  | "appendix_wrapup"
   | "assembling"
   | "publishing"
   | "done"
@@ -124,7 +125,10 @@ export type KnSlotBatchSession = {
   phase: KnSlotBatchPhase;
   /** batch 0 可写入 shell（config/meta/sources 初稿） */
   shell: Partial<
-    Pick<StructuredKbData, "config" | "meta" | "sources" | "terms" | "dataDictionary" | "summary">
+    Pick<
+      StructuredKbData,
+      "config" | "meta" | "sources" | "terms" | "dataDictionary" | "summary" | "maturity"
+    >
   >;
   slots: Partial<{ [K in CanonicalKbSlot]: SlotPayloadBySlot[K] }>;
   /** fragment 模式：Hermes 交付的 section HTML */
@@ -139,10 +143,16 @@ export type KnSlotBatchSession = {
   workerStubSlots?: CanonicalKbSlot[];
   /** D-α：assemble 时 Worker 注入 stub 的附录 B/C */
   workerStubAppendix?: ("glossary" | "data-dictionary")[];
+  /** 同 Job 内 B/C 全文收尾 */
+  appendixWrapupRunId?: string;
+  appendixWrapupCompleted?: boolean;
+  appendixWrapupRepairAttempts?: number;
   slotQuality: Partial<Record<CanonicalKbSlot, KnSlotQualityRecord>>;
   batchTimings: KnSlotBatchTiming[];
   currentRunId?: string;
   batchRepairAttempts: Partial<Record<number, number>>;
+  /** 单 Hermes run 超时后的重试次数（每 batch 最多 1 次） */
+  batchRunTimeoutRetries?: Partial<Record<number, number>>;
   /** Worker 统一 Appendix A source id 登记 */
   sourceRegistry?: import("./knowledge-network-structured-kb-data-types").StructuredKbSource[];
   prep?: KnSlotBatchPrep;

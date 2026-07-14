@@ -1,0 +1,13 @@
+{
+  "type": "kb-fragment-batch",
+  "schemaVersion": "2.91",
+  "mode": "full",
+  "batchIndex": 4,
+  "summary": "批次 4：尽调缺口 P1/P2 可折叠问题组 + 风险矩阵与停推条件。",
+  "sourceProposals": [],
+  "fragments": {
+    "diligence-gaps": "<section class=\"block kb-panel\" id=\"diligence-gaps\"><h2 class=\"section-title\"><span class=\"section-num\">十</span>待确认问题 / 尽调缺口</h2><p class=\"section-sub\">OPEN QUESTIONS · 按优先级排序</p><details class=\"oq-group\" open><summary><span class=\"oq-title\">P1 · 必须确认 — 权利与商业化闭环</span><span class=\"oq-count\">1 项</span></summary><ol class=\"oq-list\"><li class=\"oq-item\"><span class=\"oq-num\">①</span>授权是否覆盖商业化分发？<span class=\"oq-action\"> —— 影响：阻塞商业化路径；责任方：法务；下一步：提供完整授权样本</span></li></ol></details><details class=\"oq-group\" open><summary><span class=\"oq-title\">P2 · 建议确认 — 经济模型</span><span class=\"oq-count\">1 项</span></summary><ol class=\"oq-list\"><li class=\"oq-item\"><span class=\"oq-num\">②</span>单位经济与 ROI 是否可验证？<span class=\"oq-action\"> —— 影响：影响回报测算可信度；责任方：投资团队；下一步：提供历史项目数据</span></li></ol></details></section>",
+    "risks-mitigation": "<section class=\"block kb-panel\" id=\"risks-mitigation\"><h2 class=\"section-title\"><span class=\"section-num\">十一</span>关键风险与缓释</h2><table class=\"risk-matrix-table\"><thead><tr><th>级别</th><th>风险</th><th>原因/触发</th><th>影响</th><th>证据</th><th>缓释/负责人/状态</th></tr></thead><tbody><tr><td><span class=\"risk-level risk-level-critical\">致命</span></td><td>授权链不闭合</td><td>合同未覆盖 AI 生成与分发</td><td>无法商业化</td><td><sup class=\"cite-ref\"><a href=\"#source-U-1\">[U-1]</a></sup></td><td>上线前律师审阅</td></tr><tr><td><span class=\"risk-level risk-level-high\">高</span></td><td>平台审核不通过</td><td>内容标识与肖像权要求</td><td>上线延迟</td><td><sup class=\"cite-ref\"><a href=\"#source-A-2\">[A-2]</a></sup></td><td>按平台 checklist 合规</td></tr></tbody></table><table><thead><tr><th>停推条件</th><th>触发动作</th><th>Owner</th></tr></thead><tbody><tr><td>无法提供授权合同与现金流</td><td>暂停投资推进</td><td>投资负责人</td></tr></tbody></table></section>"
+  },
+  "appendixFragments": { "glossary": null, "data-dictionary": null }
+}

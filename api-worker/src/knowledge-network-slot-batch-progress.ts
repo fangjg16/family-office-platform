@@ -2,8 +2,14 @@ import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import { isFragmentGenerationSession } from "./knowledge-network-generation-mode";
 import {
+  formatSlotChineseJoined,
+  formatSlotChineseList,
+  resolveGeneratingBatchSlots,
+} from "./knowledge-network-slot-batch-slot-progress";
+import {
   KN_SLOT_BATCH_PLAN,
   type KnPublishStep,
+  type KnSlotBatchRunState,
   type KnSlotBatchSession,
 } from "./knowledge-network-slot-batch-types";
 
@@ -29,7 +35,87 @@ export type KnSlotBatchProgressView = {
   generationMode?: KnSlotBatchSession["generationMode"];
   currentPublishStep?: KnPublishStep;
   publishError?: string;
+  lastError?: string;
+  parallelMode?: boolean;
+  batchRuns?: KnSlotBatchRunState[];
+  generatingSlots?: CanonicalKbSlot[];
+  generatingSlotTitles?: string[];
+  completedSlotTitles?: string[];
 };
+
+const BATCH_RUN_STATUS_ZH: Record<KnSlotBatchRunState["status"], string> = {
+  queued: "排队",
+  pending: "等待",
+  running: "生成中",
+  completed: "收尾",
+  failed: "失败",
+  cancelled: "已取消",
+};
+
+function truncateProgressError(error: string, max = 120): string {
+  const t = error.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function buildKnFailedProgressLabel(view: KnSlotBatchProgressView): string {
+  const err = (view.publishError ?? view.lastError ?? "").trim();
+  if (!err) return "知识网络生成未完成";
+  return `知识网络生成未完成：${truncateProgressError(err)}`;
+}
+
+function batchRunStatusLabel(run: KnSlotBatchRunState): string {
+  if (run.merged) return "已合并";
+  return BATCH_RUN_STATUS_ZH[run.status] ?? run.status;
+}
+
+/** 并行模式下标出当前在飞的 batch（如「批次 1+2 并行中（1·生成中，2·排队）」） */
+function formatParallelBatchProgress(
+  view: KnSlotBatchProgressView,
+  elapsedSec?: number,
+): string | null {
+  if (!view.parallelMode || !view.batchRuns?.length) return null;
+  const active = view.batchRuns.filter(
+    (run) =>
+      !run.merged &&
+      (run.status === "queued" ||
+        run.status === "pending" ||
+        run.status === "running" ||
+        run.status === "completed"),
+  );
+  if (active.length < 2) return null;
+  const waited = formatWaited(elapsedSec);
+  const nums = active.map((run) => run.batchIndex + 1).join("+");
+  const statuses = active
+    .map((run) => `${run.batchIndex + 1}·${batchRunStatusLabel(run)}`)
+    .join("，");
+  const done = view.completedFragments.length;
+  return `正在撰写批次 ${nums} 并行中（${statuses}；已完成 ${done}/13 个板块）${formatSlotProgressDetail(view)}…${waited}`;
+}
+
+/** 生成中 / 已完成板块中文名（批次计划 + session 实存） */
+export function formatSlotProgressDetail(view: KnSlotBatchProgressView): string {
+  const parts: string[] = [];
+  const generating =
+    view.generatingSlotTitles?.length
+      ? view.generatingSlotTitles
+      : view.generatingSlots?.length
+        ? formatSlotChineseList(view.generatingSlots)
+        : [];
+  if (generating.length) {
+    parts.push(`生成：${formatSlotChineseJoined(generating)}`);
+  }
+  const completed =
+    view.completedSlotTitles?.length
+      ? view.completedSlotTitles
+      : view.completedFragments.length
+        ? formatSlotChineseList(view.completedFragments)
+        : [];
+  if (completed.length) {
+    parts.push(`已完成：${formatSlotChineseJoined(completed)}`);
+  }
+  return parts.length ? ` · ${parts.join("；")}` : "";
+}
 
 export function listCompletedCanonicalSlots(session: KnSlotBatchSession): CanonicalKbSlot[] {
   if (isFragmentGenerationSession(session)) {
@@ -76,13 +162,14 @@ export function buildKnSlotBatchUserProgressLabel(
   elapsedSec?: number,
 ): string {
   const waited = formatWaited(elapsedSec);
+
+  if (view.phase === "failed" || (view.publishError && view.publishError.trim())) {
+    return buildKnFailedProgressLabel(view);
+  }
+
   const batchNo = view.batchIndex + 1;
   const total = view.totalBatches;
   const done = view.completedFragments.length;
-
-  if (view.phase === "failed" || (view.publishError && view.publishError.trim())) {
-    return "知识网络生成未完成";
-  }
 
   if (view.repairInProgress) {
     return `正在修正第 ${batchNo} 部分…${waited}`;
@@ -90,6 +177,10 @@ export function buildKnSlotBatchUserProgressLabel(
 
   if (view.phase === "preprocessing") {
     return `正在整理项目资料…${waited}`;
+  }
+
+  if (view.phase === "appendix_wrapup") {
+    return `正在全文收尾附录 B/C…${waited}`;
   }
 
   if (view.phase === "between_batches") {
@@ -127,17 +218,26 @@ export function buildKnSlotBatchUserProgressLabel(
     "waiting_capacity",
   ]);
   if (waitingPhases.has(view.phase)) {
+    const parallelLabel = formatParallelBatchProgress(view, elapsedSec);
+    if (parallelLabel) return parallelLabel;
     if (view.batchIndex === KN_SLOT_BATCH_TOTAL_PARTS - 1) {
-      return `正在整理附录…${waited}`;
+      return `正在整理附录${formatSlotProgressDetail(view)}…${waited}`;
     }
-    return `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/13 个板块）…${waited}`;
+    return (
+      `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/13 个板块）` +
+      `${formatSlotProgressDetail(view)}…${waited}`
+    );
   }
 
-  return `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/13 个板块）…${waited}`;
+  return (
+    `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/13 个板块）` +
+    `${formatSlotProgressDetail(view)}…${waited}`
+  );
 }
 
 export function buildKnSlotBatchProgressView(session: KnSlotBatchSession): KnSlotBatchProgressView {
   const completedFragments = listCompletedCanonicalSlots(session);
+  const generatingSlots = resolveGeneratingBatchSlots(session);
   return {
     batchIndex: session.currentBatchIndex,
     totalBatches: KN_SLOT_BATCH_PLAN.length,
@@ -151,5 +251,11 @@ export function buildKnSlotBatchProgressView(session: KnSlotBatchSession): KnSlo
     generationMode: session.generationMode,
     currentPublishStep: session.currentPublishStep,
     publishError: session.publishError,
+    lastError: session.lastError,
+    parallelMode: session.parallelMode,
+    batchRuns: session.batchRuns,
+    generatingSlots,
+    generatingSlotTitles: formatSlotChineseList(generatingSlots),
+    completedSlotTitles: formatSlotChineseList(completedFragments),
   };
 }

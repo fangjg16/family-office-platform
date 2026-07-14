@@ -24,7 +24,7 @@ export const CODEX_SLOT_COMPONENT_MARKERS: Record<
   "resource-network": [/<table/i, /资源|缺口/i],
   "comps-benchmark": [/<table|callout|可比|缺口/i],
   "valuation-returns": [/scenario-cards|valuation-box|valuation-grid/i, /敏感|现金流|缺口/i],
-  "diligence-gaps": [/oq-group|topic-body/i, /问题|尽调/i],
+  "diligence-gaps": [/details class="oq-group"/i, /oq-title|问题|尽调/i],
   "risks-mitigation": [/risk-matrix-table/i],
   "timeline-milestones": [/PROJECT TIMELINE/i, /8\.1 已发生关键事件|暂无已记录的项目级|缺乏资料/i],
   "decision-framework": [/callout info|决策|下一步/i, /<table/i],

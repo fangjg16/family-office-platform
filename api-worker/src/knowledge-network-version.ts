@@ -2,8 +2,8 @@
 export function parseKnVersionFromFilename(filename: string): string | null {
   const base = filename.replace(/\.html?$/i, "").trim();
   if (!base) return null;
-  // \b 匹配空格/连字符前；_v 覆盖 draft_v1_final_v2.1 类文件名
-  const re = /(?:\b|_)v(\d+(?:\.\d{1,2})?)\b/gi;
+  // 前缀 \b|_ ；后缀不用 \b（_v11_2026 中 11 后接 _ 时 \b 不成立）
+  const re = /(?:\b|_)v(\d+(?:\.\d{1,2})?)(?=[^0-9]|$)/gi;
   let last: string | null = null;
   for (const m of base.matchAll(re)) {
     if (m[1]) last = m[1];
@@ -28,7 +28,9 @@ export function knVersionDisplayMajor(prev: KnVersionPrev): number {
 }
 
 /**
- * 本地上传：有文件名版本 → 用该 label；否则展示版 major+1。
+ * 本地上传或 Agent 写入：解析下一版展示 label。
+ * - 上传 + 文件名含 vX / vX.Y → 用文件名版本
+ * - 上传无版本 / Agent 写入 → 上一展示版 major + 1（5.8 → 6，6 → 7）
  * 内部 version 始终 prev+1，供归档路径与主键。
  */
 export function resolveKnVersionOnUpload(

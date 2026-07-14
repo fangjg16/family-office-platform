@@ -1,0 +1,16 @@
+{
+  "type": "kb-fragment-batch",
+  "schemaVersion": "2.91",
+  "mode": "full",
+  "batchIndex": 5,
+  "summary": "批次 5：项目时间轴三段式 + 决策框架 + 附录 B/C。",
+  "sourceProposals": [],
+  "fragments": {
+    "timeline-milestones": "<section class=\"block kb-panel\" id=\"timeline-milestones\"><h2 class=\"section-title\"><span class=\"section-num\">十二</span>项目时间轴</h2><p class=\"section-sub\">PROJECT TIMELINE · 仅记录项目自身节点，不放行业动向、市场趋势或研究动作</p><h3>8.1 已发生关键事件</h3><div class=\"timeline\"><div class=\"tl-item\"><span class=\"tl-date\">2026-06-12</span><span class=\"tl-text\"><strong>首轮内部讨论</strong> 确认投资方向与资料请求清单。</span></div></div><h3>8.2 正在推进</h3><div class=\"timeline\"><div class=\"tl-item timeline-ongoing\"><span class=\"tl-date\">进行中</span><span class=\"tl-text\"><strong>资料请求</strong> 等待授权样本与运营数据。</span></div></div><h3>8.3 未来关键节点</h3><div class=\"timeline\"><div class=\"tl-item timeline-deadline\"><span class=\"tl-date\">T+7</span><span class=\"tl-text\"><strong>法务初筛</strong> 完成授权链与监管红线初步审阅。</span></div></div></section>",
+    "decision-framework": "<section class=\"block kb-panel\" id=\"decision-framework\"><h2 class=\"section-title\"><span class=\"section-num\">十三</span>决策框架</h2><aside class=\"callout info\"><div class=\"callout-title\">条件式建议</div><p>建议进入资料请求与小额试点设计；在授权链与 ROI 未验证前，不进入正式 IC。</p></aside><table><thead><tr><th>投资论点</th><th>证据</th><th>前置条件</th><th>反证/风险</th></tr></thead><tbody><tr><td>降本试错优势</td><td><sup class=\"cite-ref\"><a href=\"#source-A-1\">[A-1]</a></sup></td><td>需项目级成本验证</td><td>审核与质量风险</td></tr></tbody></table><table><thead><tr><th>选项</th><th>好处</th><th>代价/风险</th><th>适用条件</th></tr></thead><tbody><tr><td>继续推进</td><td>锁定早期机会</td><td>资料缺口大</td><td>7 天内补齐 P1 资料</td></tr></tbody></table><aside class=\"callout warning\"><div class=\"callout-title\">IC Readiness</div><p>当前不适合提交 IC；需补齐 P1 权利资料与一轮运营数据。</p></aside></section>"
+  },
+  "appendixFragments": {
+    "glossary": "<section class=\"block kb-panel\" id=\"glossary\"><h2 class=\"section-title\"><span class=\"section-num\">B</span>附录 B · 术语表</h2><div class=\"glossary-row\" id=\"term-cac\"><span class=\"term\">CAC</span><span>获客成本，按投放成本除以新增付费用户计算。</span><span>估值回报</span></div></section>",
+    "data-dictionary": "<section class=\"block kb-panel\" id=\"data-dictionary\"><h2 class=\"section-title\"><span class=\"section-num\">C</span>附录 C · 数据字典、模型假设与数据证据底稿</h2><table><thead><tr><th>字段/模型项</th><th>口径/公式</th><th>样本范围/清洗逻辑</th><th>Caveat</th></tr></thead><tbody><tr><td>单集制作成本</td><td>制作环节成本合计除以上线集数</td><td>需项目方 workpaper</td><td>当前为假设</td></tr></tbody></table></section>"
+  }
+}

@@ -1,4 +1,5 @@
-import { CANONICAL_KB_SLOTS } from "./knowledge-network-html-validation";
+import { CANONICAL_KB_SLOTS } from "./knowledge-network-canonical-slots";
+import { isValidExtensionSlotId } from "./knowledge-network-kb-config";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
 import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
@@ -15,6 +16,7 @@ import {
   KB_FRAGMENT_BATCH_SCHEMA_VERSION,
   KB_FRAGMENT_BATCH_TYPE,
 } from "./knowledge-network-fragment-types";
+import { parseJsonLoose } from "./knowledge-network-json-parse-loose";
 
 const CANONICAL_SET = new Set<string>(CANONICAL_KB_SLOTS);
 
@@ -32,14 +34,20 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null && !Array.isArray(v);
 }
 
-function parseFragmentsInput(raw: unknown): Partial<Record<CanonicalKbSlot, string>> {
-  const out: Partial<Record<CanonicalKbSlot, string>> = {};
+function parseFragmentsInput(
+  raw: unknown,
+  mode: KnowledgeNetworkUpdateMode,
+): Partial<Record<string, string>> {
+  const out: Partial<Record<string, string>> = {};
   if (!isRecord(raw)) return out;
   for (const [key, val] of Object.entries(raw)) {
-    if (!CANONICAL_SET.has(key)) continue;
+    const allowed =
+      CANONICAL_SET.has(key) ||
+      (mode === "incremental" && isValidExtensionSlotId(key));
+    if (!allowed) continue;
     const html = String(val ?? "").trim();
     if (!html) continue;
-    out[key as CanonicalKbSlot] = html;
+    out[key] = html;
   }
   return out;
 }
@@ -58,6 +66,19 @@ function parseAppendixFragmentsInput(raw: unknown): KbFragmentBatchAppendixFragm
     out[key] = html || null;
   }
   return out;
+}
+
+function parseOverviewMetaInput(
+  raw: unknown,
+): KbFragmentBatchPayload["overviewMeta"] | undefined {
+  if (!isRecord(raw)) return undefined;
+  const lead = raw.lead != null ? String(raw.lead).trim() : "";
+  const autoSummary = raw.autoSummary != null ? String(raw.autoSummary).trim() : "";
+  if (!lead && !autoSummary) return undefined;
+  return {
+    lead: lead || undefined,
+    autoSummary: autoSummary || undefined,
+  };
 }
 
 function parseMaturityInput(raw: unknown): KbFragmentBatchPayload["maturity"] | undefined {
@@ -118,7 +139,7 @@ function parseKbFragmentBatchObject(raw: unknown): KbFragmentBatchPayload | null
   const batchIndex = Number(raw.batchIndex);
   if (!Number.isInteger(batchIndex) || batchIndex < 0) return null;
 
-  const fragments = parseFragmentsInput(raw.fragments);
+  const fragments = parseFragmentsInput(raw.fragments, mode);
   if (Object.keys(fragments).length === 0) {
     const appendixOnly = parseAppendixFragmentsInput(raw.appendixFragments);
     const hasAppendix =
@@ -141,6 +162,7 @@ function parseKbFragmentBatchObject(raw: unknown): KbFragmentBatchPayload | null
     appendixFragments: parseAppendixFragmentsInput(raw.appendixFragments),
     sourceProposals: parseSourceProposals(raw.sourceProposals),
     summary,
+    overviewMeta: parseOverviewMetaInput(raw.overviewMeta),
     maturity: parseMaturityInput(raw.maturity),
   };
 }
@@ -153,14 +175,18 @@ export function extractKbFragmentBatchFromAnswer(
   let lastReason = "未找到 kb-fragment-batch JSON 代码块";
 
   for (const block of blocks) {
-    try {
-      const parsed = JSON.parse(block) as unknown;
-      const batch = parseKbFragmentBatchObject(parsed);
-      if (!batch) continue;
-      return { ok: true, batch };
-    } catch {
-      lastReason = "kb-fragment-batch JSON 解析失败";
+    const parsedLoose = parseJsonLoose(block);
+    if (!parsedLoose.ok) {
+      lastReason = `kb-fragment-batch JSON 解析失败（${parsedLoose.error}）`;
+      continue;
     }
+    const batch = parseKbFragmentBatchObject(parsedLoose.value);
+    if (!batch) continue;
+    return {
+      ok: true,
+      batch,
+      jsonRepaired: parsedLoose.repaired || undefined,
+    };
   }
 
   return { ok: false, reason: lastReason };
@@ -187,10 +213,14 @@ export function mergeKbFragmentBatchPayload(
   }
 }
 
-export function listKbFragmentBatchSlots(batch: KbFragmentBatchPayload): CanonicalKbSlot[] {
-  return Object.keys(batch.fragments).filter((s): s is CanonicalKbSlot =>
-    isCanonicalKbSlot(s),
-  );
+export function listKbFragmentBatchSlots(
+  batch: KbFragmentBatchPayload,
+): string[] {
+  return Object.keys(batch.fragments).filter((s) => Boolean(batch.fragments[s]?.trim()));
+}
+
+export function listKbFragmentBatchCanonicalSlots(batch: KbFragmentBatchPayload): CanonicalKbSlot[] {
+  return listKbFragmentBatchSlots(batch).filter((s): s is CanonicalKbSlot => isCanonicalKbSlot(s));
 }
 
 export function listKbFragmentBatchAppendixSlots(
@@ -206,7 +236,12 @@ export function listKbFragmentBatchAppendixSlots(
 
 export function validateKbFragmentBatchShape(batch: KbFragmentBatchPayload): string | null {
   for (const slot of listKbFragmentBatchSlots(batch)) {
-    if (!isCanonicalKbSlot(slot)) return `未知 slot: ${slot}`;
+    if (!isCanonicalKbSlot(slot) && !isValidExtensionSlotId(slot)) {
+      return `未知 slot: ${slot}`;
+    }
+    if (!isCanonicalKbSlot(slot) && batch.mode !== "incremental") {
+      return `extension slot ${slot} 仅允许 incremental 模式`;
+    }
   }
   if (batch.appendixFragments) {
     for (const key of Object.keys(batch.appendixFragments)) {

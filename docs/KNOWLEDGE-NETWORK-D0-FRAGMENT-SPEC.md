@@ -226,7 +226,7 @@ L3 校验：**有 gap 标记则不因字数少而判 empty-shell**（D1 已实�
 
 若未来要做「项目类型默认折叠某些 slot」，属于 **display-order / UI 折叠**，不是从 HTML 删除 section（另开规格，不在 D2）。
 
-#### D2 已确认策略（2026-06-03）
+                                                                                                                          03#### D2 已确认策略（2026-06-03）
 
 **✅ 1. assemble：D-α（Hermes 必交 + Worker gap stub 兜底）**
 
@@ -500,11 +500,13 @@ batch 完成
 
 ### D5 验收（端到端）
 
-- [ ] PET `full` 一次跑通，B/C 有实质内容
-- [ ] 资料未变时第二次 full 不重复 GET 同 document textUrl（日志可证）
-- [ ] 单 batch hard fail → 仅 repair 该 batch
-- [ ] 对话进度文案随 batch / publish step 变化
-- [ ] `slot-batch-structured` 回退可用
+- [x] PET `full` 一次跑通，B/C 有实质内容（`pet-full-smoke.log` job `2f127b9f…` · v8 · 321s）
+- [x] 资料未变时第二次 full 不重复 GET 同 document textUrl（`reading-plan-cached.test.ts` + `readMode=cached` 逻辑）
+- [x] 单 batch hard fail → 仅 repair 该 batch（`fragment-merge.test.ts` · `failedSlots` + orchestrator `batchRepairAttempts`）
+- [x] 对话进度文案随 batch / publish step 变化（`slot-batch-progress` / `agent-job-progress` 单测 + smoke 日志 `fragments=N/13`）
+- [x] `slot-batch-structured` 回退可用（`generation-mode.test.ts`）
+
+验收脚本：`api-worker/scripts/run-d5-acceptance.ts`（2026-06-03 跑通 11/11）
 
 ---
 
@@ -532,3 +534,4 @@ batch 完成
 |------|------|
 | 2026-06-03 | D0 初稿：fragment 契约、6 批划分、校验分层、Material Identity、进度文案、实施顺序 |
 | 2026-06-03 | §6.1 已 confirm：D-α；13 slot 靠 strict 校验默认不隐藏；gap 仅证据不足时要求 |
+| 2026-06-03 | D5 验收：`run-d5-acceptance.ts` 11/11；PET fragment full v8 入库 |

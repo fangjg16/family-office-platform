@@ -99,11 +99,7 @@ export async function handlePutProjectKnowledgeNetwork(
     browserUpload: true,
     touchesTimeline: /id=["']timeline-milestones["']/i.test(trimmed),
   });
-  if (!strictValidation.ok) {
-    return json({ error: strictValidation.error ?? "HTML 结构校验失败" }, 400);
-  }
-
-  const htmlToStore = strictValidation.html ?? trimmed;
+  const htmlToStore = strictValidation.ok ? (strictValidation.html ?? trimmed) : trimmed;
   const note = (body.changelog ?? "").trim().slice(0, 500);
   const uploadFileName =
     typeof body.uploadFileName === "string" ? body.uploadFileName.trim() : "";
@@ -130,8 +126,12 @@ export async function handlePutProjectKnowledgeNetwork(
       changelog: meta.changelog,
       r2Key: meta.r2Key,
     }),
-    warning: strictValidation.warning ?? null,
-    message: `已发布为项目知识网络 v${vDisplay}；旧版已归档，后续「按板块更新」将基于此版。`,
+    warning: strictValidation.ok
+      ? (strictValidation.warning ?? null)
+      : `当前 HTML 已按宽松模式覆盖，但不符合平台标准结构（${strictValidation.error ?? "结构校验未通过"}）；后续「按板块更新」可能不可用，建议需要局部更新时先「全量重做」为平台标准版。`,
+    message: strictValidation.ok
+      ? `已发布为项目知识网络 v${vDisplay}；旧版已归档，后续「按板块更新」将基于此版。`
+      : `已宽松覆盖为项目知识网络 v${vDisplay}；旧版已归档。`,
   });
 }
 

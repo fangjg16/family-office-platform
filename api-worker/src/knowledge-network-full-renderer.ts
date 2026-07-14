@@ -119,7 +119,7 @@ function buildLangToggle(renderingMode: string | undefined): string {
     </div>`;
 }
 
-function renderAppendixSourceIndex(sources: StructuredKbSource[]): string {
+export function renderAppendixSourceIndex(sources: StructuredKbSource[]): string {
   const rows = sources
     .map((s) => {
       const shortId = s.id.trim().replace(/^source-/, "");

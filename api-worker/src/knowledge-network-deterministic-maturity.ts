@@ -61,6 +61,12 @@ function countAuthoringParties(sources: StructuredKbSource[]): {
 }
 
 /** Factor B · Source Diversity（按独立来源主体，非文件数） */
+export function computeFactorBFromSources(
+  sources: StructuredKbSource[],
+): { score: number; note: string } {
+  return computeFactorB(sources);
+}
+
 function computeFactorB(sources: StructuredKbSource[]): { score: number; note: string } {
   const { sellerOnly, partyCount, thirdPartyCount, professionalCount, pressCount } =
     countAuthoringParties(sources);
@@ -99,6 +105,19 @@ function computeFactorB(sources: StructuredKbSource[]): { score: number; note: s
     return { score: 30, note: "以新闻/媒体为主，独立交易资料仍不足" };
   }
   return { score: 25, note: "来源多样性不足" };
+}
+
+export function pctMaturity(n: number): string {
+  return pct(n);
+}
+
+export function inferMaturityTier(
+  combined: number,
+  factorA: number,
+  factorB: number,
+  sellerOnly: boolean,
+): string {
+  return inferTier(combined, factorA, factorB, sellerOnly);
 }
 
 function inferTier(

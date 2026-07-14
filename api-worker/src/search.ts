@@ -1,5 +1,5 @@
 import type { EmbedEnv } from "./embeddings";
-import { embedTexts, scoreChunksByEmbedding } from "./embeddings";
+import { embedQueryTexts, resolveEmbedDimension, scoreChunksByEmbedding } from "./embeddings";
 
 export type ChunkRow = {
   id: string;
@@ -199,15 +199,18 @@ export async function selectChunksForChatWithVectors(
   const sessionChunks = chunks.filter((c) => c.scope === "session");
   const forceSessionFirst = priorities.length > 0 || sessionChunks.length > 0;
 
-  const embedded = chunks.filter((c) => c.embedding && c.embedding.length > 0);
+  const expectedDim = resolveEmbedDimension(env);
+  const embedded = chunks.filter(
+    (c) => c.embedding && c.embedding.length === expectedDim,
+  );
   if (!options.deep && embedded.length >= 3 && (env.DASHSCOPE_API_KEY || "").trim()) {
     try {
       let qVec = queryEmbedding;
       if (!qVec?.length) {
-        const vectors = await embedTexts(env, [query]);
+        const vectors = await embedQueryTexts(env, [query]);
         qVec = vectors[0];
       }
-      if (qVec?.length) {
+      if (qVec?.length === expectedDim) {
         const ranked = scoreChunksByEmbedding(
           chunks.map((c) => ({ row: c, embedding: c.embedding ?? null })),
           qVec,

@@ -1,3 +1,4 @@
+import type { KnGenerationMode } from "./knowledge-network-generation-mode";
 import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import {
   CANONICAL_KB_SLOTS,
@@ -223,7 +224,9 @@ export function validateMergedKnowledgeNetworkAfterStructuredPatch(
 export function shouldUseStructuredSlotPatchMode(
   mode: KnowledgeNetworkUpdateMode,
   touchedSlots: readonly CanonicalKbSlot[],
+  options?: { generationMode?: KnGenerationMode },
 ): boolean {
+  if (options?.generationMode === "fragment") return false;
   return mode === "incremental" && touchedSlots.length === 1;
 }
 

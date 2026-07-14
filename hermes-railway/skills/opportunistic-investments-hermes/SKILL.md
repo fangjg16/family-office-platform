@@ -29,9 +29,11 @@ Establish evidence first, route each finding to the correct canonical slot, then
 
 ### Fragment-batch (Worker default for full KB)
 
-- Read `references/kb-fragment-batch-schema.md` and `examples-kb-fragment-batch.json`.
+- Read `references/kb-fragment-batch-schema.md`, `references/kb-schema.md`, `references/content-rules.md`, and batch-scoped `examples-kb-fragment-batch*.json`.
+- **batch 0** also read `references/kb-config.md` and `references/maturity-scoring.md`.
 - Deliver **kb-fragment-batch** JSON: each slot = complete `<section id="{slot}">…</section>` HTML.
-- Apply `references/slot-rendering-rules.md` and `references/slot-specific-rules.md` for coverage inside each section.
+- **batch 0** must include `overviewMeta` (synthesized `lead` + `autoSummary`, ≤200 chars) and `maturity` (Factor A/B self-assessment) — Worker passes through to masthead; **not** PDF excerpts or file-index meta.
+- Apply `references/slot-rendering-rules.md` (incl. Business-Operations visualization priority) and `references/slot-specific-rules.md`.
 - **Forbidden**: whole-page HTML, KB-CONFIG, nav, Appendix A/D, `structured-slot-batch`, PUT (unless Worker declares fallback).
 - Batch 5 must include `appendixFragments.glossary` and `appendixFragments.data-dictionary`.
 - Evidence sufficient → substantive content; insufficient → gap-first callout (do not omit slot keys).
@@ -78,9 +80,13 @@ For **structured** `initial`/`full` (not fragment-batch), read these seven by de
 6. `references/deep/risk-matrix.md`
 7. `references/deep/returns-analysis.md`
 
-For **fragment-batch**, read only deep refs named in Worker batch instructions (often 0–1 per batch).
+For **fragment-batch**, Worker injects the **union** of short deep refs for that batch’s slots (not “0–1 only”). Full Skills load only when dynamic workflow routing fires.
 
-For `incremental` updates, use slot-to-deep-ref routing from v2.92 (see `references/slot-specific-rules.md`).
+For `incremental` updates, use slot-to-deep-ref routing (see `references/slot-specific-rules.md`).
+
+## Maturity
+
+Factor A/B/Combined are computed by **Worker** at assemble/publish from fragment HTML + Source Registry. Do **not** self-report `maturity` in JSON.
 
 ## v2.91 Gotchas
 
@@ -91,7 +97,8 @@ For `incremental` updates, use slot-to-deep-ref routing from v2.92 (see `referen
 - `timeline-milestones` = project execution only (not industry history or AI workflow dates).
 - Appendix C required when models/formulas/source data are used; batch 5 delivers B/C fragments.
 - Appendix D written by Worker at publish.
-- Maturity / Factor A/B computed by Worker after ingest — Hermes percentages are not final.
+- **Fragment-batch**: Hermes writes `overviewMeta` in batch 0 JSON; Worker computes Factor A/B at assemble; Appendix B/C prefer same-job wrap-up Run.
+- **Structured slot-batch**: Factor A/B computed by Worker after ingest.
 
 ## Output Discipline
 

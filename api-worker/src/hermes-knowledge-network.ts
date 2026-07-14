@@ -5,6 +5,8 @@ import {
   resolveKnowledgeNetworkDeepRefs,
 } from "./knowledge-network-deep-refs";
 import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
+import { isCanonicalKbSlot } from "./knowledge-network-fragment-validation";
+import { buildFragmentSlotRenderingRecipe } from "./knowledge-network-fragment-slot-recipes";
 import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import { validateKnowledgeNetworkHtmlForWrite } from "./knowledge-network-html-validation";
 import { resolveKnowledgeNetworkPutJobId } from "./knowledge-network-guards";
@@ -23,6 +25,7 @@ import {
   buildBatch3StructuredExampleBlock,
 } from "./knowledge-network-slot-batch-batch3-protocol";
 import { buildMinimalSlotBatchRepairPrompt } from "./knowledge-network-slot-batch-minimal-repair";
+import { knPublicSearchMaterialsLine } from "./knowledge-network-kn-policy";
 
 function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
@@ -417,8 +420,7 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
       return {
         modeLine:
           "全量重做（v2.91）：legacy v2.8 KB 须重建；按 kb-schema 13-slot 产出 structured-kb-data JSON，由 Worker 渲染。",
-        materialsLine:
-          "资料：jfo-r2-materials manifest 后读取主要项目资料与本对话 session 附件（按需）。**禁止** web_search / 公开检索（除非用户消息明确要求「查外部资料」）。",
+        materialsLine: knPublicSearchMaterialsLine("full"),
         getStep: "全量可跳过 GET；或 curl GET … || echo NO_CURRENT_KB（只读参考，勿整页编辑）",
         editStep:
           "填充 structured-kb-data（13 slots + sources + maturity + meta）；**禁止**手写整页 HTML / nav / KB-CONFIG / Appendix D。",
@@ -436,8 +438,7 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
       return {
         modeLine:
           "增量更新（v2.91）：GET 当前版；slot-specific-rules 只改用户点名 slot。",
-        materialsLine:
-          "资料：当前 KB + 点名 slot 相关资料片段 + session 附件（按需 textUrl）。",
+        materialsLine: knPublicSearchMaterialsLine("incremental"),
         getStep: "必做：curl GET 当前版到工作文件",
         editStep:
           "局部编辑点名 slot；若含 timeline-milestones 须读 timeline-rules.md 并过 eligibility gate。",
@@ -447,8 +448,7 @@ function knModeWorkflowLines(mode: KnowledgeNetworkUpdateMode): {
       return {
         modeLine:
           "首次生成（v2.91）：无已发布版；按 kb-schema 13-slot 产出 structured-kb-data JSON，由 Worker 渲染。",
-        materialsLine:
-          "资料：jfo-r2-materials manifest 后按需读取主要资料 + session 附件。",
+        materialsLine: knPublicSearchMaterialsLine("initial"),
         getStep: "无旧版可跳过 GET；或 curl GET … || echo NO_CURRENT_KB（只读参考）",
         editStep:
           "填充 structured-kb-data JSON（config/meta/maturity/slots/sources）；timeline-milestones 须经 eligibility gate。",
@@ -631,6 +631,75 @@ curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
 - **禁止** sectionHtml / slot-html-patch / 整页 \\\`\\\`\\\`html（除非 requires_full_update 后用户改走 multi-slot/full）
 - timeline-milestones：**仅**项目级节点；行业/市场新闻不得写入 timeline`;
 
+}
+
+/** incremental 单 slot：Hermes 交付 kb-fragment-batch JSON（fragment 主路径） */
+export function buildHermesKnowledgeNetworkFragmentIncrementalProtocol(
+  slot: string,
+): string {
+  const recipe = isCanonicalKbSlot(slot)
+    ? buildFragmentSlotRenderingRecipe(slot)
+    : `- **${slot}**（extension slot · 自定义模块）保持 kb-panel section 结构；禁止 shell/nav/KB-CONFIG。`;
+  return `
+
+【知识网络 · kb-fragment-batch 增量交付（单 slot · schema v2.91 · fragment 主路径）】
+用户仅更新 **#${slot}**。交付 **kb-fragment-batch** JSON（\`mode: "incremental"\`）；**禁止** structured-slot-patch / curl PUT / 整页 \\\`\\\`\\\`html。
+
+**对用户可见回复**
+1. 先写 3–8 行简体中文摘要（改了什么、证据/缺口变化）。
+2. 附 **一个** \\\`\\\`\\\`json 代码块（type 必须为 kb-fragment-batch）：
+\\\`\\\`\\\`json
+{
+  "type": "kb-fragment-batch",
+  "schemaVersion": "2.91",
+  "mode": "incremental",
+  "batchIndex": 0,
+  "summary": "仅更新 ${slot}。",
+  "sourceProposals": [],
+  "fragments": {
+    "${slot}": "<section class=\\"block kb-panel\\" id=\\"${slot}\\">...</section>"
+  },
+  "appendixFragments": null
+}
+\\\`\\\`\\\`
+3. \`fragments.${slot}\` 必须是**完整** \`<section id="${slot}">…</section>\`；遵守 Codex 渲染食谱，禁止 shell/nav/KB-CONFIG。
+4. citation：Appendix A 已有 \`#source-*\`，或本批 \`sourceProposals\` 临时 key（Worker 入库时分配 U-N/A-N）。
+5. 资料不足写 gap callout / 缺口表，禁止 empty-shell。
+6. structured-slot-patch / slot-html-patch 仅为 structured 模式 fallback，**不是**本任务格式。
+
+**本 slot 渲染食谱**
+${recipe}`;
+}
+
+/** 单 slot incremental 专用工作流（kb-fragment-batch 主路径） */
+export function buildHermesKnowledgeNetworkFragmentIncrementalWorkflow(
+  jfoBase: string,
+  projectId: string,
+  projectTitleHint: string,
+  slot: string,
+): string {
+  const url = hermesKnowledgeNetworkCurrentUrl(jfoBase, projectId);
+  const workFile = `./kb/${projectId}/[AI]_${projectTitleHint}_知识网络.html`;
+
+  return `
+
+【知识网络 · Fragment Incremental 工作流（Hermes v2.92 · 单 slot · fragment 主路径）】
+增量更新：仅改用户点名的 **#${slot}**；交付 kb-fragment-batch JSON，Worker 合并 section 入库。
+资料：当前 KB（只读 citation）+ 点名 slot 相关资料 + session 附件（按需 textUrl）。
+
+${buildHermesKnowledgeNetworkFragmentIncrementalProtocol(slot)}
+
+**可选：只读拉取当前版（已有 source id / 版式参考）**
+\`\`\`bash
+curl -sS -f -H "Authorization: Bearer $JFO_INTERNAL_KEY" \\
+  "${url}?format=raw" -o "${workFile}" || echo "NO_CURRENT_KB"
+\`\`\`
+工作文件仅供阅读已有 source id；**禁止**整页编辑或 PUT。
+
+**硬性禁止**
+- **禁止** bash ${KB_PUT_SCRIPT} / curl PUT
+- **禁止** structured-slot-patch / 整页 \\\`\\\`\\\`html
+- timeline-milestones：**仅**项目级节点；行业/市场新闻不得写入 timeline`;
 }
 
 /** incremental 单 slot：Hermes 交付 slot-html-patch JSON（兼容 fallback，非默认） */

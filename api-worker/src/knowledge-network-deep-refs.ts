@@ -26,11 +26,11 @@ export const DEFAULT_KB_DEEP_REFS = DEFAULT_KB_DEEP_REF_FILES.map(
  * risks-mitigation: includes compliance + returns for legal/economic risk coverage.
  */
 export const DEEP_REFS_BY_SLOT: Readonly<Record<CanonicalKbSlot, readonly KbDeepRefFile[]>> = {
-  snapshot: ["project-intake.md", "knowledge-base-generation.md"],
+  snapshot: ["project-intake.md", "knowledge-base-generation.md", "public-info-search.md"],
   "target-overview": ["public-info-search.md", "dd-claim-audit.md"],
   "resource-network": ["public-info-search.md", "dd-claim-audit.md"],
-  "industry-market": ["public-info-search.md", "dd-claim-audit.md"],
-  "business-operations": ["dd-claim-audit.md", "returns-analysis.md"],
+  "industry-market": ["public-info-search.md", "compliance-check.md", "dd-claim-audit.md"],
+  "business-operations": ["public-info-search.md", "dd-claim-audit.md", "returns-analysis.md"],
   "legal-ownership": ["compliance-check.md", "dd-claim-audit.md"],
   "regulatory-compliance": ["compliance-check.md", "dd-claim-audit.md"],
   "comps-benchmark": ["public-info-search.md", "dd-claim-audit.md"],
@@ -79,6 +79,20 @@ export function buildKnowledgeNetworkDeepRefResolutionLines(
       ? "默认 7 个 short deep refs（initial/full）"
       : `增量点名 slot 映射 deep refs：${touchedSlots.join(", ")}`;
   return ["", `【Deep refs · ${label}】`, refs.map((r) => `- ${r}`).join("\n")].join("\n");
+}
+
+export function resolveDeepRefsForBatchSlots(
+  batchSlots: readonly CanonicalKbSlot[],
+): string[] {
+  const found = new Set<KbDeepRefFile>();
+  for (const slot of batchSlots) {
+    for (const file of DEEP_REFS_BY_SLOT[slot] ?? []) {
+      found.add(file);
+    }
+  }
+  return DEFAULT_KB_DEEP_REF_FILES.filter((f) => found.has(f)).map(
+    (f) => `references/deep/${f}`,
+  );
 }
 
 /** Coverage report for tests */

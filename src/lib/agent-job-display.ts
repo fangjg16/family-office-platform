@@ -12,7 +12,17 @@ export type SlotBatchProgressLike = {
   repairInProgress?: boolean;
   generationMode?: string;
   publishError?: string | null;
+  lastError?: string | null;
   currentPublishStep?: string | null;
+  parallelMode?: boolean;
+  batchRuns?: {
+    batchIndex: number;
+    status: string;
+    merged?: boolean;
+  }[];
+  generatingSlots?: string[];
+  generatingSlotTitles?: string[];
+  completedSlotTitles?: string[];
 };
 
 const KN_ERROR_FRIENDLY: Record<string, string> = {
@@ -53,6 +63,63 @@ export function isTechnicalAgentJobCopy(text: string): boolean {
   return TECHNICAL_SUBMIT_RE.test(text) || TECHNICAL_PROGRESS_RE.test(text);
 }
 
+const BATCH_RUN_STATUS_ZH: Record<string, string> = {
+  queued: "排队",
+  pending: "等待",
+  running: "生成中",
+  completed: "收尾",
+  failed: "失败",
+  cancelled: "已取消",
+};
+
+function truncateProgressError(error: string, max = 120): string {
+  const t = error.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+function buildKnFailedProgressLabel(sb: SlotBatchProgressLike): string {
+  const err = String(sb.publishError ?? sb.lastError ?? "").trim();
+  if (!err) return "知识网络生成未完成";
+  return `知识网络生成未完成：${truncateProgressError(err)}`;
+}
+
+function formatSlotProgressDetail(sb: SlotBatchProgressLike): string {
+  const parts: string[] = [];
+  if (sb.generatingSlotTitles?.length) {
+    parts.push(`生成：${sb.generatingSlotTitles.join("、")}`);
+  }
+  if (sb.completedSlotTitles?.length) {
+    parts.push(`已完成：${sb.completedSlotTitles.join("、")}`);
+  }
+  return parts.length ? ` · ${parts.join("；")}` : "";
+}
+
+function formatParallelBatchProgress(sb: SlotBatchProgressLike, elapsedSec?: number): string | null {
+  if (!sb.parallelMode || !sb.batchRuns?.length) return null;
+  const active = sb.batchRuns.filter(
+    (run) =>
+      !run.merged &&
+      (run.status === "queued" ||
+        run.status === "pending" ||
+        run.status === "running" ||
+        run.status === "completed"),
+  );
+  if (active.length < 2) return null;
+  const nums = active.map((run) => run.batchIndex + 1).join("+");
+  const statuses = active
+    .map((run) => {
+      const label = run.merged ? "已合并" : (BATCH_RUN_STATUS_ZH[run.status] ?? run.status);
+      return `${run.batchIndex + 1}·${label}`;
+    })
+    .join("，");
+  const done = sb.completedFragments?.length ?? sb.completedSlots?.length ?? 0;
+  return withWaited(
+    `正在撰写批次 ${nums} 并行中（${statuses}；已完成 ${done}/${KN_TOTAL_SECTIONS} 个板块）${formatSlotProgressDetail(sb)}…`,
+    elapsedSec,
+  );
+}
+
 /** D0 §8：结构化 slotBatchProgress → 用户文案 */
 export function buildKnSlotBatchUserProgressLabel(
   sb: SlotBatchProgressLike,
@@ -64,7 +131,7 @@ export function buildKnSlotBatchUserProgressLabel(
   const phase = (sb.phase ?? "").trim();
 
   if (phase === "failed" || (sb.publishError && String(sb.publishError).trim())) {
-    return "知识网络生成未完成";
+    return buildKnFailedProgressLabel(sb);
   }
   if (sb.repairInProgress) {
     return withWaited(`正在修正第 ${batchNo} 部分…`, elapsedSec);
@@ -105,17 +172,19 @@ export function buildKnSlotBatchUserProgressLabel(
     "waiting_capacity",
   ]);
   if (waitingPhases.has(phase)) {
+    const parallelLabel = formatParallelBatchProgress(sb, elapsedSec);
+    if (parallelLabel) return parallelLabel;
     if ((sb.batchIndex ?? 0) === total - 1) {
-      return withWaited("正在整理附录…", elapsedSec);
+      return withWaited(`正在整理附录${formatSlotProgressDetail(sb)}…`, elapsedSec);
     }
     return withWaited(
-      `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/${KN_TOTAL_SECTIONS} 个板块）…`,
+      `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/${KN_TOTAL_SECTIONS} 个板块）${formatSlotProgressDetail(sb)}…`,
       elapsedSec,
     );
   }
 
   return withWaited(
-    `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/${KN_TOTAL_SECTIONS} 个板块）…`,
+    `正在撰写第 ${batchNo} 部分，共 ${total} 部分（已完成 ${done}/${KN_TOTAL_SECTIONS} 个板块）${formatSlotProgressDetail(sb)}…`,
     elapsedSec,
   );
 }

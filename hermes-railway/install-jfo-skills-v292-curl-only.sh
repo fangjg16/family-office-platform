@@ -43,6 +43,15 @@ for ref in kb-schema.md kb-config.md content-rules.md gotchas.md handoff-schema.
   curl_kb "references/$ref" "$KB/references/$ref"
 done
 
+for batch_example in \
+  examples-kb-fragment-batch-business-ops.json \
+  examples-kb-fragment-batch-resource-comps.json \
+  examples-kb-fragment-batch-valuation.json \
+  examples-kb-fragment-batch-risks-diligence.json \
+  examples-kb-fragment-batch-timeline-decision.json; do
+  curl_kb "$batch_example" "$KB/$batch_example"
+done
+
 for deep in knowledge-base-generation.md project-intake.md public-info-search.md \
   dd-claim-audit.md compliance-check.md risk-matrix.md returns-analysis.md; do
   curl_kb "references/deep/$deep" "$KB/references/deep/$deep"

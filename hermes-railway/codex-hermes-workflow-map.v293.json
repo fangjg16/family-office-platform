@@ -1,0 +1,42 @@
+{
+  "version": "1.0.0",
+  "generatedAt": "2026-07-14",
+  "codexPackage": "opportunistic-investments-codex-v2.93",
+  "kbSchemaVersion": "2.91",
+  "hermesCoordinator": "opportunistic-investments-hermes",
+  "notes": [
+    "Codex v2.93 = 1 coordinator + 26 thin workflow skills; KB schema remains v2.91.",
+    "Hermes full KB does not load all installed skills by default; Worker injects short deep refs + dynamic workflow routes.",
+    "Absent skills on Hermes (legal/viz suite) are listed as missingCapability."
+  ],
+  "workflows": [
+    { "id": "project-intake", "hermes": { "skillInstalled": true, "deepRef": "project-intake.md", "fullKbDefault": "compressed" } },
+    { "id": "document-reorganize", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "not_read", "dynamicRoute": false } },
+    { "id": "public-info-search", "hermes": { "skillInstalled": true, "deepRef": "public-info-search.md", "fullKbDefault": "compressed", "dynamicRoute": true } },
+    { "id": "knowledge-base-generation", "hermes": { "skillInstalled": true, "deepRef": "knowledge-base-generation.md", "fullKbDefault": "compressed" } },
+    { "id": "term-annotator", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "appendix_wrapup", "dynamicRoute": false } },
+    { "id": "comp-analysis", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "not_read", "dynamicRoute": true } },
+    { "id": "dd-checklist", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "not_read", "dynamicRoute": true } },
+    { "id": "dd-claim-audit", "hermes": { "skillInstalled": true, "deepRef": "dd-claim-audit.md", "fullKbDefault": "compressed", "dynamicRoute": false } },
+    { "id": "background-check", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "not_read", "dynamicRoute": true } },
+    { "id": "risk-matrix", "hermes": { "skillInstalled": true, "deepRef": "risk-matrix.md", "fullKbDefault": "compressed", "dynamicRoute": true } },
+    { "id": "returns-analysis", "hermes": { "skillInstalled": true, "deepRef": "returns-analysis.md", "fullKbDefault": "compressed", "dynamicRoute": true } },
+    { "id": "sensitivity-analysis", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "not_read", "dynamicRoute": true } },
+    { "id": "value-creation-plan", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "not_read", "dynamicRoute": true } },
+    { "id": "ic-memo", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "chat_only" } },
+    { "id": "gap-tracking", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "not_read", "dynamicRoute": true } },
+    { "id": "node-monitoring", "hermes": { "skillInstalled": true, "deepRef": null, "fullKbDefault": "not_read", "dynamicRoute": true } },
+    { "id": "compliance-check", "hermes": { "skillInstalled": false, "deepRef": "compliance-check.md", "fullKbDefault": "compressed", "missingCapability": true, "dynamicRoute": true } },
+    { "id": "review-contract", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } },
+    { "id": "legal-risk-assessment", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } },
+    { "id": "legal-response", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } },
+    { "id": "triage-nda", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } },
+    { "id": "signature-request", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } },
+    { "id": "data-analyze", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } },
+    { "id": "create-viz", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } },
+    { "id": "build-dashboard", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } },
+    { "id": "data-visualization", "hermes": { "skillInstalled": false, "deepRef": null, "fullKbDefault": "missing", "missingCapability": true } }
+  ],
+  "platformOnly": ["jfo-r2-materials", "opportunistic-investments-hermes"],
+  "removedInCodex293": ["vendor-check", "brief", "meeting-briefing"]
+}

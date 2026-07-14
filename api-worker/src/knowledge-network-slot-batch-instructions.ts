@@ -23,7 +23,7 @@ import {
 import { loadChunks } from "./chat-data";
 import {
   DEEP_REFS_BY_SLOT,
-  DEFAULT_KB_DEEP_REF_FILES,
+  resolveDeepRefsForBatchSlots,
 } from "./knowledge-network-deep-refs";
 import type { KnowledgeNetworkUpdateMode } from "./knowledge-network-mode";
 import { buildKnowledgeNetworkModeInstructions } from "./knowledge-network-mode";
@@ -36,6 +36,11 @@ import {
 import type { StructuredKbSource } from "./knowledge-network-structured-kb-data-types";
 import { normalizeStructuredKbSources } from "./knowledge-network-structured-kb-data";
 import type { SkillIntent } from "./chat-modes";
+import { countFragmentBatchDeepRefs } from "./knowledge-network-fragment-batch-reads";
+import {
+  buildWorkflowDepthRequiredReadsBlock,
+  resolveWorkflowDepthRoutes,
+} from "./knowledge-network-workflow-routing";
 
 export type BatchReadPlan = {
   batchIndex: number;
@@ -47,20 +52,8 @@ export type BatchReadPlan = {
   includesExamplesJson: boolean;
 };
 
-/** 按 batch slots 收窄 deep refs（非 initial/full 全 7 个） */
-export function resolveDeepRefsForBatchSlots(
-  batchSlots: readonly CanonicalKbSlot[],
-): string[] {
-  const found = new Set<(typeof DEFAULT_KB_DEEP_REF_FILES)[number]>();
-  for (const slot of batchSlots) {
-    for (const file of DEEP_REFS_BY_SLOT[slot] ?? []) {
-      found.add(file);
-    }
-  }
-  return DEFAULT_KB_DEEP_REF_FILES.filter((f) => found.has(f)).map(
-    (f) => `references/deep/${f}`,
-  );
-}
+/** 按 batch slots 收窄 deep refs — 实现在 knowledge-network-deep-refs */
+export { resolveDeepRefsForBatchSlots } from "./knowledge-network-deep-refs";
 
 export function describeBatchReadPlan(batchIndex: number): BatchReadPlan {
   const batchSlots = [...KN_SLOT_BATCH_PLAN[batchIndex]!] as CanonicalKbSlot[];
@@ -343,16 +336,27 @@ export async function buildSlotBatchHermesInstructionsPackage(
   }
 
   const injectionMeta: KnSlotBatchInjectionMeta = {
-    deepRefCount: compact ? Math.min(readPlan.deepRefs.length, 2) : readPlan.deepRefs.length,
+    deepRefCount: isFragmentGenerationSession(session)
+      ? countFragmentBatchDeepRefs(batchSlots)
+      : compact
+        ? Math.min(readPlan.deepRefs.length, 2)
+        : readPlan.deepRefs.length,
     materialHintsFileCount,
     readingPlanMustRead,
     readingPlanShouldRead,
     digestIncluded,
   };
 
+  const workflowRoutes = resolveWorkflowDepthRoutes({
+    batchSlots,
+    evidenceInventory: session.prep?.evidenceInventory ?? [],
+  });
+  const workflowDepthBlock = buildWorkflowDepthRequiredReadsBlock(workflowRoutes);
+
   if (compact) {
     instructions += buildPrepSharedContextBlock(session);
     instructions += buildBatchEvidenceHintsBlock(session, batchSlots);
+    instructions += workflowDepthBlock;
     if (isFragmentGenerationSession(session)) {
       instructions += buildCompactFragmentBatchWorkflow({
         mode: session.mode,
@@ -372,6 +376,7 @@ export async function buildSlotBatchHermesInstructionsPackage(
     if (batchIndex > 0) {
       instructions += buildSlotBatchSharedContextBlock(session);
     }
+    instructions += workflowDepthBlock;
     if (isFragmentGenerationSession(session)) {
       instructions += buildHermesFragmentBatchWorkflow({
         mode: session.mode,

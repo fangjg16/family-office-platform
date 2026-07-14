@@ -74,4 +74,34 @@ describe("kn slot-batch progress D4", () => {
     expect(view.repairInProgress).toBe(true);
     expect(buildKnSlotBatchUserProgressLabel(view)).toContain("正在修正第 3 部分");
   });
+
+  it("shows parallel batch labels with per-batch status", () => {
+    const view = buildKnSlotBatchProgressView(
+      baseSession({
+        phase: "waiting_batches",
+        parallelMode: true,
+        currentBatchIndex: 0,
+        batchRuns: [
+          { batchIndex: 0, status: "running" },
+          { batchIndex: 1, status: "queued" },
+        ],
+      }),
+    );
+    const label = buildKnSlotBatchUserProgressLabel(view);
+    expect(label).toContain("批次 1+2 并行中");
+    expect(label).toContain("1·生成中");
+    expect(label).toContain("2·排队");
+  });
+
+  it("includes lastError in failed progress label", () => {
+    const view = buildKnSlotBatchProgressView(
+      baseSession({
+        phase: "failed",
+        lastError: "mergeFragmentBatchIntoSession is not defined",
+      }),
+    );
+    expect(buildKnSlotBatchUserProgressLabel(view)).toContain(
+      "mergeFragmentBatchIntoSession is not defined",
+    );
+  });
 });
