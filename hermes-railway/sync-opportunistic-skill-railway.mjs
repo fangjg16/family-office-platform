@@ -51,15 +51,16 @@ run("tar", ["-czf", tarPath, "-C", path.join(root, "hermes-railway", "skills"), 
 const b64 = readFileSync(tarPath).toString("base64");
 console.log(`tar ${Math.round(readFileSync(tarPath).length / 1024)} KB`);
 
-console.log("=== upload base64 to /tmp/oih-skill.b64 ===");
-await railway(["bash", "-c", "cat > /tmp/oih-skill.b64"], b64);
+console.log("=== upload base64 to /opt/data/oih-skill.b64 ===");
+await railway(["bash", "-c", "cat > /opt/data/oih-skill.b64"], b64);
 
 const verify = `
 set -euo pipefail
 export HERMES_SKILLS_DIR=/opt/data/skills
 mkdir -p "$HERMES_SKILLS_DIR" /opt/data/kb /opt/data/logs
-base64 -d /tmp/oih-skill.b64 | tar -xzf - -C "$HERMES_SKILLS_DIR"
-rm -f /tmp/oih-skill.b64
+test -s /opt/data/oih-skill.b64
+base64 -d /opt/data/oih-skill.b64 | tar -xzf - -C "$HERMES_SKILLS_DIR"
+rm -f /opt/data/oih-skill.b64
 KB="$HERMES_SKILLS_DIR/opportunistic-investments-hermes"
 LEGACY="$HERMES_SKILLS_DIR/knowledge-base-generation"
 DEPRECATED="$HERMES_SKILLS_DIR/knowledge-base-generation_deprecated"
@@ -71,6 +72,7 @@ fi
 test -f "$KB/SKILL.md"
 test -f "$KB/references/kb-fragment-batch-schema.md"
 grep -q 'JSON escaping' "$KB/references/kb-fragment-batch-schema.md"
+grep -q '禁止 Hermes 自评' "$KB/references/kb-fragment-batch-schema.md"
 test -f "$KB/examples-kb-fragment-batch-risks-diligence.json"
 grep -q 'details class="oq-group"' "$KB/examples-kb-fragment-batch-risks-diligence.json"
 grep -q '#source-index' "$KB/assets/kb-template.html"
