@@ -15,12 +15,6 @@ Worker **fragment-batch** jobs expect one JSON object per Hermes reply (inside a
     "lead": "一句话定位（masthead-lead，≤80 字，合成判断）",
     "autoSummary": "项目概览（kb-summary，≤200 字，合成：标的+阶段+资料边界）"
   },
-  "maturity": {
-    "factorA": "18%",
-    "factorB": "12%",
-    "combined": "16%",
-    "tier": "Early"
-  },
   "sourceProposals": [],
   "fragments": {},
   "appendixFragments": {
@@ -38,7 +32,7 @@ Worker **fragment-batch** jobs expect one JSON object per Hermes reply (inside a
 | `mode` | optional | `initial` \| `full` \| `incremental` |
 | `summary` | optional | Short batch summary |
 | `overviewMeta` | batch 0 | `lead` + `autoSummary` — **Hermes 合成**写入 masthead / kb-summary；**禁止** PDF 摘录或「已索引 N 份资料」 |
-| `maturity` | batch 0 | Hermes 自评；Worker 透传至 masthead |
+| `maturity` | **omit** | **禁止 Hermes 自评**。若误传，Worker 组装时**丢弃**并以固定公式覆盖 Factor A/B/Combined |
 | `sourceProposals` | optional | New sources; use `sourceKey`, Worker assigns `U-N` / `A-N` |
 | `fragments` | yes | Map `canonicalSlot` → **full** `<section id="…">…</section>` HTML |
 | `appendixFragments` | batch 5 | `glossary` + `data-dictionary` full sections; other batches may use `null` |

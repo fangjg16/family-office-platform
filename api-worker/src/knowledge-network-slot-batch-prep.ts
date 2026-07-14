@@ -7,6 +7,7 @@ import {
 } from "./knowledge-network-material-hints";
 import type {
   EvidenceInventoryItem,
+  KnPublicSearchTelemetry,
   KnSlotBatchPrep,
   KnSlotBatchSession,
 } from "./knowledge-network-slot-batch-types";
@@ -14,6 +15,7 @@ import type { StructuredKbSource } from "./knowledge-network-structured-kb-data-
 import { normalizeStructuredKbSources } from "./knowledge-network-structured-kb-data";
 
 import type { EmbedEnv } from "./embeddings";
+import { embedQueryTexts, resolveEmbedDimension } from "./embeddings";
 import { sanitizeDocumentExcerpt } from "./knowledge-network-fragment-normalize";
 import { buildMaterialSnapshotFromDocuments } from "./knowledge-network-material-snapshot";
 import {
@@ -32,7 +34,7 @@ const EXCERPT_MAX = 600;
 const CHUNKS_PER_SLOT = 3;
 const MAX_CHARS_PER_SLOT_QUERY = 4200;
 
-const SLOT_EVIDENCE_QUERIES: Record<CanonicalKbSlot, string> = {
+export const SLOT_EVIDENCE_QUERIES: Record<CanonicalKbSlot, string> = {
   snapshot: "项目概况 标的 交易结构 估值 阶段 对手方",
   "target-overview": "资产 标的 产品 技术 平台 产能 区位 许可",
   "resource-network": "渠道 供应商 顾问 关键人 政府关系 合作",
@@ -112,7 +114,7 @@ function sourceIdForFilename(
 
 /**
  * 按 Slot 多 chunk 检索证据（向量优先，关键词回退）。
- * 形态：Slot → 相关 chunk 多段 → 保留来源；非整文件灌入。
+ * **一次**批量 embed 13 个查询向量，再分别检索 — 避免 13 次顺序网络请求。
  */
 async function buildSlotAwareEvidenceInventory(
   env: SlotBatchPrepEnv,
@@ -125,17 +127,42 @@ async function buildSlotAwareEvidenceInventory(
   const inventory: EvidenceInventoryItem[] = [];
   const seenChunkIds = new Set<string>();
 
-  for (const slot of CANONICAL_KB_SLOTS) {
-    const query = `${SLOT_EVIDENCE_QUERIES[slot]} ${userMessage}`.trim();
-    const hits = await selectChunksForChatWithVectors(env, chunks, query, {
-      deep: false,
-      maxChars: MAX_CHARS_PER_SLOT_QUERY,
-      topK: CHUNKS_PER_SLOT,
-    });
+  const queries = CANONICAL_KB_SLOTS.map(
+    (slot) => `${SLOT_EVIDENCE_QUERIES[slot]} ${userMessage}`.trim(),
+  );
+
+  let queryVectors: (number[] | null)[] = queries.map(() => null);
+  const expectedDim = resolveEmbedDimension(env);
+  const embeddedCount = chunks.filter(
+    (c) => c.embedding && c.embedding.length === expectedDim,
+  ).length;
+  if (embeddedCount >= 3 && (env.DASHSCOPE_API_KEY || "").trim()) {
+    try {
+      const vectors = await embedQueryTexts(env, queries);
+      queryVectors = vectors.map((v) => (v?.length === expectedDim ? v : null));
+    } catch {
+      /* 批量失败则各 slot 走关键词 */
+    }
+  }
+
+  for (let i = 0; i < CANONICAL_KB_SLOTS.length; i++) {
+    const slot = CANONICAL_KB_SLOTS[i]!;
+    const query = queries[i]!;
+    const hits = await selectChunksForChatWithVectors(
+      env,
+      chunks,
+      query,
+      {
+        deep: false,
+        maxChars: MAX_CHARS_PER_SLOT_QUERY,
+        topK: CHUNKS_PER_SLOT,
+      },
+      queryVectors[i],
+    );
 
     for (const hit of hits) {
       if (seenChunkIds.has(hit.id)) {
-        const existing = inventory.find((i) => i.id === `chunk-${hit.id}`);
+        const existing = inventory.find((item) => item.id === `chunk-${hit.id}`);
         if (existing && !existing.relevantSlots.includes(slot)) {
           existing.relevantSlots = [...existing.relevantSlots, slot];
         }
@@ -156,6 +183,17 @@ async function buildSlotAwareEvidenceInventory(
   }
 
   return inventory;
+}
+
+export function createInitialPublicSearchTelemetry(): KnPublicSearchTelemetry {
+  return {
+    allowed: true,
+    attempted: false,
+    succeeded: false,
+    sourcesAdded: 0,
+    routingRequested: false,
+    notes: [],
+  };
 }
 
 /** Worker 确定性预处理：按 Slot 多 chunk Evidence Inventory + Source Registry + Project Shell */
@@ -234,6 +272,11 @@ export async function runKnSlotBatchPreprocess(
   };
   session.sourceRegistry = registry;
   session.materialSnapshot = buildMaterialSnapshotFromDocuments(documents, env);
+  session.publicSearchTelemetry =
+    session.publicSearchTelemetry ?? createInitialPublicSearchTelemetry();
+  session.publicSearchTelemetry.notes.push(
+    `prep inventory=${inventory.length}; embedding queries batched=${CANONICAL_KB_SLOTS.length}`,
+  );
   session.updatedAt = new Date().toISOString();
   return prep;
 }

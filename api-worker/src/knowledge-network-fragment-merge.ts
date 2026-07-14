@@ -7,13 +7,19 @@ import {
   validateAppendixFragment,
   validateCanonicalSlotFragment,
 } from "./knowledge-network-fragment-validation";
-import { KN_SLOT_BATCH_PLAN, type KnSlotBatchSession } from "./knowledge-network-slot-batch-types";
+import {
+  KN_SLOT_BATCH_PLAN,
+  type KnSlotBatchSession,
+} from "./knowledge-network-slot-batch-types";
 import type { SourceProposalInput } from "./knowledge-network-source-proposals";
 import { rejectInventedFinalSourceIds } from "./knowledge-network-source-ref-resolve";
+import { createInitialPublicSearchTelemetry } from "./knowledge-network-slot-batch-prep";
 
 export type FragmentBatchMergeResult =
   | { ok: true }
   | { ok: false; error: string; failedSlots: CanonicalKbSlot[]; hardOnly: boolean };
+
+const PUBLIC_SOURCE_TYPE_RE = /公开|第三方|政府|监管|审计|年报|market|public|tavily|web/i;
 
 function proposalsFromFragmentBatch(batch: KbFragmentBatchPayload): SourceProposalInput[] {
   return (batch.sourceProposals ?? []).map((p) => ({
@@ -26,6 +32,24 @@ function proposalsFromFragmentBatch(batch: KbFragmentBatchPayload): SourcePropos
     usedIn: p.usedIn,
     documentId: p.documentId,
   }));
+}
+
+function recordPublicSearchFromProposals(
+  session: KnSlotBatchSession,
+  proposals: SourceProposalInput[],
+  batchIndex: number,
+): void {
+  const publicOnes = proposals.filter((p) => PUBLIC_SOURCE_TYPE_RE.test(p.type ?? ""));
+  if (publicOnes.length === 0) return;
+  const tel =
+    session.publicSearchTelemetry ?? createInitialPublicSearchTelemetry();
+  tel.attempted = true;
+  tel.succeeded = true;
+  tel.sourcesAdded += publicOnes.length;
+  tel.notes.push(
+    `batch ${batchIndex}: +${publicOnes.length} public/third-party sourceProposals`,
+  );
+  session.publicSearchTelemetry = tel;
 }
 
 function setFragmentDelivery(
@@ -80,16 +104,7 @@ export function mergeFragmentBatchIntoSession(
           : {}),
       };
     }
-    if (batch.maturity) {
-      session.shell.maturity = {
-        factorA: batch.maturity.factorA ?? session.shell.maturity?.factorA ?? "—",
-        factorB: batch.maturity.factorB ?? session.shell.maturity?.factorB ?? "—",
-        combined: batch.maturity.combined ?? session.shell.maturity?.combined ?? "—",
-        tier: batch.maturity.tier ?? session.shell.maturity?.tier,
-        factorANote: batch.maturity.factorANote ?? session.shell.maturity?.factorANote,
-        factorBNote: batch.maturity.factorBNote ?? session.shell.maturity?.factorBNote,
-      };
-    }
+    // maturity：忽略 Hermes 自评；assemble 时由 Worker 计算覆盖
   } else if (parallel) {
     const invented = rejectInventedFinalSourceIds(
       (batch.sourceProposals ?? []) as { id?: string; sourceKey?: string; title: string }[],
@@ -100,16 +115,7 @@ export function mergeFragmentBatchIntoSession(
     }
   }
 
-  if (parallel && batch.maturity) {
-    session.shell.maturity = {
-      factorA: batch.maturity.factorA ?? session.shell.maturity?.factorA ?? "—",
-      factorB: batch.maturity.factorB ?? session.shell.maturity?.factorB ?? "—",
-      combined: batch.maturity.combined ?? session.shell.maturity?.combined ?? "—",
-      tier: batch.maturity.tier ?? session.shell.maturity?.tier,
-      factorANote: batch.maturity.factorANote ?? session.shell.maturity?.factorANote,
-      factorBNote: batch.maturity.factorBNote ?? session.shell.maturity?.factorBNote,
-    };
-  }
+  // 并行路径同样忽略 batch.maturity（Worker-only）
 
   if (parallel && batch.overviewMeta && batchIndex === 0) {
     session.shell.meta = {
@@ -125,6 +131,7 @@ export function mergeFragmentBatchIntoSession(
 
   if (proposals.length) {
     session.pendingSourceProposals = [...(session.pendingSourceProposals ?? []), ...proposals];
+    recordPublicSearchFromProposals(session, proposals, batchIndex);
   }
 
   if (batch.summary?.trim()) {

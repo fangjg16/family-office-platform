@@ -258,13 +258,22 @@ async function runKnFragmentBatchPublishing(
     )
     .join("；");
   const stubAudit = formatWorkerStubAuditAnswerBlock(session);
+  const tel = session.publicSearchTelemetry;
+  const publicSearchAudit = tel
+    ? `\n公开检索遥测：allowed=${tel.allowed} routingRequested=${tel.routingRequested} attempted=${tel.attempted} succeeded=${tel.succeeded} sourcesAdded=${tel.sourcesAdded}。`
+    : "";
+  const appendixAudit = session.appendixWrapupFellBackToStub
+    ? "\n**审计 · Appendix B/C**：Hermes 全文收尾失败，已用 Worker stub 兜底（非 Hermes 合成）。"
+    : session.appendixWrapupCompleted
+      ? "\nAppendix B/C 经同 Job 全文收尾 Run 合成。"
+      : "";
   const answer =
     `${summary}\n\n` +
     `已通过 **kb-fragment-batch**（预处理 + ${KN_SLOT_BATCH_PLAN.length} 批并行 / 13 slot HTML fragment）写入项目知识网络 **v${versionDisplay}**。` +
     `${stubAudit}\n` +
     `批次耗时：${timingSummary}。\n` +
     `Factor A/B/Combined 由 Worker 入库前按固定公式计算（Hermes 不自评）。` +
-    `${session.appendixWrapupCompleted ? "\nAppendix B/C 经同 Job 全文收尾 Run 合成。" : ""}`;
+    `${appendixAudit}${publicSearchAudit}`;
 
   try {
     await withPublishStepTimeout(env, session, "syncing_chat", async () => {
@@ -549,6 +558,15 @@ export async function initKnSlotBatchSession(params: {
     sourceRegistry: [],
     batchRuns: [],
     pendingSourceProposals: [],
+    publicSearchTelemetry: {
+      allowed: true,
+      attempted: false,
+      succeeded: false,
+      sourcesAdded: 0,
+      routingRequested: false,
+      notes: [],
+    },
+    appendixWrapupFellBackToStub: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -1489,6 +1507,8 @@ async function ensureFragmentAppendixWrapup(
     if (!isHermesAgentConfigured(env)) {
       // 无 Hermes：assemble 时 Worker stub 兜底
       session.appendixWrapupCompleted = true;
+      session.appendixWrapupFellBackToStub = true;
+      session.lastError = "Hermes 未配置；Appendix B/C 将用 Worker stub";
       return null;
     }
     const instructions = buildAppendixWrapupInstructions(session);
@@ -1503,6 +1523,7 @@ async function ensureFragmentAppendixWrapup(
     if (!runId) {
       if (attempts >= 1) {
         session.appendixWrapupCompleted = true;
+        session.appendixWrapupFellBackToStub = true;
         session.lastError = error ?? "Appendix wrap-up 启动失败；将用 Worker stub";
         return null;
       }
@@ -1532,6 +1553,7 @@ async function ensureFragmentAppendixWrapup(
     session.appendixWrapupRunId = undefined;
     if (attempts >= 1) {
       session.appendixWrapupCompleted = true;
+      session.appendixWrapupFellBackToStub = true;
       session.lastError = snap.error ?? "Appendix wrap-up 失败；将用 Worker stub";
       await writeKnSlotBatchSession(env, session);
       return null;
@@ -1546,6 +1568,7 @@ async function ensureFragmentAppendixWrapup(
     session.appendixWrapupRunId = undefined;
     if (attempts >= 1) {
       session.appendixWrapupCompleted = true;
+      session.appendixWrapupFellBackToStub = true;
       session.lastError = merged.error;
       await writeKnSlotBatchSession(env, session);
       return null;
@@ -1555,6 +1578,7 @@ async function ensureFragmentAppendixWrapup(
   }
 
   session.appendixWrapupCompleted = true;
+  session.appendixWrapupFellBackToStub = false;
   session.updatedAt = nowIso();
   await writeKnSlotBatchSession(env, session);
   return null;

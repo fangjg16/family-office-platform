@@ -30,9 +30,9 @@ Establish evidence first, route each finding to the correct canonical slot, then
 ### Fragment-batch (Worker default for full KB)
 
 - Read `references/kb-fragment-batch-schema.md`, `references/kb-schema.md`, `references/content-rules.md`, and batch-scoped `examples-kb-fragment-batch*.json`.
-- **batch 0** also read `references/kb-config.md` and `references/maturity-scoring.md`.
+- **batch 0** also read `references/kb-config.md`（**不要**读 `maturity-scoring.md` 做自评；Factor A/B 仅由 Worker 计算）.
 - Deliver **kb-fragment-batch** JSON: each slot = complete `<section id="{slot}">…</section>` HTML.
-- **batch 0** must include `overviewMeta` (synthesized `lead` + `autoSummary`, ≤200 chars) and `maturity` (Factor A/B self-assessment) — Worker passes through to masthead; **not** PDF excerpts or file-index meta.
+- **batch 0** must include `overviewMeta` (synthesized `lead` + `autoSummary`, ≤200 chars) — Worker writes masthead; **not** PDF excerpts or file-index meta. **Do not** include `maturity` in JSON.
 - Apply `references/slot-rendering-rules.md` (incl. Business-Operations visualization priority) and `references/slot-specific-rules.md`.
 - **Forbidden**: whole-page HTML, KB-CONFIG, nav, Appendix A/D, `structured-slot-batch`, PUT (unless Worker declares fallback).
 - Batch 5 must include `appendixFragments.glossary` and `appendixFragments.data-dictionary`.

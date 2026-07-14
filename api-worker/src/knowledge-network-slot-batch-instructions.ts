@@ -40,7 +40,9 @@ import { countFragmentBatchDeepRefs } from "./knowledge-network-fragment-batch-r
 import {
   buildWorkflowDepthRequiredReadsBlock,
   resolveWorkflowDepthRoutes,
+  routesRequestPublicInfoSearch,
 } from "./knowledge-network-workflow-routing";
+import { createInitialPublicSearchTelemetry } from "./knowledge-network-slot-batch-prep";
 
 export type BatchReadPlan = {
   batchIndex: number;
@@ -352,6 +354,15 @@ export async function buildSlotBatchHermesInstructionsPackage(
     evidenceInventory: session.prep?.evidenceInventory ?? [],
   });
   const workflowDepthBlock = buildWorkflowDepthRequiredReadsBlock(workflowRoutes);
+  if (routesRequestPublicInfoSearch(workflowRoutes)) {
+    session.publicSearchTelemetry =
+      session.publicSearchTelemetry ?? createInitialPublicSearchTelemetry();
+    session.publicSearchTelemetry.routingRequested = true;
+    session.publicSearchTelemetry.attempted = true;
+    session.publicSearchTelemetry.notes.push(
+      `batch ${batchIndex}: route requested public-info-search`,
+    );
+  }
 
   if (compact) {
     instructions += buildPrepSharedContextBlock(session);

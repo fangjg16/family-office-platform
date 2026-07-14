@@ -1,8 +1,29 @@
 import type { KnGenerationMode } from "./knowledge-network-generation-mode";
 import type { MaterialSnapshot } from "./knowledge-network-material-snapshot";
 import type { SlotFragmentDeliveryStatus } from "./knowledge-network-fragment-types";
+import type { CanonicalKbSlot } from "./knowledge-network-slot-aliases";
+import type { SlotPayloadBySlot } from "./knowledge-network-structured-patch-types";
+import type {
+  StructuredKbData,
+  StructuredKbSource,
+} from "./knowledge-network-structured-kb-data-types";
 
 export const STRUCTURED_SLOT_BATCH_TYPE = "structured-slot-batch" as const;
+
+/** 公开检索执行遥测（允许 ≠ 已执行） */
+export type KnPublicSearchTelemetry = {
+  /** 政策允许公开检索 */
+  allowed: boolean;
+  /** 动态路由曾要求 public-info-search（Skill 或 deep-ref） */
+  routingRequested: boolean;
+  /** Hermes 或 Worker 侧曾尝试检索（以提案/路由为准） */
+  attempted: boolean;
+  /** 至少新增一条公开/第三方来源 */
+  succeeded: boolean;
+  /** 本 Job 经 sourceProposals 新增的公开类来源数 */
+  sourcesAdded: number;
+  notes: string[];
+};
 
 /** Full structured 生成批次（6 批 × 13 slot · 拆分重 batch） */
 export const KN_SLOT_BATCH_PLAN: readonly (readonly CanonicalKbSlot[])[] = [
@@ -147,6 +168,10 @@ export type KnSlotBatchSession = {
   appendixWrapupRunId?: string;
   appendixWrapupCompleted?: boolean;
   appendixWrapupRepairAttempts?: number;
+  /** Hermes B/C 收尾失败后改用 Worker stub（审计用，非静默） */
+  appendixWrapupFellBackToStub?: boolean;
+  /** 公开检索：允许 / 尝试 / 成功 / 新增来源数 */
+  publicSearchTelemetry?: KnPublicSearchTelemetry;
   slotQuality: Partial<Record<CanonicalKbSlot, KnSlotQualityRecord>>;
   batchTimings: KnSlotBatchTiming[];
   currentRunId?: string;
