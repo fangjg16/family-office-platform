@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Download, FileText, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
+import { Download, FileText, FolderOpen, Loader2, Paperclip, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   ENABLE_LIVE_CHAT,
   AI_CHAT_ENDPOINT,
   deleteProjectFile,
   fetchProjectFiles,
+  fileDisplayName,
   projectFileDownloadUrl,
   uploadProjectPackageFile,
   type ProjectFileRecord,
@@ -46,6 +47,7 @@ export function ProjectMaterialsSection({
   canDownload = false,
 }: ProjectMaterialsSectionProps) {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
   const [liveFiles, setLiveFiles] = useState<ProjectFileRecord[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -81,16 +83,27 @@ export function ProjectMaterialsSection({
     if (!list?.length || !useLive || !canManage) return;
     setUploading(true);
     setError(null);
+    const uploadErrors: string[] = [];
     try {
       for (const file of Array.from(list)) {
-        await uploadProjectPackageFile(projectId, userId, file);
+        try {
+          await uploadProjectPackageFile(projectId, userId, file);
+        } catch (e) {
+          uploadErrors.push(
+            `${fileDisplayName(file)}：${e instanceof Error ? e.message : "上传失败"}`,
+          );
+        }
       }
       await reload();
+      if (uploadErrors.length) {
+        setError(`部分文件未上传成功：\n${uploadErrors.join("\n")}`);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
+      if (folderInputRef.current) folderInputRef.current.value = "";
     }
   };
 
@@ -114,6 +127,7 @@ export function ProjectMaterialsSection({
 
   const packageLive = (liveFiles ?? []).filter((f) => f.scope === "package");
   const hasAny = packageLive.length > 0;
+  const busy = uploading || Boolean(deletingId);
 
   return (
     <section
@@ -134,22 +148,36 @@ export function ProjectMaterialsSection({
           </p>
         </div>
         {useLive && canManage ? (
-          <button
-            type="button"
-            disabled={uploading || Boolean(deletingId)}
-            onClick={() => fileInputRef.current?.click()}
-            className={cn(
-              "inline-flex shrink-0 items-center gap-1.5 rounded-full border border-[hsl(var(--wine-deep)/0.32)] bg-[hsl(var(--wine-deep)/0.06)] px-3 py-1.5 text-[11px] font-semibold text-[hsl(var(--wine-deep))] transition-colors hover:bg-[hsl(var(--wine-deep)/0.1)]",
-              (uploading || deletingId) && "pointer-events-none opacity-60",
-            )}
-          >
-            {uploading ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-            ) : (
-              <Upload className="h-3.5 w-3.5" aria-hidden />
-            )}
-            上传资料
-          </button>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => fileInputRef.current?.click()}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--wine-deep)/0.32)] bg-[hsl(var(--wine-deep)/0.06)] px-3 py-1.5 text-[11px] font-semibold text-[hsl(var(--wine-deep))] transition-colors hover:bg-[hsl(var(--wine-deep)/0.1)]",
+                busy && "pointer-events-none opacity-60",
+              )}
+            >
+              {uploading ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+              ) : (
+                <Upload className="h-3.5 w-3.5" aria-hidden />
+              )}
+              上传文件
+            </button>
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => folderInputRef.current?.click()}
+              className={cn(
+                "inline-flex items-center gap-1.5 rounded-full border border-[hsl(var(--wine-deep)/0.32)] bg-[hsl(var(--wine-deep)/0.06)] px-3 py-1.5 text-[11px] font-semibold text-[hsl(var(--wine-deep))] transition-colors hover:bg-[hsl(var(--wine-deep)/0.1)]",
+                busy && "pointer-events-none opacity-60",
+              )}
+            >
+              <FolderOpen className="h-3.5 w-3.5" aria-hidden />
+              上传文件夹
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -161,7 +189,7 @@ export function ProjectMaterialsSection({
       ) : null}
 
       {error ? (
-        <p className="mt-3 rounded-lg border border-rose-200/80 bg-rose-50/80 px-3 py-2 text-[11px] text-rose-700">
+        <p className="mt-3 whitespace-pre-wrap rounded-lg border border-rose-200/80 bg-rose-50/80 px-3 py-2 text-[11px] text-rose-700">
           {error}
         </p>
       ) : null}
@@ -169,7 +197,7 @@ export function ProjectMaterialsSection({
       {!loading && !hasAny ? (
         <p className="mt-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-4 text-[11px] leading-relaxed text-muted-foreground">
           {useLive
-            ? "暂无项目资料包。可在此上传全项目共用的 .txt / .md / PDF；单次对话附件请在对话里上传。"
+            ? "暂无项目资料包。可上传文件或整个文件夹（.txt / .md / PDF 等）；单次对话附件请在对话里上传。"
             : "暂无资料列表。开启 Live 对话并上传后可见。"}
         </p>
       ) : null}
@@ -193,6 +221,19 @@ export function ProjectMaterialsSection({
         className="sr-only"
         multiple
         accept=".txt,.md,.html,.htm,.pdf,.doc,.docx,.xlsx,.xls,.jpg,.jpeg,.png,text/plain,text/html,text/markdown,application/pdf"
+        onChange={(e) => void onPickFiles(e.target.files)}
+      />
+      <input
+        ref={(el) => {
+          folderInputRef.current = el;
+          if (el) {
+            el.setAttribute("webkitdirectory", "");
+            el.setAttribute("directory", "");
+          }
+        }}
+        type="file"
+        className="sr-only"
+        multiple
         onChange={(e) => void onPickFiles(e.target.files)}
       />
     </section>

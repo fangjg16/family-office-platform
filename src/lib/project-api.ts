@@ -335,6 +335,30 @@ export function dedupeFilesByFilename(
   );
 }
 
+/** 文件夹选择时的相对路径（如 `DD/合同/nda.pdf`）；普通多选则为空 */
+export function fileRelativePath(file: File): string {
+  const rel = (file as File & { webkitRelativePath?: string }).webkitRelativePath?.trim();
+  return rel && rel !== file.name ? rel : "";
+}
+
+/** 列表展示名：优先相对路径，便于区分不同子目录下的同名文件 */
+export function fileDisplayName(file: File): string {
+  return fileRelativePath(file) || file.name;
+}
+
+/** 去重 / React key：相对路径 + 体积 + 修改时间 */
+export function fileIdentityKey(file: File): string {
+  return `${fileDisplayName(file)}-${file.size}-${file.lastModified}`;
+}
+
+/**
+ * 上传用文件名：文件夹内文件写成相对路径，避免不同目录下同名互相覆盖；
+ * Worker 会把路径分隔符净化进 R2 key，DB 仍保留可读路径。
+ */
+export function fileUploadName(file: File): string {
+  return fileDisplayName(file);
+}
+
 export async function uploadProjectPackageFile(
   projectId: string,
   userId: string,
@@ -342,8 +366,16 @@ export async function uploadProjectPackageFile(
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<void> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
+  const uploadName = fileUploadName(file);
+  const payload =
+    uploadName === file.name
+      ? file
+      : new File([file], uploadName, {
+          type: file.type,
+          lastModified: file.lastModified,
+        });
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", payload);
   form.append("userId", userId);
   form.append("scope", "package");
   const res = await fetch(`${base}/api/projects/${projectId}/files`, {

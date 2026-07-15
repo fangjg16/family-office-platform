@@ -7,6 +7,7 @@ import {
   Coins,
   FileText,
   Filter,
+  FolderOpen,
   GraduationCap,
   Hotel,
   Landmark,
@@ -33,6 +34,8 @@ import {
   ENABLE_LIVE_CHAT,
   fetchMyProjectRoles,
   fetchProjectsFromApi,
+  fileDisplayName,
+  fileIdentityKey,
   uploadProjectPackageFile,
 } from "@/lib/project-api";
 import { clearLastChatProjectId, loadLastChatProjectId } from "@/workspace/session";
@@ -234,6 +237,7 @@ export default function ProjectOverview() {
   const [projectsLoading, setProjectsLoading] = useState(false);
   const [projectsLoadError, setProjectsLoadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const folderInputRef = useRef<HTMLInputElement | null>(null);
 
   useBodyScrollLock(Boolean(showCreateModal || detailProject || createHint));
 
@@ -347,7 +351,7 @@ export default function ProjectOverview() {
             await uploadProjectPackageFile(project.id, userId, file);
           } catch (e) {
             uploadErrors.push(
-              `${file.name}：${e instanceof Error ? e.message : "上传失败"}`,
+              `${fileDisplayName(file)}：${e instanceof Error ? e.message : "上传失败"}`,
             );
           }
         }
@@ -407,10 +411,10 @@ export default function ProjectOverview() {
     if (!files || files.length === 0) return;
     const picked = Array.from(files);
     setNewProjectFiles((prev) => {
-      const seen = new Set(prev.map((f) => `${f.name}-${f.size}-${f.lastModified}`));
+      const seen = new Set(prev.map((f) => fileIdentityKey(f)));
       const merged = [...prev];
       picked.forEach((f) => {
-        const key = `${f.name}-${f.size}-${f.lastModified}`;
+        const key = fileIdentityKey(f);
         if (!seen.has(key)) merged.push(f);
       });
       return merged;
@@ -711,14 +715,24 @@ export default function ProjectOverview() {
                   参考附件
                 </span>
                 <div className="rounded-lg border border-dashed border-[hsl(var(--sand))] bg-[hsl(var(--linen)/0.4)] p-2.5">
-                  <button
-                    type="button"
-                    onClick={() => fileInputRef.current?.click()}
-                    className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--sand)/0.9)] bg-white px-2.5 py-1.5 text-xs font-medium text-[hsl(var(--warm-charcoal))] transition hover:border-[hsl(var(--wine-deep)/0.35)]"
-                  >
-                    <Upload className="h-3.5 w-3.5 text-[hsl(var(--wine-deep))]" />
-                    选择文件
-                  </button>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => fileInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--sand)/0.9)] bg-white px-2.5 py-1.5 text-xs font-medium text-[hsl(var(--warm-charcoal))] transition hover:border-[hsl(var(--wine-deep)/0.35)]"
+                    >
+                      <Upload className="h-3.5 w-3.5 text-[hsl(var(--wine-deep))]" />
+                      选择文件
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => folderInputRef.current?.click()}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-[hsl(var(--sand)/0.9)] bg-white px-2.5 py-1.5 text-xs font-medium text-[hsl(var(--warm-charcoal))] transition hover:border-[hsl(var(--wine-deep)/0.35)]"
+                    >
+                      <FolderOpen className="h-3.5 w-3.5 text-[hsl(var(--wine-deep))]" />
+                      选择文件夹
+                    </button>
+                  </div>
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -729,19 +743,37 @@ export default function ProjectOverview() {
                       e.currentTarget.value = "";
                     }}
                   />
+                  <input
+                    ref={(el) => {
+                      folderInputRef.current = el;
+                      if (el) {
+                        el.setAttribute("webkitdirectory", "");
+                        el.setAttribute("directory", "");
+                      }
+                    }}
+                    type="file"
+                    className="hidden"
+                    multiple
+                    onChange={(e) => {
+                      addDemoFiles(e.target.files);
+                      e.currentTarget.value = "";
+                    }}
+                  />
                   <p className="mt-2 text-xs text-muted-foreground">
-                    已选择 {newProjectFiles.length} 个文件
+                    已选择 {newProjectFiles.length} 个文件；可选单文件、多文件或整文件夹。
                   </p>
                   {newProjectFiles.length > 0 ? (
                     <ul className="mt-2 max-h-28 space-y-1.5 overflow-y-auto pr-0.5">
                       {newProjectFiles.map((f, idx) => (
                         <li
-                          key={`${f.name}-${f.size}-${f.lastModified}`}
+                          key={fileIdentityKey(f)}
                           className="flex items-center justify-between gap-2 rounded-lg border border-border/65 bg-white px-3 py-2 text-xs"
                         >
                           <span className="flex min-w-0 items-center gap-1.5">
-                            <FileText className="h-3.5 w-3.5 text-primary/80" />
-                            <span className="truncate">{f.name}</span>
+                            <FileText className="h-3.5 w-3.5 shrink-0 text-primary/80" />
+                            <span className="truncate" title={fileDisplayName(f)}>
+                              {fileDisplayName(f)}
+                            </span>
                           </span>
                           <button
                             type="button"
