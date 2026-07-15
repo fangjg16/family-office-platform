@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type DragEvent,
+} from "react";
 import {
   ChevronDown,
   Download,
@@ -9,8 +15,10 @@ import {
   Paperclip,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import {
   ENABLE_LIVE_CHAT,
   AI_CHAT_ENDPOINT,
@@ -28,11 +36,11 @@ import {
 type ProjectMaterialsSectionProps = {
   projectId: string;
   userId: string;
-  /** 有对话权限时允许上传、删除项目级资料包 */
   canManage?: boolean;
-  /** Admin / Core / 创建人可下载原文件 */
   canDownload?: boolean;
 };
+
+const DND_DOC_MIME = "application/x-jfo-package-doc";
 
 function formatFileDate(iso: string): string {
   try {
@@ -53,6 +61,10 @@ function scopeLabel(scope: ProjectFileRecord["scope"]): string {
   return scope === "package" ? "项目资料包" : "对话临时";
 }
 
+function fileMeta(f: ProjectFileRecord): string {
+  return `${scopeLabel(f.scope)} · ${formatFileDate(f.createdAt)}${f.chunkCount ? ` · ${f.chunkCount} 段` : ""}`;
+}
+
 export function ProjectMaterialsSection({
   projectId,
   userId,
@@ -66,6 +78,7 @@ export function ProjectMaterialsSection({
   const [uploading, setUploading] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [moveFile, setMoveFile] = useState<ProjectFileRecord | null>(null);
 
   const useLive = ENABLE_LIVE_CHAT && Boolean(AI_CHAT_ENDPOINT);
 
@@ -179,6 +192,7 @@ export function ProjectMaterialsSection({
     setError(null);
     try {
       await moveProjectPackageFile(projectId, file.id, userId, folder);
+      setMoveFile(null);
       await reload();
     } catch (e) {
       setError(
@@ -195,6 +209,7 @@ export function ProjectMaterialsSection({
     .filter(Boolean);
   const hasAny = packageLive.length > 0;
   const busy = uploading || Boolean(deletingId);
+  const filesById = new Map(packageLive.map((f) => [f.id, f]));
 
   return (
     <section
@@ -211,7 +226,8 @@ export function ProjectMaterialsSection({
           </h3>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
             仅展示<strong className="font-semibold text-foreground">项目级资料包</strong>
-            （全项目、各对话共用）。上传文件夹后按路径分组展示；可将文件<strong className="font-semibold text-foreground">移动到文件夹</strong>（会改逻辑路径）。对话里用回形针上传的文件请在对话页右上角「本对话文件」查看。
+            。可将文件<strong className="font-semibold text-foreground">拖到文件夹</strong>
+            上，或点移动按钮选目标（会改逻辑路径）。
           </p>
         </div>
         {useLive && canManage ? (
@@ -264,7 +280,7 @@ export function ProjectMaterialsSection({
       {!loading && !hasAny ? (
         <p className="mt-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-4 text-[11px] leading-relaxed text-muted-foreground">
           {useLive
-            ? "暂无项目资料包。可上传文件或整个文件夹（.txt / .md / PDF 等）；单次对话附件请在对话里上传。"
+            ? "暂无项目资料包。可上传文件或整个文件夹；单次对话附件请在对话里上传。"
             : "暂无资料列表。开启 Live 对话并上传后可见。"}
         </p>
       ) : null}
@@ -273,6 +289,7 @@ export function ProjectMaterialsSection({
         <MaterialsList
           title="项目资料包"
           items={packageLive}
+          filesById={filesById}
           folderOptions={folderOptions}
           canDelete={useLive && canManage}
           canDownload={useLive && canDownload}
@@ -282,6 +299,17 @@ export function ProjectMaterialsSection({
           onDelete={onDeleteFile}
           onDeleteFolder={onDeleteFolder}
           onMove={onMoveFile}
+          onOpenMove={setMoveFile}
+        />
+      ) : null}
+
+      {moveFile ? (
+        <MoveFileModal
+          file={moveFile}
+          folderOptions={folderOptions}
+          busy={Boolean(deletingId)}
+          onClose={() => setMoveFile(null)}
+          onConfirm={(folder) => void onMoveFile(moveFile, folder)}
         />
       ) : null}
 
@@ -310,13 +338,10 @@ export function ProjectMaterialsSection({
   );
 }
 
-function fileMeta(f: ProjectFileRecord): string {
-  return `${scopeLabel(f.scope)} · ${formatFileDate(f.createdAt)}${f.chunkCount ? ` · ${f.chunkCount} 段` : ""}`;
-}
-
 function MaterialsList({
   title,
   items,
+  filesById,
   folderOptions,
   canDelete,
   canDownload,
@@ -326,9 +351,11 @@ function MaterialsList({
   onDelete,
   onDeleteFolder,
   onMove,
+  onOpenMove,
 }: {
   title: string;
   items: ProjectFileRecord[];
+  filesById: Map<string, ProjectFileRecord>;
   folderOptions: string[];
   canDelete: boolean;
   canDownload: boolean;
@@ -338,42 +365,101 @@ function MaterialsList({
   onDelete: (file: ProjectFileRecord) => void;
   onDeleteFolder: (folder: string, files: ProjectFileRecord[]) => void;
   onMove: (file: ProjectFileRecord, folder: string) => void;
+  onOpenMove: (file: ProjectFileRecord) => void;
 }) {
   const groups = groupProjectFilesByFolder(items);
+  const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
+  const canDrop = canDelete && !deletingId;
+
+  const handleDropOnFolder = (folder: string, e: DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setDragOverFolder(null);
+    if (!canDrop) return;
+    const id =
+      e.dataTransfer.getData(DND_DOC_MIME) || e.dataTransfer.getData("text/plain");
+    const file = filesById.get(id.trim());
+    if (!file) return;
+    void onMove(file, folder);
+  };
 
   return (
     <div className="mt-4">
       <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{title}</p>
+      {canDelete ? (
+        <p className="mt-1 text-[10px] text-muted-foreground">
+          拖拽文件到文件夹标题上即可归入该夹；也可点移动图标选择。
+        </p>
+      ) : null}
       <div className="mt-2 space-y-2">
         {groups.map((group) => {
           if (!group.folder) {
             return (
-              <ul key="__root__" className="space-y-1.5">
-                {group.files.map((file) => (
-                  <FileRow
-                    key={file.id}
-                    file={file}
-                    displayName={splitStoredFilePath(file.filename).basename}
-                    folderOptions={folderOptions}
-                    canDelete={canDelete}
-                    canDownload={canDownload}
-                    projectId={projectId}
-                    userId={userId}
-                    deletingId={deletingId}
-                    onDelete={onDelete}
-                    onMove={onMove}
+              <div key="__root__" className="space-y-1.5">
+                {canDelete && folderOptions.length > 0 ? (
+                  <FolderDropZone
+                    label="根目录（移出文件夹）"
+                    active={dragOverFolder === ""}
+                    disabled={!canDrop}
+                    onDragEnter={() => setDragOverFolder("")}
+                    onDragLeave={() =>
+                      setDragOverFolder((cur) => (cur === "" ? null : cur))
+                    }
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = "move";
+                    }}
+                    onDrop={(e) => handleDropOnFolder("", e)}
                   />
-                ))}
-              </ul>
+                ) : null}
+                <ul className="space-y-1.5">
+                  {group.files.map((file) => (
+                    <FileRow
+                      key={file.id}
+                      file={file}
+                      displayName={splitStoredFilePath(file.filename).basename}
+                      canDelete={canDelete}
+                      canDownload={canDownload}
+                      projectId={projectId}
+                      userId={userId}
+                      deletingId={deletingId}
+                      onDelete={onDelete}
+                      onOpenMove={onOpenMove}
+                    />
+                  ))}
+                </ul>
+              </div>
             );
           }
 
           const folderBusy = deletingId === `folder:${group.folder}`;
+          const isOver = dragOverFolder === group.folder;
           return (
             <details
               key={group.folder}
               open
-              className="group/folder overflow-hidden rounded-xl border border-border/60 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)]"
+              className={cn(
+                "group/folder overflow-hidden rounded-xl border bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)] transition-colors",
+                isOver
+                  ? "border-[hsl(var(--wine-deep)/0.55)] bg-[hsl(var(--wine-muted)/0.45)] ring-2 ring-[hsl(var(--wine-deep)/0.2)]"
+                  : "border-border/60",
+              )}
+              onDragEnter={(e) => {
+                if (!canDrop) return;
+                e.preventDefault();
+                setDragOverFolder(group.folder);
+              }}
+              onDragOver={(e) => {
+                if (!canDrop) return;
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }}
+              onDragLeave={(e) => {
+                if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+                  setDragOverFolder((cur) => (cur === group.folder ? null : cur));
+                }
+              }}
+              onDrop={(e) => handleDropOnFolder(group.folder, e)}
             >
               <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 marker:content-none [&::-webkit-details-marker]:hidden">
                 <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-muted-foreground transition-transform group-open/folder:rotate-0" />
@@ -386,7 +472,9 @@ function MaterialsList({
                   <p className="truncate text-sm font-semibold text-foreground" title={group.folder}>
                     {group.folder}
                   </p>
-                  <p className="text-[10px] text-muted-foreground">{group.files.length} 个文件</p>
+                  <p className="text-[10px] text-muted-foreground">
+                    {isOver ? "松开以移入此文件夹" : `${group.files.length} 个文件`}
+                  </p>
                 </div>
                 {canDelete ? (
                   <button
@@ -419,14 +507,13 @@ function MaterialsList({
                     file={file}
                     displayName={splitStoredFilePath(file.filename).basename}
                     nested
-                    folderOptions={folderOptions}
                     canDelete={canDelete}
                     canDownload={canDownload}
                     projectId={projectId}
                     userId={userId}
                     deletingId={deletingId}
                     onDelete={onDelete}
-                    onMove={onMove}
+                    onOpenMove={onOpenMove}
                   />
                 ))}
               </ul>
@@ -438,80 +525,87 @@ function MaterialsList({
   );
 }
 
+function FolderDropZone({
+  label,
+  active,
+  disabled,
+  onDragEnter,
+  onDragLeave,
+  onDragOver,
+  onDrop,
+}: {
+  label: string;
+  active: boolean;
+  disabled: boolean;
+  onDragEnter: () => void;
+  onDragLeave: () => void;
+  onDragOver: (e: DragEvent) => void;
+  onDrop: (e: DragEvent) => void;
+}) {
+  return (
+    <div
+      onDragEnter={(e) => {
+        if (disabled) return;
+        e.preventDefault();
+        onDragEnter();
+      }}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className={cn(
+        "rounded-lg border border-dashed px-3 py-2 text-[11px] transition-colors",
+        active
+          ? "border-[hsl(var(--wine-deep)/0.55)] bg-[hsl(var(--wine-muted)/0.4)] text-[hsl(var(--wine-deep))]"
+          : "border-border/70 bg-muted/15 text-muted-foreground",
+        disabled && "opacity-50",
+      )}
+    >
+      {active ? "松开以移到根目录" : label}
+    </div>
+  );
+}
+
 function FileRow({
   file,
   displayName,
   nested = false,
-  folderOptions,
   canDelete,
   canDownload,
   projectId,
   userId,
   deletingId,
   onDelete,
-  onMove,
+  onOpenMove,
 }: {
   file: ProjectFileRecord;
   displayName: string;
   nested?: boolean;
-  folderOptions: string[];
   canDelete: boolean;
   canDownload: boolean;
   projectId: string;
   userId: string;
   deletingId: string | null;
   onDelete: (file: ProjectFileRecord) => void;
-  onMove: (file: ProjectFileRecord, folder: string) => void;
+  onOpenMove: (file: ProjectFileRecord) => void;
 }) {
   const isBusy = deletingId === file.id || deletingId === `move:${file.id}`;
-  const currentFolder = splitStoredFilePath(file.filename).folder;
-
-  const promptMove = () => {
-    const choices = [
-      "（根目录）",
-      ...folderOptions.filter((f) => f !== currentFolder),
-      "新建文件夹…",
-    ];
-    const hint = choices
-      .map((c, i) => `${i + 1}. ${c}`)
-      .join("\n");
-    const raw = window.prompt(
-      `将「${displayName}」移动到哪个文件夹？\n输入序号或文件夹名：\n${hint}`,
-      currentFolder ? "1" : folderOptions[0] ? "2" : "1",
-    );
-    if (raw == null) return;
-    const trimmed = raw.trim();
-    if (!trimmed) return;
-
-    let target = "";
-    const asNum = Number(trimmed);
-    if (Number.isInteger(asNum) && asNum >= 1 && asNum <= choices.length) {
-      const picked = choices[asNum - 1]!;
-      if (picked === "（根目录）") target = "";
-      else if (picked === "新建文件夹…") {
-        const created = window.prompt("新文件夹名称（如 01_资产权属与地图）");
-        if (created == null) return;
-        target = created.trim();
-        if (!target) return;
-      } else {
-        target = picked;
-      }
-    } else if (trimmed === "（根目录）" || trimmed === "/" || trimmed === ".") {
-      target = "";
-    } else {
-      target = trimmed;
-    }
-
-    void onMove(file, target);
-  };
+  const draggable = canDelete && !deletingId;
 
   return (
     <li
+      draggable={draggable}
+      onDragStart={(e) => {
+        if (!draggable) return;
+        e.dataTransfer.setData(DND_DOC_MIME, file.id);
+        e.dataTransfer.setData("text/plain", file.id);
+        e.dataTransfer.effectAllowed = "move";
+      }}
       className={cn(
         "flex items-start gap-2.5 px-3 py-2.5",
         nested
           ? "rounded-lg border border-border/40 bg-white"
           : "rounded-xl border border-border/60 bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)]",
+        draggable && "cursor-grab active:cursor-grabbing",
       )}
     >
       <FileText
@@ -530,7 +624,7 @@ function FileRow({
           <button
             type="button"
             disabled={Boolean(deletingId)}
-            onClick={promptMove}
+            onClick={() => onOpenMove(file)}
             className={cn(
               "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-[hsl(var(--wine-deep)/0.25)] hover:bg-[hsl(var(--wine-deep)/0.06)] hover:text-[hsl(var(--wine-deep))]",
               isBusy && "pointer-events-none opacity-50",
@@ -579,5 +673,165 @@ function FileRow({
         ) : null}
       </div>
     </li>
+  );
+}
+
+function MoveFileModal({
+  file,
+  folderOptions,
+  busy,
+  onClose,
+  onConfirm,
+}: {
+  file: ProjectFileRecord;
+  folderOptions: string[];
+  busy: boolean;
+  onClose: () => void;
+  onConfirm: (folder: string) => void;
+}) {
+  useBodyScrollLock(true);
+  const { folder: currentFolder, basename } = splitStoredFilePath(file.filename);
+  const [mode, setMode] = useState<"pick" | "create">("pick");
+  const [selected, setSelected] = useState<string>(currentFolder || "");
+  const [newName, setNewName] = useState("");
+
+  const destinations = [
+    { value: "", label: "根目录" },
+    ...folderOptions.map((f) => ({ value: f, label: f })),
+  ];
+
+  return (
+    <div
+      className="fixed inset-0 z-[140] flex items-center justify-center bg-black/35 p-4 backdrop-blur-[1px]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="move-file-title"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-2xl border border-[hsl(var(--sand)/0.9)] bg-[hsl(var(--linen))] p-5 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3
+              id="move-file-title"
+              className="font-display text-base font-semibold text-[hsl(var(--wine-deep))]"
+            >
+              移动到文件夹
+            </h3>
+            <p className="mt-1 text-xs leading-relaxed text-muted-foreground" title={file.filename}>
+              {basename}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-full p-1.5 text-muted-foreground transition hover:bg-white/80 hover:text-foreground"
+            aria-label="关闭"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="mt-4 flex gap-2">
+          <button
+            type="button"
+            onClick={() => setMode("pick")}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-[11px] font-semibold transition",
+              mode === "pick"
+                ? "bg-[hsl(var(--wine-deep))] text-[hsl(var(--wine-deep-foreground))]"
+                : "border border-[hsl(var(--sand))] bg-white text-[hsl(var(--warm-charcoal))]",
+            )}
+          >
+            已有文件夹
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("create")}
+            className={cn(
+              "rounded-full px-3 py-1.5 text-[11px] font-semibold transition",
+              mode === "create"
+                ? "bg-[hsl(var(--wine-deep))] text-[hsl(var(--wine-deep-foreground))]"
+                : "border border-[hsl(var(--sand))] bg-white text-[hsl(var(--warm-charcoal))]",
+            )}
+          >
+            新建文件夹
+          </button>
+        </div>
+
+        {mode === "pick" ? (
+          <ul className="mt-3 max-h-56 space-y-1.5 overflow-y-auto pr-0.5">
+            {destinations.map((d) => {
+              const active = selected === d.value;
+              const isCurrent = (currentFolder || "") === d.value;
+              return (
+                <li key={d.value || "__root__"}>
+                  <button
+                    type="button"
+                    disabled={isCurrent}
+                    onClick={() => setSelected(d.value)}
+                    className={cn(
+                      "flex w-full items-center gap-2 rounded-xl border px-3 py-2.5 text-left text-sm transition",
+                      active
+                        ? "border-[hsl(var(--wine-deep)/0.45)] bg-white text-[hsl(var(--wine-deep))]"
+                        : "border-border/60 bg-white/70 text-foreground hover:border-[hsl(var(--wine-deep)/0.25)]",
+                      isCurrent && "cursor-default opacity-50",
+                    )}
+                  >
+                    <FolderOpen className="h-4 w-4 shrink-0 opacity-80" />
+                    <span className="min-w-0 flex-1 truncate">{d.label}</span>
+                    {isCurrent ? (
+                      <span className="text-[10px] text-muted-foreground">当前</span>
+                    ) : null}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="mt-3">
+            <label className="text-[11px] font-medium text-[hsl(var(--warm-charcoal))]">
+              新文件夹名称
+              <input
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                placeholder="例如 01_资产权属与地图"
+                className="mt-1.5 w-full rounded-lg border border-[hsl(var(--sand)/0.9)] bg-white px-3 py-2 text-sm outline-none transition focus:border-[hsl(var(--wine-deep)/0.45)] focus:ring-1 focus:ring-[hsl(var(--wine-deep)/0.12)]"
+                autoFocus
+              />
+            </label>
+          </div>
+        )}
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-lg border border-[hsl(var(--sand)/0.9)] bg-white px-3.5 py-2 text-xs font-medium text-[hsl(var(--warm-charcoal))]"
+          >
+            取消
+          </button>
+          <button
+            type="button"
+            disabled={busy || (mode === "create" && !newName.trim())}
+            onClick={() => {
+              if (mode === "create") {
+                const name = newName.trim();
+                if (!name) return;
+                onConfirm(name);
+              } else {
+                onConfirm(selected);
+              }
+            }}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-[hsl(var(--wine-deep))] bg-[hsl(var(--wine-deep))] px-3.5 py-2 text-xs font-semibold text-[hsl(var(--wine-deep-foreground))] disabled:opacity-60"
+          >
+            {busy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : null}
+            确认移动
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
