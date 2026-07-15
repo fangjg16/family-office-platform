@@ -36,6 +36,7 @@ import {
   fetchProjectsFromApi,
   fileDisplayName,
   fileIdentityKey,
+  splitStoredFilePath,
   uploadProjectPackageFile,
 } from "@/lib/project-api";
 import { clearLastChatProjectId, loadLastChatProjectId } from "@/workspace/session";
@@ -760,32 +761,95 @@ export default function ProjectOverview() {
                     }}
                   />
                   <p className="mt-2 text-xs text-muted-foreground">
-                    已选择 {newProjectFiles.length} 个文件；可选单文件、多文件或整文件夹。
+                    已选择 {newProjectFiles.length} 个文件；文件夹将按目录分组展示。
                   </p>
                   {newProjectFiles.length > 0 ? (
-                    <ul className="mt-2 max-h-28 space-y-1.5 overflow-y-auto pr-0.5">
-                      {newProjectFiles.map((f, idx) => (
-                        <li
-                          key={fileIdentityKey(f)}
-                          className="flex items-center justify-between gap-2 rounded-lg border border-border/65 bg-white px-3 py-2 text-xs"
-                        >
-                          <span className="flex min-w-0 items-center gap-1.5">
-                            <FileText className="h-3.5 w-3.5 shrink-0 text-primary/80" />
-                            <span className="truncate" title={fileDisplayName(f)}>
-                              {fileDisplayName(f)}
-                            </span>
-                          </span>
-                          <button
-                            type="button"
-                            onClick={() => removeDemoFile(idx)}
-                            className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-                            aria-label="移除附件"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
+                    <div className="mt-2 max-h-36 space-y-2 overflow-y-auto pr-0.5">
+                      {(() => {
+                        const byFolder = new Map<string, { file: File; idx: number }[]>();
+                        newProjectFiles.forEach((f, idx) => {
+                          const { folder } = splitStoredFilePath(fileDisplayName(f));
+                          const key = folder || "";
+                          const list = byFolder.get(key) ?? [];
+                          list.push({ file: f, idx });
+                          byFolder.set(key, list);
+                        });
+                        const folders = Array.from(byFolder.keys()).sort((a, b) => {
+                          if (!a) return 1;
+                          if (!b) return -1;
+                          return a.localeCompare(b, "zh-CN");
+                        });
+                        return folders.map((folder) => {
+                          const rows = byFolder.get(folder)!;
+                          if (!folder) {
+                            return (
+                              <ul key="__root__" className="space-y-1.5">
+                                {rows.map(({ file: f, idx }) => (
+                                  <li
+                                    key={fileIdentityKey(f)}
+                                    className="flex items-center justify-between gap-2 rounded-lg border border-border/65 bg-white px-3 py-2 text-xs"
+                                  >
+                                    <span className="flex min-w-0 items-center gap-1.5">
+                                      <FileText className="h-3.5 w-3.5 shrink-0 text-primary/80" />
+                                      <span className="truncate" title={f.name}>
+                                        {f.name}
+                                      </span>
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => removeDemoFile(idx)}
+                                      className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                      aria-label="移除附件"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </li>
+                                ))}
+                              </ul>
+                            );
+                          }
+                          return (
+                            <div
+                              key={folder}
+                              className="rounded-lg border border-border/65 bg-white px-2.5 py-2"
+                            >
+                              <p className="flex items-center gap-1.5 text-xs font-semibold text-[hsl(var(--warm-charcoal))]">
+                                <FolderOpen className="h-3.5 w-3.5 text-[hsl(var(--wine-deep))]" />
+                                <span className="truncate" title={folder}>
+                                  {folder}
+                                </span>
+                                <span className="shrink-0 font-normal text-muted-foreground">
+                                  · {rows.length} 个
+                                </span>
+                              </p>
+                              <ul className="mt-1.5 space-y-1 border-l border-border/50 pl-2.5">
+                                {rows.map(({ file: f, idx }) => {
+                                  const { basename } = splitStoredFilePath(fileDisplayName(f));
+                                  return (
+                                    <li
+                                      key={fileIdentityKey(f)}
+                                      className="flex items-center justify-between gap-2 py-1 text-xs"
+                                    >
+                                      <span className="truncate text-muted-foreground" title={fileDisplayName(f)}>
+                                        {basename}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        onClick={() => removeDemoFile(idx)}
+                                        className="rounded-full p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                        aria-label="移除附件"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </button>
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            </div>
+                          );
+                        });
+                      })()}
+                    </div>
                   ) : (
                     <p className="mt-2 text-xs text-muted-foreground">尚未选择附件。</p>
                   )}

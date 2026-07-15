@@ -359,6 +359,53 @@ export function fileUploadName(file: File): string {
   return fileDisplayName(file);
 }
 
+/** 已入库 filename（可能含 `文件夹/子路径/文件.pdf`）拆成目录与文件名 */
+export function splitStoredFilePath(filename: string): {
+  folder: string;
+  basename: string;
+} {
+  const normalized = filename.replace(/\\/g, "/").replace(/^\/+/, "");
+  const i = normalized.lastIndexOf("/");
+  if (i <= 0) return { folder: "", basename: normalized || filename };
+  return {
+    folder: normalized.slice(0, i),
+    basename: normalized.slice(i + 1) || normalized,
+  };
+}
+
+export type ProjectFileFolderGroup = {
+  folder: string;
+  files: ProjectFileRecord[];
+};
+
+/** 按父目录分组；无路径的文件归入 folder=""（根级） */
+export function groupProjectFilesByFolder(
+  files: readonly ProjectFileRecord[],
+): ProjectFileFolderGroup[] {
+  const map = new Map<string, ProjectFileRecord[]>();
+  for (const f of files) {
+    const { folder } = splitStoredFilePath(f.filename);
+    const list = map.get(folder);
+    if (list) list.push(f);
+    else map.set(folder, [f]);
+  }
+  const groups = Array.from(map.entries()).map(([folder, groupFiles]) => ({
+    folder,
+    files: [...groupFiles].sort((a, b) =>
+      splitStoredFilePath(a.filename).basename.localeCompare(
+        splitStoredFilePath(b.filename).basename,
+        "zh-CN",
+      ),
+    ),
+  }));
+  groups.sort((a, b) => {
+    if (!a.folder) return 1;
+    if (!b.folder) return -1;
+    return a.folder.localeCompare(b.folder, "zh-CN");
+  });
+  return groups;
+}
+
 export async function uploadProjectPackageFile(
   projectId: string,
   userId: string,
