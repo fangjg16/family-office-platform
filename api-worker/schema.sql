@@ -117,6 +117,7 @@ CREATE TABLE IF NOT EXISTS projects (
   summary TEXT NOT NULL DEFAULT '',
   guest_summary TEXT NOT NULL DEFAULT '',
   created_by TEXT,
+  visibility TEXT NOT NULL DEFAULT 'public',
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );

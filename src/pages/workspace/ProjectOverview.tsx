@@ -58,7 +58,7 @@ import type { WorkspaceRole } from "@/workspace/types";
 const CREATE_PERMISSION_OPTIONS = ["core", "mid", "low"] as const;
 type CreatePermission = (typeof CREATE_PERMISSION_OPTIONS)[number];
 type CreateParticipant = { userId: string; name: string; permission: CreatePermission };
-type ProjectOpenness = "public" | "partial" | "invite";
+type ProjectOpenness = "public" | "invite";
 
 const PROJECT_OPENNESS_OPTIONS: {
   value: ProjectOpenness;
@@ -66,22 +66,16 @@ const PROJECT_OPENNESS_OPTIONS: {
   description: string;
 }[] = [
   {
+    value: "invite",
+    title: "仅限邀请",
+    description:
+      "默认仅创建人可见。邀请成员后，被选中的人才能在总览看到并进入该项目。",
+  },
+  {
     value: "public",
     title: "全开放",
     description:
-      "除涉及敏感区间的信息外，项目基础信息公开，所有进入平台的用户均可看到该项目的存在及概要。",
-  },
-  {
-    value: "partial",
-    title: "半开放",
-    description:
-      "项目存在对外可见，但只展示基础信息（如项目名称和摘要），详细内容需要对应权限才能访问。",
-  },
-  {
-    value: "invite",
-    title: "内部邀请",
-    description:
-      "项目在主页只显示标题，甚至不展示在主页，完全依赖内部邀请才能接触。适用于高度敏感或尚未对外的项目。",
+      "平台内所有用户均可看到该项目；未单独授权的成员仍按默认角色查看公开信息。",
   },
 ];
 
@@ -229,7 +223,7 @@ export default function ProjectOverview() {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDetail, setNewProjectDetail] = useState("");
-  const [newProjectOpenness, setNewProjectOpenness] = useState<ProjectOpenness>("partial");
+  const [newProjectOpenness, setNewProjectOpenness] = useState<ProjectOpenness>("invite");
   const [participantKeyword, setParticipantKeyword] = useState("");
   const [participants, setParticipants] = useState<CreateParticipant[]>([]);
   const [newProjectFiles, setNewProjectFiles] = useState<File[]>([]);
@@ -258,7 +252,7 @@ export default function ProjectOverview() {
     let cancelled = false;
     setProjectsLoading(true);
     setProjectsLoadError(null);
-    void fetchProjectsFromApi()
+    void fetchProjectsFromApi(userId)
       .then((rows) => {
         if (!cancelled) setApiProjects(rows);
       })
@@ -277,7 +271,7 @@ export default function ProjectOverview() {
     };
   }, [userId]);
 
-  /** 全开放项目对所有用户可见，不再需要单独配置参与人员与分级 */
+  /** 全开放不需要单独邀请名单；仅限邀请才配置参与人 */
   useEffect(() => {
     if (newProjectOpenness !== "public") return;
     setParticipants([]);
@@ -308,7 +302,7 @@ export default function ProjectOverview() {
   const resetCreateForm = () => {
     setNewProjectName("");
     setNewProjectDetail("");
-    setNewProjectOpenness("partial");
+    setNewProjectOpenness("invite");
     setParticipantKeyword("");
     setParticipants([]);
     setNewProjectFiles([]);
@@ -333,10 +327,14 @@ export default function ProjectOverview() {
           name,
           detail: newProjectDetail.trim() || undefined,
           userId,
-          participants: participants.map((p) => ({
-            userId: p.userId,
-            role: p.permission,
-          })),
+          visibility: newProjectOpenness,
+          participants:
+            newProjectOpenness === "invite"
+              ? participants.map((p) => ({
+                  userId: p.userId,
+                  role: p.permission,
+                }))
+              : [],
         });
         try {
           const roles = await fetchMyProjectRoles(userId);
@@ -632,12 +630,15 @@ export default function ProjectOverview() {
                 </p>
               </div>
 
-              {newProjectOpenness !== "public" ? (
+              {newProjectOpenness === "invite" ? (
                 <div>
                   <span className="mb-1 block text-xs font-medium text-[hsl(var(--warm-charcoal))]">
-                    参与人员与权限
+                    邀请成员与权限
                   </span>
                   <div className="rounded-lg border border-[hsl(var(--sand)/0.9)] bg-[hsl(var(--linen)/0.35)] p-2.5">
+                    <p className="mb-2 text-[11px] leading-relaxed text-muted-foreground">
+                      未邀请任何人时，仅你（创建人）可见本项目。选中成员后对方才会出现在总览里。
+                    </p>
                     <div className="relative">
                       <input
                         type="text"
@@ -704,7 +705,7 @@ export default function ProjectOverview() {
                       </ul>
                     ) : (
                       <p className="mt-2 text-xs text-muted-foreground">
-                        选择成员后可为其分配权限等级 Core 核心级 / Advanced 进阶级 / Basic 基础级，用于控制后续项目访问范围。
+                        尚未邀请成员。创建后只有你能看到本项目。
                       </p>
                     )}
                   </div>

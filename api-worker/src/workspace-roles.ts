@@ -1,6 +1,7 @@
 /** 与前端 workspace-users.ts 对齐的演示权限（Worker 侧校验） */
 
 import { getProjectMemberRoleOverride } from "./project-member-roles-db";
+import { getProjectById } from "./projects-db";
 import { DEFAULT_ROLE_BY_USER } from "./workspace-known-users";
 import { isPlatformAdmin } from "./projects-auth";
 
@@ -31,10 +32,21 @@ export async function resolveProjectRole(
   if (!uid) return "guest";
   if (isPlatformAdmin(uid)) return "admin";
 
+  const project = await getProjectById(env, projectId);
+  const visibility = project?.visibility ?? "public";
+  const creator = (createdBy ?? project?.createdBy ?? "").trim();
   const override = await getProjectMemberRoleOverride(env, projectId, uid);
-  let role: WorkspaceRole = override ?? DEFAULT_ROLE_BY_USER[uid] ?? "guest";
 
-  const creator = (createdBy ?? "").trim();
+  // 仅限邀请：非创建人且无成员席位 → Guest（不可当作「进了项目」）
+  if (visibility === "invite") {
+    if (creator && creator === uid) {
+      return higherRole(override ?? "core", "core");
+    }
+    if (override) return override;
+    return "guest";
+  }
+
+  let role: WorkspaceRole = override ?? DEFAULT_ROLE_BY_USER[uid] ?? "guest";
   if (creator && creator === uid) {
     role = higherRole(role, "core");
   }

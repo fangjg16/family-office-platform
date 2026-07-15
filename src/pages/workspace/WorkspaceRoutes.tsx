@@ -21,7 +21,7 @@ function WorkspaceChatRedirect() {
     const run = async () => {
       if (ENABLE_LIVE_CHAT) {
         try {
-          const rows = await fetchProjectsFromApi();
+          const rows = await fetchProjectsFromApi(userId);
           if (!cancelled) setApiProjects(rows);
         } catch {
           /* 无 API 时列表为空 */

@@ -1,12 +1,15 @@
 import { auditAllMessagesInConversationDeleted } from "./chat-audit";
 import { deleteProjectMemberRolesForProject } from "./project-member-roles-db";
 import { deleteProjectKnowledgeNetwork } from "./project-knowledge-network";
+import { isPlatformAdmin } from "./projects-auth";
 
 export type ProjectPhase =
   | "Active（资源筹备中）"
   | "Completed（已签约）"
   | "Paused（暂停）"
   | "Cancelled（已取消）";
+
+export type ProjectVisibility = "public" | "invite";
 
 export type ProjectRow = {
   id: string;
@@ -16,6 +19,7 @@ export type ProjectRow = {
   summary: string;
   guest_summary: string;
   created_by: string | null;
+  visibility: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -28,12 +32,20 @@ export type ProjectJson = {
   summary: string;
   guestSummary: string;
   createdBy: string | null;
+  /** public=全平台可见；invite=仅创建人与已邀请成员 */
+  visibility: ProjectVisibility;
   createdAt: string;
   updatedAt: string;
 };
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+export function normalizeProjectVisibility(
+  raw: string | null | undefined,
+): ProjectVisibility {
+  return (raw ?? "").trim() === "invite" ? "invite" : "public";
 }
 
 export function rowToJson(row: ProjectRow): ProjectJson {
@@ -45,17 +57,48 @@ export function rowToJson(row: ProjectRow): ProjectJson {
     summary: row.summary,
     guestSummary: row.guest_summary,
     createdBy: row.created_by,
+    visibility: normalizeProjectVisibility(row.visibility),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
+const PROJECT_SELECT = `SELECT id, name, category, phase, summary, guest_summary, created_by,
+        COALESCE(visibility, 'public') AS visibility, created_at, updated_at
+     FROM projects`;
+
 export async function listProjects(env: { DB: D1Database }): Promise<ProjectJson[]> {
   const { results } = await env.DB.prepare(
-    `SELECT id, name, category, phase, summary, guest_summary, created_by, created_at, updated_at
-     FROM projects
+    `${PROJECT_SELECT}
      ORDER BY updated_at DESC`,
   ).all<ProjectRow>();
+  return (results ?? []).map(rowToJson);
+}
+
+/**
+ * 对指定用户可见的项目：
+ * - 平台管理员：全部
+ * - public：全平台
+ * - invite：创建人或 project_member_roles 中有席位
+ */
+export async function listProjectsVisibleToUser(
+  env: { DB: D1Database },
+  userId: string,
+): Promise<ProjectJson[]> {
+  const uid = userId.trim();
+  if (!uid) return [];
+
+  if (isPlatformAdmin(uid)) return listProjects(env);
+
+  const { results } = await env.DB.prepare(
+    `${PROJECT_SELECT}
+     WHERE COALESCE(visibility, 'public') = 'public'
+        OR created_by = ?
+        OR id IN (SELECT project_id FROM project_member_roles WHERE user_id = ?)
+     ORDER BY updated_at DESC`,
+  )
+    .bind(uid, uid)
+    .all<ProjectRow>();
   return (results ?? []).map(rowToJson);
 }
 
@@ -63,10 +106,7 @@ export async function getProjectById(
   env: { DB: D1Database },
   id: string,
 ): Promise<ProjectJson | null> {
-  const row = await env.DB.prepare(
-    `SELECT id, name, category, phase, summary, guest_summary, created_by, created_at, updated_at
-     FROM projects WHERE id = ?`,
-  )
+  const row = await env.DB.prepare(`${PROJECT_SELECT} WHERE id = ?`)
     .bind(id)
     .first<ProjectRow>();
   return row ? rowToJson(row) : null;
@@ -87,6 +127,7 @@ export async function createProject(
     category?: string;
     phase?: ProjectPhase;
     createdBy?: string | null;
+    visibility?: ProjectVisibility | string | null;
   },
 ): Promise<ProjectJson> {
   const t = nowIso();
@@ -94,10 +135,11 @@ export async function createProject(
   const guestSummary =
     (input.guestSummary ?? "").trim() ||
     "项目在管推进中，详情按权限展示。";
+  const visibility = normalizeProjectVisibility(input.visibility);
   await env.DB.prepare(
     `INSERT INTO projects (
-      id, name, category, phase, summary, guest_summary, created_by, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, name, category, phase, summary, guest_summary, created_by, visibility, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       id,
@@ -107,6 +149,7 @@ export async function createProject(
       input.summary.trim(),
       guestSummary,
       input.createdBy ?? null,
+      visibility,
       t,
       t,
     )

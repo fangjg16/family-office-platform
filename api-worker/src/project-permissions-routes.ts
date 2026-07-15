@@ -5,7 +5,7 @@ import {
   upsertProjectMemberRole,
 } from "./project-member-roles-db";
 import { canManageProjectRecord } from "./projects-auth";
-import { getProjectById, listProjects } from "./projects-db";
+import { getProjectById, listProjectsVisibleToUser } from "./projects-db";
 import { decodePathProjectId } from "./projects-resolve";
 import { resolveProjectRole, type WorkspaceRole } from "./workspace-roles";
 import { workspaceUserDisplayName } from "./workspace-display-names";
@@ -168,7 +168,7 @@ export async function handleGetUserProjectRoles(
   const userId = normalizeUserId(routeUserId);
   if (!userId) return json({ error: "无效 userId" }, 400);
 
-  const projects = await listProjects(env);
+  const projects = await listProjectsVisibleToUser(env, userId);
   const roles: Record<string, WorkspaceRole> = {};
   for (const p of projects) {
     roles[p.id] = await resolveProjectRole(env, userId, p.id, p.createdBy);

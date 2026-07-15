@@ -16,6 +16,8 @@ export type WorkspaceProject = {
   guestSummary: string;
   /** 云端新建项目：创建人 userId，用于编辑/删除鉴权 */
   createdBy?: string | null;
+  /** public=全开放；invite=仅限邀请 */
+  visibility?: "public" | "invite";
   /** 云端项目创建时间（ISO） */
   createdAt?: string | null;
   updatedAt?: string | null;

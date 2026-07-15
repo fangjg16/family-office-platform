@@ -1814,7 +1814,7 @@ export default {
         const hermesRes = await tryHandleHermesRoutes(request, env, path);
         response = hermesRes ?? json({ error: "Not Found" }, 404);
       } else if (path === "/api/projects" && request.method === "GET") {
-        response = await handleListProjects(env);
+        response = await handleListProjects(env, url.searchParams.get("userId"));
       } else if (path === "/api/projects" && request.method === "POST") {
         response = await handleCreateProject(request, env);
       } else if (/^\/api\/projects\/[^/]+$/u.test(path)) {

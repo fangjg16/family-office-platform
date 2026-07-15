@@ -30,6 +30,7 @@ export type ApiProjectJson = {
   summary: string;
   guestSummary: string;
   createdBy?: string | null;
+  visibility?: "public" | "invite" | string | null;
   createdAt?: string;
   updatedAt?: string;
 };
@@ -43,17 +44,22 @@ function mapApiProject(row: ApiProjectJson) {
     summary: row.summary || "",
     guestSummary: row.guestSummary || "",
     createdBy: row.createdBy ?? null,
+    visibility: row.visibility === "invite" ? ("invite" as const) : ("public" as const),
     createdAt: row.createdAt ?? null,
     updatedAt: row.updatedAt ?? null,
   };
 }
 
 export async function fetchProjectsFromApi(
+  userId?: string | null,
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<import("@/workspace/projects").WorkspaceProject[]> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
   if (!base) return [];
-  const res = await fetch(`${base}/api/projects`);
+  const q = new URLSearchParams();
+  if (userId?.trim()) q.set("userId", userId.trim());
+  const url = q.size ? `${base}/api/projects?${q}` : `${base}/api/projects`;
+  const res = await fetch(url);
   if (!res.ok) {
     const err = await res.text().catch(() => "");
     throw new Error(err || `项目列表加载失败（${res.status}）`);
@@ -181,12 +187,14 @@ export async function createProjectViaApi(
     detail?: string;
     category?: string;
     userId?: string;
+    visibility?: "public" | "invite";
     participants?: { userId: string; role: "core" | "mid" | "low" }[];
   },
   chatEndpoint = AI_CHAT_ENDPOINT,
 ): Promise<import("@/workspace/projects").WorkspaceProject> {
   const base = apiBaseFromChatEndpoint(chatEndpoint);
   if (!base) throw new Error("未配置 VITE_AI_CHAT_ENDPOINT，无法创建项目");
+  const visibility = input.visibility === "public" ? "public" : "invite";
   const res = await fetch(`${base}/api/projects`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -196,7 +204,8 @@ export async function createProjectViaApi(
       category: input.category,
       userId: input.userId,
       createdBy: input.userId,
-      participants: input.participants,
+      visibility,
+      participants: visibility === "invite" ? input.participants : [],
     }),
   });
   const data = (await res.json().catch(() => ({}))) as {

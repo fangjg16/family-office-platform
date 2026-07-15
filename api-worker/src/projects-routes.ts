@@ -5,7 +5,9 @@ import {
   deleteProjectCascade,
   getProjectById,
   listProjects,
+  listProjectsVisibleToUser,
   normalizeProjectPhase,
+  normalizeProjectVisibility,
   updateProject,
 } from "./projects-db";
 import type { WorkspaceRole } from "./workspace-roles";
@@ -26,8 +28,14 @@ function normalizeUserId(raw: string | null): string | null {
   return id;
 }
 
-export async function handleListProjects(env: Env): Promise<Response> {
-  const projects = await listProjects(env);
+export async function handleListProjects(
+  env: Env,
+  userIdRaw?: string | null,
+): Promise<Response> {
+  const userId = normalizeUserId(userIdRaw ?? null);
+  const projects = userId
+    ? await listProjectsVisibleToUser(env, userId)
+    : await listProjects(env);
   return json({ projects });
 }
 
@@ -50,6 +58,8 @@ export async function handleCreateProject(request: Request, env: Env): Promise<R
     phase?: string;
     createdBy?: string;
     userId?: string;
+    visibility?: string;
+    openness?: string;
     participants?: { userId?: string; role?: string }[];
   };
   try {
@@ -67,6 +77,9 @@ export async function handleCreateProject(request: Request, env: Env): Promise<R
     `${name} 已创建，可上传资料包并在对话中使用 Master Agent 分析。`;
   const guestSummary = `${name} 项目在管推进中，详情按权限展示。`;
   const createdBy = normalizeUserId(body.createdBy ?? body.userId ?? null);
+  const visibility = normalizeProjectVisibility(
+    body.visibility ?? body.openness ?? "invite",
+  );
 
   try {
     const project = await createProject(env, {
@@ -76,14 +89,18 @@ export async function handleCreateProject(request: Request, env: Env): Promise<R
       category: body.category,
       phase: body.phase as Parameters<typeof createProject>[1]["phase"],
       createdBy,
+      visibility,
     });
 
-    const participants = (body.participants ?? [])
-      .map((p) => ({
-        userId: (p.userId ?? "").trim(),
-        role: (p.role ?? "mid").trim() as WorkspaceRole,
-      }))
-      .filter((p) => p.userId.length > 0);
+    const participants =
+      visibility === "public"
+        ? []
+        : (body.participants ?? [])
+            .map((p) => ({
+              userId: (p.userId ?? "").trim(),
+              role: (p.role ?? "mid").trim() as WorkspaceRole,
+            }))
+            .filter((p) => p.userId.length > 0);
 
     if (createdBy) {
       try {
@@ -107,6 +124,15 @@ export async function handleCreateProject(request: Request, env: Env): Promise<R
         {
           error:
             "projects 表未创建。请在 api-worker 目录执行：npx wrangler d1 execute jfo-meta --remote --file=./migrations/0005_projects.sql",
+        },
+        503,
+      );
+    }
+    if (/no such column:\s*visibility/i.test(msg)) {
+      return json(
+        {
+          error:
+            "projects.visibility 列未迁移。请执行：npx wrangler d1 execute jfo-meta --remote --file=./migrations/0015_project_visibility.sql",
         },
         503,
       );
