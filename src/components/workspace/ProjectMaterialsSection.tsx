@@ -3,6 +3,7 @@ import {
   ChevronDown,
   Download,
   FileText,
+  FolderInput,
   FolderOpen,
   Loader2,
   Paperclip,
@@ -17,6 +18,7 @@ import {
   fetchProjectFiles,
   fileDisplayName,
   groupProjectFilesByFolder,
+  moveProjectPackageFile,
   projectFileDownloadUrl,
   splitStoredFilePath,
   uploadProjectPackageFile,
@@ -169,7 +171,28 @@ export function ProjectMaterialsSection({
     }
   };
 
+  const onMoveFile = async (file: ProjectFileRecord, folder: string) => {
+    if (!useLive || !canManage || file.scope !== "package") return;
+    const { folder: currentFolder, basename } = splitStoredFilePath(file.filename);
+    if ((currentFolder || "") === (folder || "")) return;
+    setDeletingId(`move:${file.id}`);
+    setError(null);
+    try {
+      await moveProjectPackageFile(projectId, file.id, userId, folder);
+      await reload();
+    } catch (e) {
+      setError(
+        `移动「${basename}」失败：${e instanceof Error ? e.message : String(e)}`,
+      );
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   const packageLive = (liveFiles ?? []).filter((f) => f.scope === "package");
+  const folderOptions = groupProjectFilesByFolder(packageLive)
+    .map((g) => g.folder)
+    .filter(Boolean);
   const hasAny = packageLive.length > 0;
   const busy = uploading || Boolean(deletingId);
 
@@ -188,7 +211,7 @@ export function ProjectMaterialsSection({
           </h3>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
             仅展示<strong className="font-semibold text-foreground">项目级资料包</strong>
-            （全项目、各对话共用）。上传文件夹后按路径分组展示；对话里用回形针上传的文件请在对话页右上角「本对话文件」查看。
+            （全项目、各对话共用）。上传文件夹后按路径分组展示；可将文件<strong className="font-semibold text-foreground">移动到文件夹</strong>（会改逻辑路径）。对话里用回形针上传的文件请在对话页右上角「本对话文件」查看。
           </p>
         </div>
         {useLive && canManage ? (
@@ -250,6 +273,7 @@ export function ProjectMaterialsSection({
         <MaterialsList
           title="项目资料包"
           items={packageLive}
+          folderOptions={folderOptions}
           canDelete={useLive && canManage}
           canDownload={useLive && canDownload}
           projectId={projectId}
@@ -257,6 +281,7 @@ export function ProjectMaterialsSection({
           deletingId={deletingId}
           onDelete={onDeleteFile}
           onDeleteFolder={onDeleteFolder}
+          onMove={onMoveFile}
         />
       ) : null}
 
@@ -292,6 +317,7 @@ function fileMeta(f: ProjectFileRecord): string {
 function MaterialsList({
   title,
   items,
+  folderOptions,
   canDelete,
   canDownload,
   projectId,
@@ -299,9 +325,11 @@ function MaterialsList({
   deletingId,
   onDelete,
   onDeleteFolder,
+  onMove,
 }: {
   title: string;
   items: ProjectFileRecord[];
+  folderOptions: string[];
   canDelete: boolean;
   canDownload: boolean;
   projectId: string;
@@ -309,6 +337,7 @@ function MaterialsList({
   deletingId: string | null;
   onDelete: (file: ProjectFileRecord) => void;
   onDeleteFolder: (folder: string, files: ProjectFileRecord[]) => void;
+  onMove: (file: ProjectFileRecord, folder: string) => void;
 }) {
   const groups = groupProjectFilesByFolder(items);
 
@@ -325,12 +354,14 @@ function MaterialsList({
                     key={file.id}
                     file={file}
                     displayName={splitStoredFilePath(file.filename).basename}
+                    folderOptions={folderOptions}
                     canDelete={canDelete}
                     canDownload={canDownload}
                     projectId={projectId}
                     userId={userId}
                     deletingId={deletingId}
                     onDelete={onDelete}
+                    onMove={onMove}
                   />
                 ))}
               </ul>
@@ -388,12 +419,14 @@ function MaterialsList({
                     file={file}
                     displayName={splitStoredFilePath(file.filename).basename}
                     nested
+                    folderOptions={folderOptions}
                     canDelete={canDelete}
                     canDownload={canDownload}
                     projectId={projectId}
                     userId={userId}
                     deletingId={deletingId}
                     onDelete={onDelete}
+                    onMove={onMove}
                   />
                 ))}
               </ul>
@@ -409,24 +442,69 @@ function FileRow({
   file,
   displayName,
   nested = false,
+  folderOptions,
   canDelete,
   canDownload,
   projectId,
   userId,
   deletingId,
   onDelete,
+  onMove,
 }: {
   file: ProjectFileRecord;
   displayName: string;
   nested?: boolean;
+  folderOptions: string[];
   canDelete: boolean;
   canDownload: boolean;
   projectId: string;
   userId: string;
   deletingId: string | null;
   onDelete: (file: ProjectFileRecord) => void;
+  onMove: (file: ProjectFileRecord, folder: string) => void;
 }) {
-  const isDeleting = deletingId === file.id;
+  const isBusy = deletingId === file.id || deletingId === `move:${file.id}`;
+  const currentFolder = splitStoredFilePath(file.filename).folder;
+
+  const promptMove = () => {
+    const choices = [
+      "（根目录）",
+      ...folderOptions.filter((f) => f !== currentFolder),
+      "新建文件夹…",
+    ];
+    const hint = choices
+      .map((c, i) => `${i + 1}. ${c}`)
+      .join("\n");
+    const raw = window.prompt(
+      `将「${displayName}」移动到哪个文件夹？\n输入序号或文件夹名：\n${hint}`,
+      currentFolder ? "1" : folderOptions[0] ? "2" : "1",
+    );
+    if (raw == null) return;
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+
+    let target = "";
+    const asNum = Number(trimmed);
+    if (Number.isInteger(asNum) && asNum >= 1 && asNum <= choices.length) {
+      const picked = choices[asNum - 1]!;
+      if (picked === "（根目录）") target = "";
+      else if (picked === "新建文件夹…") {
+        const created = window.prompt("新文件夹名称（如 01_资产权属与地图）");
+        if (created == null) return;
+        target = created.trim();
+        if (!target) return;
+      } else {
+        target = picked;
+      }
+    } else if (trimmed === "（根目录）" || trimmed === "/" || trimmed === ".") {
+      target = "";
+    } else {
+      target = trimmed;
+    }
+
+    void onMove(file, target);
+  };
+
   return (
     <li
       className={cn(
@@ -448,6 +526,25 @@ function FileRow({
         <p className="mt-0.5 text-[10px] text-muted-foreground">{fileMeta(file)}</p>
       </div>
       <div className="flex shrink-0 items-center gap-0.5">
+        {canDelete ? (
+          <button
+            type="button"
+            disabled={Boolean(deletingId)}
+            onClick={promptMove}
+            className={cn(
+              "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-[hsl(var(--wine-deep)/0.25)] hover:bg-[hsl(var(--wine-deep)/0.06)] hover:text-[hsl(var(--wine-deep))]",
+              isBusy && "pointer-events-none opacity-50",
+            )}
+            aria-label={`移动 ${displayName}`}
+            title="移动到文件夹"
+          >
+            {deletingId === `move:${file.id}` ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <FolderInput className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            )}
+          </button>
+        ) : null}
         {canDownload ? (
           <a
             href={projectFileDownloadUrl(projectId, file.id, userId)}
@@ -466,12 +563,12 @@ function FileRow({
             onClick={() => void onDelete(file)}
             className={cn(
               "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600",
-              isDeleting && "pointer-events-none opacity-50",
+              isBusy && "pointer-events-none opacity-50",
             )}
             aria-label={`删除 ${displayName}`}
             title="从资料包删除"
           >
-            {isDeleting ? (
+            {deletingId === file.id ? (
               <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
             ) : (
               <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />

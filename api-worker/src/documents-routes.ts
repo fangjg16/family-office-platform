@@ -28,6 +28,34 @@ function canDeleteDocument(
   return false;
 }
 
+function splitBasename(filename: string): string {
+  const normalized = filename.replace(/\\/g, "/").replace(/^\/+/u, "");
+  const i = normalized.lastIndexOf("/");
+  return i >= 0 ? normalized.slice(i + 1) : normalized;
+}
+
+/** 清洗文件夹相对路径；空字符串表示根目录 */
+export function normalizePackageFolderPath(raw: string | null | undefined): string {
+  let folder = (raw ?? "").trim().replace(/\\/g, "/");
+  folder = folder.replace(/^\/+|\/+$/gu, "");
+  if (!folder) return "";
+  if (folder.includes("..") || folder.includes("\0")) {
+    throw new Error("非法文件夹路径");
+  }
+  if (!/^[\w.\-一-龥/]+$/u.test(folder)) {
+    throw new Error("文件夹名含不支持的字符");
+  }
+  return folder;
+}
+
+export function buildPackageFilename(folder: string, basename: string): string {
+  const name = basename.trim().replace(/^\/+/u, "");
+  if (!name || name.includes("/") || name.includes("\\") || name.includes("..")) {
+    throw new Error("非法文件名");
+  }
+  return folder ? `${folder}/${name}` : name;
+}
+
 export async function handleDeleteProjectFile(
   request: Request,
   env: Env,
@@ -107,5 +135,113 @@ export async function handleDeleteProjectFile(
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return json({ error: `删除失败：${msg}` }, 500);
+  }
+}
+
+/**
+ * PATCH /api/projects/:id/files/:docId
+ * body: { userId, folder?: string } — 将资料包文件逻辑路径移入 folder（空=根目录）。
+ * 只改 D1 filename（分组依据）；R2 对象 key 不变。
+ */
+export async function handleMoveProjectFile(
+  request: Request,
+  env: Env,
+  pathProjectId: string,
+  docId: string,
+): Promise<Response> {
+  let body: { userId?: string; folder?: string | null };
+  try {
+    body = (await request.json()) as typeof body;
+  } catch {
+    return json({ error: "Invalid JSON" }, 400);
+  }
+
+  const userId = normalizeUserId(body.userId);
+  if (!userId) return json({ error: "缺少 userId" }, 400);
+
+  const projectId = decodePathProjectId(pathProjectId);
+  const id = docId.trim();
+  if (!id) return json({ error: "缺少 documentId" }, 400);
+
+  const project = await getProjectById(env, projectId);
+  if (!project) return json({ error: "项目不存在" }, 404);
+
+  const row = await env.DB.prepare(
+    `SELECT id, project_id, filename, scope, conversation_id, uploaded_by, r2_key
+     FROM documents WHERE id = ? AND project_id = ?`,
+  )
+    .bind(id, projectId)
+    .first<DocumentRow>();
+
+  if (!row) return json({ error: "文件不存在或已删除" }, 404);
+  if (row.scope !== "package") {
+    return json({ error: "仅项目资料包文件可移动到文件夹" }, 400);
+  }
+
+  const accessErr = documentAccessError(row, userId);
+  if (accessErr) return json({ error: accessErr }, 403);
+  if (!canDeleteDocument(row, userId, project)) {
+    return json({ error: "仅项目创建人、平台管理员或该文件上传者可移动" }, 403);
+  }
+
+  let folder: string;
+  try {
+    folder = normalizePackageFolderPath(body.folder ?? "");
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : "非法文件夹路径" }, 400);
+  }
+
+  const basename = splitBasename(row.filename);
+  if (!basename) return json({ error: "当前文件名无效" }, 400);
+
+  let nextFilename: string;
+  try {
+    nextFilename = buildPackageFilename(folder, basename);
+  } catch (e) {
+    return json({ error: e instanceof Error ? e.message : "无法生成路径" }, 400);
+  }
+
+  if (nextFilename === row.filename) {
+    return json({
+      ok: true,
+      documentId: id,
+      projectId,
+      filename: row.filename,
+      unchanged: true,
+    });
+  }
+
+  const clash = await env.DB.prepare(
+    `SELECT id FROM documents WHERE project_id = ? AND scope = 'package' AND filename = ? AND id != ?`,
+  )
+    .bind(projectId, nextFilename, id)
+    .first<{ id: string }>();
+  if (clash) {
+    return json({ error: `目标位置已有同名文件：${nextFilename}` }, 409);
+  }
+
+  try {
+    await env.DB.prepare(
+      `UPDATE documents SET filename = ? WHERE id = ? AND project_id = ?`,
+    )
+      .bind(nextFilename, id, projectId)
+      .run();
+
+    await invalidateChunkCache(projectId, userId, undefined);
+    if (row.uploaded_by && row.uploaded_by !== userId) {
+      await invalidateChunkCache(projectId, row.uploaded_by, undefined);
+    }
+
+    return json({
+      ok: true,
+      documentId: id,
+      projectId,
+      filename: nextFilename,
+      previousFilename: row.filename,
+      folder: folder || null,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return json({ error: `移动失败：${msg}` }, 500);
   }
 }

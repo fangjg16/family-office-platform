@@ -644,3 +644,34 @@ export async function deleteProjectFile(
   const data = (await res.json().catch(() => ({}))) as { error?: string };
   if (!res.ok) throw new Error(data.error || `删除失败（${res.status}）`);
 }
+
+/** 将资料包文件逻辑路径移入 folder（空字符串=根目录）；写入 D1 filename */
+export async function moveProjectPackageFile(
+  projectId: string,
+  documentId: string,
+  userId: string,
+  folder: string,
+  chatEndpoint = AI_CHAT_ENDPOINT,
+): Promise<{ filename: string }> {
+  const base = apiBaseFromChatEndpoint(chatEndpoint);
+  let res: Response;
+  try {
+    res = await fetch(
+      `${base}/api/projects/${encodeURIComponent(projectId)}/files/${encodeURIComponent(documentId)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, folder }),
+      },
+    );
+  } catch {
+    throw new Error("无法连接 API（多为跨域未放行 PATCH）。请确认 Worker 已部署最新版后强刷页面。");
+  }
+  const data = (await res.json().catch(() => ({}))) as {
+    error?: string;
+    filename?: string;
+  };
+  if (!res.ok) throw new Error(data.error || `移动失败（${res.status}）`);
+  if (!data.filename) throw new Error("移动成功但未返回新路径");
+  return { filename: data.filename };
+}

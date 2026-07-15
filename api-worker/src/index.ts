@@ -78,7 +78,7 @@ import { chunkPlainText, isGenericProjectQuestion } from "./search";
 import { getProjectById as getDbProjectById } from "./projects-db";
 import { LIST_FILES_SQL, packageR2Key, sessionR2Key } from "./documents-access";
 import { handleDownloadProjectFile } from "./documents-download";
-import { handleDeleteProjectFile } from "./documents-routes";
+import { handleDeleteProjectFile, handleMoveProjectFile } from "./documents-routes";
 import {
   handleGetProjectPermissions,
   handleGetUserProjectRoles,
@@ -1937,6 +1937,8 @@ export default {
         const docId = path.split("/")[5] ?? "";
         if (request.method === "DELETE") {
           response = await handleDeleteProjectFile(request, env, projectId, docId);
+        } else if (request.method === "PATCH") {
+          response = await handleMoveProjectFile(request, env, projectId, docId);
         } else {
           response = json({ error: "Method Not Allowed" }, 405);
         }
