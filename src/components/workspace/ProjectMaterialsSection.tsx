@@ -22,14 +22,19 @@ import { useBodyScrollLock } from "@/hooks/use-body-scroll-lock";
 import {
   ENABLE_LIVE_CHAT,
   AI_CHAT_ENDPOINT,
+  buildProjectFileFolderTree,
+  collectFilesInFolderTree,
+  countFolderTreeFiles,
   deleteProjectFile,
   fetchProjectFiles,
   fileDisplayName,
-  groupProjectFilesByFolder,
+  joinPackageFolderPath,
+  listPackageFolderPaths,
   moveProjectPackageFile,
   projectFileDownloadUrl,
   splitStoredFilePath,
   uploadProjectPackageFile,
+  type ProjectFileFolderNode,
   type ProjectFileRecord,
 } from "@/lib/project-api";
 
@@ -153,13 +158,13 @@ export function ProjectMaterialsSection({
     }
   };
 
-  const onDeleteFolder = async (folder: string, files: ProjectFileRecord[]) => {
-    if (!useLive || !canManage || !folder || files.length === 0) return;
+  const onDeleteFolder = async (folderPath: string, files: ProjectFileRecord[]) => {
+    if (!useLive || !canManage || !folderPath || files.length === 0) return;
     const ok = window.confirm(
-      `确定删除文件夹「${folder}」中的全部 ${files.length} 个文件？\n删除后无法恢复。`,
+      `确定删除文件夹「${folderPath}」及其子文件夹中的全部 ${files.length} 个文件？\n删除后无法恢复。`,
     );
     if (!ok) return;
-    setDeletingId(`folder:${folder}`);
+    setDeletingId(`folder:${folderPath}`);
     setError(null);
     const errors: string[] = [];
     try {
@@ -204,9 +209,8 @@ export function ProjectMaterialsSection({
   };
 
   const packageLive = (liveFiles ?? []).filter((f) => f.scope === "package");
-  const folderOptions = groupProjectFilesByFolder(packageLive)
-    .map((g) => g.folder)
-    .filter(Boolean);
+  const folderTree = buildProjectFileFolderTree(packageLive);
+  const folderOptions = listPackageFolderPaths(folderTree);
   const hasAny = packageLive.length > 0;
   const busy = uploading || Boolean(deletingId);
   const filesById = new Map(packageLive.map((f) => [f.id, f]));
@@ -226,8 +230,7 @@ export function ProjectMaterialsSection({
           </h3>
           <p className="mt-1 text-[11px] leading-relaxed text-muted-foreground">
             仅展示<strong className="font-semibold text-foreground">项目级资料包</strong>
-            。可将文件<strong className="font-semibold text-foreground">拖到文件夹</strong>
-            上，或点移动按钮选目标（会改逻辑路径）。
+            。支持嵌套子文件夹；可将文件拖到目标夹，或点移动按钮选择（含「在某夹下新建」）。
           </p>
         </div>
         {useLive && canManage ? (
@@ -280,7 +283,7 @@ export function ProjectMaterialsSection({
       {!loading && !hasAny ? (
         <p className="mt-3 rounded-xl border border-dashed border-border/80 bg-muted/20 px-3 py-4 text-[11px] leading-relaxed text-muted-foreground">
           {useLive
-            ? "暂无项目资料包。可上传文件或整个文件夹；单次对话附件请在对话里上传。"
+            ? "暂无项目资料包。可上传文件或整个文件夹（含多层子目录）；单次对话附件请在对话里上传。"
             : "暂无资料列表。开启 Live 对话并上传后可见。"}
         </p>
       ) : null}
@@ -288,9 +291,9 @@ export function ProjectMaterialsSection({
       {packageLive.length > 0 ? (
         <MaterialsList
           title="项目资料包"
-          items={packageLive}
+          tree={folderTree}
           filesById={filesById}
-          folderOptions={folderOptions}
+          hasFolders={folderOptions.length > 0}
           canDelete={useLive && canManage}
           canDownload={useLive && canDownload}
           projectId={projectId}
@@ -340,9 +343,9 @@ export function ProjectMaterialsSection({
 
 function MaterialsList({
   title,
-  items,
+  tree,
   filesById,
-  folderOptions,
+  hasFolders,
   canDelete,
   canDownload,
   projectId,
@@ -354,9 +357,9 @@ function MaterialsList({
   onOpenMove,
 }: {
   title: string;
-  items: ProjectFileRecord[];
+  tree: ReturnType<typeof buildProjectFileFolderTree>;
   filesById: Map<string, ProjectFileRecord>;
-  folderOptions: string[];
+  hasFolders: boolean;
   canDelete: boolean;
   canDownload: boolean;
   projectId: string;
@@ -367,7 +370,6 @@ function MaterialsList({
   onMove: (file: ProjectFileRecord, folder: string) => void;
   onOpenMove: (file: ProjectFileRecord) => void;
 }) {
-  const groups = groupProjectFilesByFolder(items);
   const [dragOverFolder, setDragOverFolder] = useState<string | null>(null);
   const canDrop = canDelete && !deletingId;
 
@@ -385,128 +387,40 @@ function MaterialsList({
 
   return (
     <div className="mt-4">
-      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">{title}</p>
+      <p className="text-[10px] font-bold uppercase tracking-wide text-muted-foreground">
+        {title}
+      </p>
       {canDelete ? (
         <p className="mt-1 text-[10px] text-muted-foreground">
-          拖拽文件到文件夹标题上即可归入该夹；也可点移动图标选择。
+          拖拽文件到任意文件夹（含子夹）即可归入；删除文件夹会连同其下全部子夹与文件。
         </p>
       ) : null}
       <div className="mt-2 space-y-2">
-        {groups.map((group) => {
-          if (!group.folder) {
-            return (
-              <div key="__root__" className="space-y-1.5">
-                {canDelete && folderOptions.length > 0 ? (
-                  <FolderDropZone
-                    label="根目录（移出文件夹）"
-                    active={dragOverFolder === ""}
-                    disabled={!canDrop}
-                    onDragEnter={() => setDragOverFolder("")}
-                    onDragLeave={() =>
-                      setDragOverFolder((cur) => (cur === "" ? null : cur))
-                    }
-                    onDragOver={(e) => {
-                      e.preventDefault();
-                      e.dataTransfer.dropEffect = "move";
-                    }}
-                    onDrop={(e) => handleDropOnFolder("", e)}
-                  />
-                ) : null}
-                <ul className="space-y-1.5">
-                  {group.files.map((file) => (
-                    <FileRow
-                      key={file.id}
-                      file={file}
-                      displayName={splitStoredFilePath(file.filename).basename}
-                      canDelete={canDelete}
-                      canDownload={canDownload}
-                      projectId={projectId}
-                      userId={userId}
-                      deletingId={deletingId}
-                      onDelete={onDelete}
-                      onOpenMove={onOpenMove}
-                    />
-                  ))}
-                </ul>
-              </div>
-            );
-          }
-
-          const folderBusy = deletingId === `folder:${group.folder}`;
-          const isOver = dragOverFolder === group.folder;
-          return (
-            <details
-              key={group.folder}
-              open
-              className={cn(
-                "group/folder overflow-hidden rounded-xl border bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)] transition-colors",
-                isOver
-                  ? "border-[hsl(var(--wine-deep)/0.55)] bg-[hsl(var(--wine-muted)/0.45)] ring-2 ring-[hsl(var(--wine-deep)/0.2)]"
-                  : "border-border/60",
-              )}
-              onDragEnter={(e) => {
-                if (!canDrop) return;
-                e.preventDefault();
-                setDragOverFolder(group.folder);
-              }}
-              onDragOver={(e) => {
-                if (!canDrop) return;
-                e.preventDefault();
-                e.dataTransfer.dropEffect = "move";
-              }}
-              onDragLeave={(e) => {
-                if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
-                  setDragOverFolder((cur) => (cur === group.folder ? null : cur));
+        {(tree.rootFiles.length > 0 || (canDelete && hasFolders)) && (
+          <div className="space-y-1.5">
+            {canDelete && hasFolders ? (
+              <FolderDropZone
+                label="根目录（移出文件夹）"
+                active={dragOverFolder === ""}
+                disabled={!canDrop}
+                onDragEnter={() => setDragOverFolder("")}
+                onDragLeave={() =>
+                  setDragOverFolder((cur) => (cur === "" ? null : cur))
                 }
-              }}
-              onDrop={(e) => handleDropOnFolder(group.folder, e)}
-            >
-              <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 marker:content-none [&::-webkit-details-marker]:hidden">
-                <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-muted-foreground transition-transform group-open/folder:rotate-0" />
-                <FolderOpen
-                  className="h-4 w-4 shrink-0 text-[hsl(var(--wine-deep)/0.85)]"
-                  strokeWidth={2}
-                  aria-hidden
-                />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-foreground" title={group.folder}>
-                    {group.folder}
-                  </p>
-                  <p className="text-[10px] text-muted-foreground">
-                    {isOver ? "松开以移入此文件夹" : `${group.files.length} 个文件`}
-                  </p>
-                </div>
-                {canDelete ? (
-                  <button
-                    type="button"
-                    disabled={Boolean(deletingId)}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      void onDeleteFolder(group.folder, group.files);
-                    }}
-                    className={cn(
-                      "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600",
-                      folderBusy && "pointer-events-none opacity-50",
-                    )}
-                    aria-label={`删除文件夹 ${group.folder}`}
-                    title="删除整个文件夹"
-                  >
-                    {folderBusy ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                    ) : (
-                      <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                    )}
-                  </button>
-                ) : null}
-              </summary>
-              <ul className="space-y-1 border-t border-border/50 bg-[hsl(var(--linen)/0.35)] px-2 py-2">
-                {group.files.map((file) => (
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }}
+                onDrop={(e) => handleDropOnFolder("", e)}
+              />
+            ) : null}
+            {tree.rootFiles.length > 0 ? (
+              <ul className="space-y-1.5">
+                {tree.rootFiles.map((file) => (
                   <FileRow
                     key={file.id}
                     file={file}
                     displayName={splitStoredFilePath(file.filename).basename}
-                    nested
                     canDelete={canDelete}
                     canDownload={canDownload}
                     projectId={projectId}
@@ -517,11 +431,186 @@ function MaterialsList({
                   />
                 ))}
               </ul>
-            </details>
-          );
-        })}
+            ) : null}
+          </div>
+        )}
+
+        {tree.folders.map((node) => (
+          <FolderNodeView
+            key={node.path}
+            node={node}
+            depth={0}
+            dragOverFolder={dragOverFolder}
+            setDragOverFolder={setDragOverFolder}
+            canDrop={canDrop}
+            canDelete={canDelete}
+            canDownload={canDownload}
+            projectId={projectId}
+            userId={userId}
+            deletingId={deletingId}
+            onDelete={onDelete}
+            onDeleteFolder={onDeleteFolder}
+            onDropFolder={handleDropOnFolder}
+            onOpenMove={onOpenMove}
+          />
+        ))}
       </div>
     </div>
+  );
+}
+
+function FolderNodeView({
+  node,
+  depth,
+  dragOverFolder,
+  setDragOverFolder,
+  canDrop,
+  canDelete,
+  canDownload,
+  projectId,
+  userId,
+  deletingId,
+  onDelete,
+  onDeleteFolder,
+  onDropFolder,
+  onOpenMove,
+}: {
+  node: ProjectFileFolderNode;
+  depth: number;
+  dragOverFolder: string | null;
+  setDragOverFolder: (path: string | null | ((cur: string | null) => string | null)) => void;
+  canDrop: boolean;
+  canDelete: boolean;
+  canDownload: boolean;
+  projectId: string;
+  userId: string;
+  deletingId: string | null;
+  onDelete: (file: ProjectFileRecord) => void;
+  onDeleteFolder: (folder: string, files: ProjectFileRecord[]) => void;
+  onDropFolder: (folder: string, e: DragEvent) => void;
+  onOpenMove: (file: ProjectFileRecord) => void;
+}) {
+  const total = countFolderTreeFiles(node);
+  const allFiles = collectFilesInFolderTree(node);
+  const folderBusy = deletingId === `folder:${node.path}`;
+  const isOver = dragOverFolder === node.path;
+  const nested = depth > 0;
+
+  return (
+    <details
+      open
+      className={cn(
+        "group/folder overflow-hidden rounded-xl border bg-white shadow-[0_1px_0_rgba(15,23,42,0.04)] transition-colors",
+        isOver
+          ? "border-[hsl(var(--wine-deep)/0.55)] bg-[hsl(var(--wine-muted)/0.45)] ring-2 ring-[hsl(var(--wine-deep)/0.2)]"
+          : nested
+            ? "border-border/50"
+            : "border-border/60",
+      )}
+      style={nested ? { marginLeft: Math.min(depth, 4) * 8 } : undefined}
+      onDragEnter={(e) => {
+        if (!canDrop) return;
+        e.preventDefault();
+        e.stopPropagation();
+        setDragOverFolder(node.path);
+      }}
+      onDragOver={(e) => {
+        if (!canDrop) return;
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "move";
+      }}
+      onDragLeave={(e) => {
+        if (!(e.currentTarget as HTMLElement).contains(e.relatedTarget as Node)) {
+          setDragOverFolder((cur) => (cur === node.path ? null : cur));
+        }
+      }}
+      onDrop={(e) => onDropFolder(node.path, e)}
+    >
+      <summary className="flex cursor-pointer list-none items-center gap-2 px-3 py-2.5 marker:content-none [&::-webkit-details-marker]:hidden">
+        <ChevronDown className="h-3.5 w-3.5 shrink-0 -rotate-90 text-muted-foreground transition-transform group-open/folder:rotate-0" />
+        <FolderOpen
+          className="h-4 w-4 shrink-0 text-[hsl(var(--wine-deep)/0.85)]"
+          strokeWidth={2}
+          aria-hidden
+        />
+        <div className="min-w-0 flex-1">
+          <p className="truncate text-sm font-semibold text-foreground" title={node.path}>
+            {node.name}
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            {isOver
+              ? "松开以移入此文件夹"
+              : node.children.length > 0
+                ? `${total} 个文件 · ${node.children.length} 个子文件夹`
+                : `${total} 个文件`}
+          </p>
+        </div>
+        {canDelete ? (
+          <button
+            type="button"
+            disabled={Boolean(deletingId)}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              void onDeleteFolder(node.path, allFiles);
+            }}
+            className={cn(
+              "inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-muted-foreground transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600",
+              folderBusy && "pointer-events-none opacity-50",
+            )}
+            aria-label={`删除文件夹 ${node.path}`}
+            title="删除此文件夹及全部子内容"
+          >
+            {folderBusy ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            )}
+          </button>
+        ) : null}
+      </summary>
+      <div className="space-y-1.5 border-t border-border/50 bg-[hsl(var(--linen)/0.35)] px-2 py-2">
+        {node.children.map((child) => (
+          <FolderNodeView
+            key={child.path}
+            node={child}
+            depth={depth + 1}
+            dragOverFolder={dragOverFolder}
+            setDragOverFolder={setDragOverFolder}
+            canDrop={canDrop}
+            canDelete={canDelete}
+            canDownload={canDownload}
+            projectId={projectId}
+            userId={userId}
+            deletingId={deletingId}
+            onDelete={onDelete}
+            onDeleteFolder={onDeleteFolder}
+            onDropFolder={onDropFolder}
+            onOpenMove={onOpenMove}
+          />
+        ))}
+        {node.files.length > 0 ? (
+          <ul className="space-y-1">
+            {node.files.map((file) => (
+              <FileRow
+                key={file.id}
+                file={file}
+                displayName={splitStoredFilePath(file.filename).basename}
+                nested
+                canDelete={canDelete}
+                canDownload={canDownload}
+                projectId={projectId}
+                userId={userId}
+                deletingId={deletingId}
+                onDelete={onDelete}
+                onOpenMove={onOpenMove}
+              />
+            ))}
+          </ul>
+        ) : null}
+      </div>
+    </details>
   );
 }
 
@@ -676,6 +765,14 @@ function FileRow({
   );
 }
 
+function folderDepthLabel(path: string): string {
+  if (!path) return "根目录";
+  const depth = path.split("/").filter(Boolean).length;
+  const indent = "　".repeat(Math.max(0, depth - 1));
+  const name = path.split("/").filter(Boolean).pop() || path;
+  return depth > 1 ? `${indent}↳ ${name}` : name;
+}
+
 function MoveFileModal({
   file,
   folderOptions,
@@ -693,12 +790,15 @@ function MoveFileModal({
   const { folder: currentFolder, basename } = splitStoredFilePath(file.filename);
   const [mode, setMode] = useState<"pick" | "create">("pick");
   const [selected, setSelected] = useState<string>(currentFolder || "");
+  const [parentFolder, setParentFolder] = useState<string>(currentFolder || "");
   const [newName, setNewName] = useState("");
 
   const destinations = [
     { value: "", label: "根目录" },
-    ...folderOptions.map((f) => ({ value: f, label: f })),
+    ...folderOptions.map((f) => ({ value: f, label: folderDepthLabel(f) })),
   ];
+
+  const previewPath = joinPackageFolderPath(parentFolder, newName);
 
   return (
     <div
@@ -757,7 +857,7 @@ function MoveFileModal({
                 : "border border-[hsl(var(--sand))] bg-white text-[hsl(var(--warm-charcoal))]",
             )}
           >
-            新建文件夹
+            新建（可含子夹）
           </button>
         </div>
 
@@ -781,7 +881,9 @@ function MoveFileModal({
                     )}
                   >
                     <FolderOpen className="h-4 w-4 shrink-0 opacity-80" />
-                    <span className="min-w-0 flex-1 truncate">{d.label}</span>
+                    <span className="min-w-0 flex-1 truncate" title={d.value || "根目录"}>
+                      {d.label}
+                    </span>
                     {isCurrent ? (
                       <span className="text-[10px] text-muted-foreground">当前</span>
                     ) : null}
@@ -791,17 +893,37 @@ function MoveFileModal({
             })}
           </ul>
         ) : (
-          <div className="mt-3">
-            <label className="text-[11px] font-medium text-[hsl(var(--warm-charcoal))]">
+          <div className="mt-3 space-y-3">
+            <label className="block text-[11px] font-medium text-[hsl(var(--warm-charcoal))]">
+              放在哪个文件夹下
+              <select
+                value={parentFolder}
+                onChange={(e) => setParentFolder(e.target.value)}
+                className="mt-1.5 w-full rounded-lg border border-[hsl(var(--sand)/0.9)] bg-white px-3 py-2 text-sm outline-none transition focus:border-[hsl(var(--wine-deep)/0.45)] focus:ring-1 focus:ring-[hsl(var(--wine-deep)/0.12)]"
+              >
+                <option value="">根目录</option>
+                {folderOptions.map((f) => (
+                  <option key={f} value={f}>
+                    {folderDepthLabel(f)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block text-[11px] font-medium text-[hsl(var(--warm-charcoal))]">
               新文件夹名称
               <input
                 value={newName}
                 onChange={(e) => setNewName(e.target.value)}
-                placeholder="例如 01_资产权属与地图"
+                placeholder="例如 合同 或 子夹/更深一层"
                 className="mt-1.5 w-full rounded-lg border border-[hsl(var(--sand)/0.9)] bg-white px-3 py-2 text-sm outline-none transition focus:border-[hsl(var(--wine-deep)/0.45)] focus:ring-1 focus:ring-[hsl(var(--wine-deep)/0.12)]"
                 autoFocus
               />
             </label>
+            {newName.trim() ? (
+              <p className="text-[10px] text-muted-foreground">
+                将移到：<span className="font-medium text-foreground">{previewPath}</span>
+              </p>
+            ) : null}
           </div>
         )}
 
@@ -818,9 +940,8 @@ function MoveFileModal({
             disabled={busy || (mode === "create" && !newName.trim())}
             onClick={() => {
               if (mode === "create") {
-                const name = newName.trim();
-                if (!name) return;
-                onConfirm(name);
+                if (!previewPath) return;
+                onConfirm(previewPath);
               } else {
                 onConfirm(selected);
               }

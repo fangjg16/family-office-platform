@@ -387,7 +387,140 @@ export type ProjectFileFolderGroup = {
   files: ProjectFileRecord[];
 };
 
-/** 按父目录分组；无路径的文件归入 folder=""（根级） */
+export type ProjectFileFolderNode = {
+  /** 单级目录名 */
+  name: string;
+  /** 相对根的完整路径，如 `尽调/合同` */
+  path: string;
+  /** 直接落在该目录下的文件（不含子夹内文件） */
+  files: ProjectFileRecord[];
+  children: ProjectFileFolderNode[];
+};
+
+export type ProjectFileFolderTree = {
+  rootFiles: ProjectFileRecord[];
+  folders: ProjectFileFolderNode[];
+};
+
+function sortPackageFilesByBasename(
+  files: readonly ProjectFileRecord[],
+): ProjectFileRecord[] {
+  return [...files].sort((a, b) =>
+    splitStoredFilePath(a.filename).basename.localeCompare(
+      splitStoredFilePath(b.filename).basename,
+      "zh-CN",
+    ),
+  );
+}
+
+/** 拼接资料包文件夹路径（空 parent = 根下新建） */
+export function joinPackageFolderPath(parent: string, name: string): string {
+  const p = parent.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/gu, "");
+  const n = name.trim().replace(/\\/g, "/").replace(/^\/+|\/+$/gu, "");
+  if (!n) return p;
+  return p ? `${p}/${n}` : n;
+}
+
+/** 将扁平 filename 建成可嵌套的目录树 */
+export function buildProjectFileFolderTree(
+  files: readonly ProjectFileRecord[],
+): ProjectFileFolderTree {
+  type Mutable = {
+    name: string;
+    path: string;
+    files: ProjectFileRecord[];
+    children: Map<string, Mutable>;
+  };
+  const root: Mutable = {
+    name: "",
+    path: "",
+    files: [],
+    children: new Map(),
+  };
+
+  const ensurePath = (parts: string[]): Mutable => {
+    let cur = root;
+    for (let i = 0; i < parts.length; i++) {
+      const seg = parts[i]!;
+      const path = parts.slice(0, i + 1).join("/");
+      let next = cur.children.get(seg);
+      if (!next) {
+        next = { name: seg, path, files: [], children: new Map() };
+        cur.children.set(seg, next);
+      }
+      cur = next;
+    }
+    return cur;
+  };
+
+  for (const f of files) {
+    const { folder } = splitStoredFilePath(f.filename);
+    if (!folder) {
+      root.files.push(f);
+      continue;
+    }
+    const parts = folder.split("/").filter(Boolean);
+    if (parts.length === 0) {
+      root.files.push(f);
+      continue;
+    }
+    ensurePath(parts).files.push(f);
+  }
+
+  const freeze = (node: Mutable): ProjectFileFolderNode => {
+    const children = Array.from(node.children.values())
+      .map(freeze)
+      .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+    return {
+      name: node.name,
+      path: node.path,
+      files: sortPackageFilesByBasename(node.files),
+      children,
+    };
+  };
+
+  return {
+    rootFiles: sortPackageFilesByBasename(root.files),
+    folders: Array.from(root.children.values())
+      .map(freeze)
+      .sort((a, b) => a.name.localeCompare(b.name, "zh-CN")),
+  };
+}
+
+/** 含子目录在内的文件总数 */
+export function countFolderTreeFiles(node: ProjectFileFolderNode): number {
+  return (
+    node.files.length +
+    node.children.reduce((sum, child) => sum + countFolderTreeFiles(child), 0)
+  );
+}
+
+/** 收集该夹及所有子夹内的文件 */
+export function collectFilesInFolderTree(
+  node: ProjectFileFolderNode,
+): ProjectFileRecord[] {
+  return [
+    ...node.files,
+    ...node.children.flatMap((child) => collectFilesInFolderTree(child)),
+  ];
+}
+
+/** 展开树为全部文件夹路径（用于移动目标列表） */
+export function listPackageFolderPaths(
+  tree: ProjectFileFolderTree,
+): string[] {
+  const out: string[] = [];
+  const walk = (nodes: readonly ProjectFileFolderNode[]) => {
+    for (const n of nodes) {
+      out.push(n.path);
+      walk(n.children);
+    }
+  };
+  walk(tree.folders);
+  return out;
+}
+
+/** 按父目录扁平分组；无路径的文件归入 folder=""（根级）。保留供兼容。 */
 export function groupProjectFilesByFolder(
   files: readonly ProjectFileRecord[],
 ): ProjectFileFolderGroup[] {
@@ -400,12 +533,7 @@ export function groupProjectFilesByFolder(
   }
   const groups = Array.from(map.entries()).map(([folder, groupFiles]) => ({
     folder,
-    files: [...groupFiles].sort((a, b) =>
-      splitStoredFilePath(a.filename).basename.localeCompare(
-        splitStoredFilePath(b.filename).basename,
-        "zh-CN",
-      ),
-    ),
+    files: sortPackageFilesByBasename(groupFiles),
   }));
   groups.sort((a, b) => {
     if (!a.folder) return 1;
